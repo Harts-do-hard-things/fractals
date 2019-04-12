@@ -29,7 +29,8 @@ class Fractal:
     def plot(self):
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        self.plot = ax.plot(np.real(self.S),np.imag(self.S))            
+        # Previously was naming this variable self.plot which breaks self.plot()
+        self.plot_handle = ax.plot(np.real(self.S),np.imag(self.S))            
         plt.axis('equal')
 
 SF =[]
@@ -72,12 +73,19 @@ Kna = (.5 - .5*1j*math.sqrt(3))
 kr = 1/3
 SK = [-1,0]
 
+
+
+# This seems like a cleaner way to make the IFS functions... Probably as 
+# members of the class
+IFS_function = dict()
 # Plain Ole' Dragon Curve
-def dragon1(z):
-    return 0.5*(1+1j)*z
-    
-def dragon2(z):
-    return 1-0.5*(1-1j)*z
+IFS_function['dragon'] = [lambda z :  0.5*(1+1j)*z, lambda z : 1-0.5*(1-1j)*z]
+#z2 dragon curve
+IFS_function['z2_dragon'] = [
+        lambda z :  0.5*(1+1j)*z,
+        lambda z :  -(1-0.5*(1-1j)*z),
+        lambda z : 1-0.5*(1-1j)*z,
+        lambda z : -(0.5*(1+1j)*z)]
 
 # Levy C
 def func1(z):
@@ -138,19 +146,7 @@ def z2levy3(z):
 def z2levy4(z):
     return -(0.5*(1-1j)*z)
 
-#z2 dragon curve
 
-def z2dragon1(z):
-    return dragon1(z)
-
-def z2dragon2(z):
-    return -(1-0.5*(1-1j)*z)
-    
-def z2dragon3(z):
-    return dragon2(z)  
-    
-def z2dragon4(z):
-    return -(0.5*(1+1j)*z)
 
 #Pentigree
 
@@ -213,13 +209,13 @@ pentagon = np.cumsum(star)
 
 
 if __name__ == "__main__":
-#    dragon = Fractal(S0,[dragon1,dragon2])
-#    dragon.iterate(1)
-#    dragon.plot()
+    dragon = Fractal(S0,IFS_function['dragon'])
+    dragon.iterate(5)
+    dragon.plot()
 #    levy = Fractal(S0,[func1,func2])
 #    levy.iterate(17)
 #    levy.plot()
-#    z2_dragon = Fractal(S0,[z2dragon1,z2dragon2,z2dragon3,z2dragon4])
+#    z2_dragon = Fractal(S0,IFS_function['z2_dragon'])
 #    z2_dragon.iterate(10)
 #    z2_dragon.plot()
 #    z2levy = Fractal([0,1],[func1,z2levy2,func2,z2levy4])
