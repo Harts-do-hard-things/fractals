@@ -33,6 +33,14 @@ class Fractal:
         self.plot_handle = ax.plot(np.real(self.S),np.imag(self.S))            
         plt.axis('equal')
 
+# Another option for making the code cleaner... 
+class HeighwayDragon(Fractal):
+    def __init__(self):
+        Fractal.__init__(self,
+                         S0 = [0,1],
+                         func_list = 
+                         [lambda z :  0.5*(1+1j)*z, lambda z : 1-0.5*(1-1j)*z])
+        
 SF =[]
 S0 = [0,1]
 
@@ -212,6 +220,9 @@ if __name__ == "__main__":
     dragon = Fractal(S0,IFS_function['dragon'])
     dragon.iterate(5)
     dragon.plot()
+    heighway = HeighwayDragon()
+    heighway.iterate(5)
+    heighway.plot()
 #    levy = Fractal(S0,[func1,func2])
 #    levy.iterate(17)
 #    levy.plot()
