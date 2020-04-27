@@ -16,6 +16,8 @@ class Fractal:
         self.S0 = S0
         self.S  = S0
         self.func_list = func_list
+        self.plot_list = []
+        self.angle = [0]
         self.i = 0
     
     def iterate(self, i):
@@ -25,13 +27,22 @@ class Fractal:
                 S.extend(list(map(func,self.S)))
                 S.append(float('nan'))
             self.S = S
+            
+    def rotate(self,angle):
+        for k in self.angle:
+            S = [i*cmath.exp(k*1j) for i in self.S]
+            self.plot_list.append(S)
+            print(S)
+
 
     def plot(self):
         fig = plt.figure()
         ax = fig.add_subplot(111)
         # Previously was naming this variable self.plot which breaks self.plot()
-        self.plot_handle = ax.plot(np.real(self.S),np.imag(self.S))            
+        for S in self.plot_list:
+            self.plot_handle = ax.plot(np.real(S),np.imag(S))            
         plt.axis('equal')
+        
 
 # Another option for making the code cleaner... 
 class HeighwayDragon(Fractal):
@@ -41,12 +52,23 @@ class HeighwayDragon(Fractal):
                          func_list = 
                          [lambda z :  0.5*(1+1j)*z, lambda z : 1-0.5*(1-1j)*z])
         
+lamda = .5 - 1j/2/math.sqrt(3)
+lamdaconj = .5 + 1j/2/math.sqrt(3)
+
+class fudgeflake(Fractal):
+    def __init__(self):
+        Fractal.__init__(self,
+                         S0 = [0,1],
+                         func_list = 
+                         [lambda z :  lamda*z, 
+                          lambda z : 1j/math.sqrt(3)*z+lamda,
+                          lambda z : lamda*z + lamdaconj])       
+
 SF =[]
 S0 = [0,1]
 
 #Vars Used in terdragon    
-lamda = .5 - 1j/2/math.sqrt(3)
-lamdaconj = .5 + 1j/2/math.sqrt(3)
+
 
 #Vars used in twindragon
 S0_twin = [0,1,1-1j]
@@ -218,7 +240,8 @@ pentagon = np.cumsum(star)
 
 if __name__ == "__main__":
 #    dragon = Fractal(S0,IFS_function['dragon'])
-#    dragon.iterate(17)
+#    dragon.iterate(16)
+#    dragon.rotate(- math.pi*.5)
 #    dragon.plot()
 #    heighway = HeighwayDragon()
 #    heighway.iterate(17)
@@ -236,7 +259,8 @@ if __name__ == "__main__":
 #    twin_dragon.iterate(17)
 #    twin_dragon.plot()
 #    terdragon = Fractal(S0,[ter1,ter2,ter3])
-#    terdragon.iterate(10)
+#    terdragon.iterate(3)
+#    terdragon.rotate([math.pi/3,2*math.pi/3])
 #    terdragon.plot()
 #    golden_dragon = Fractal(S0,[gd1,gd2])
 #    golden_dragon.iterate(14)
@@ -244,12 +268,12 @@ if __name__ == "__main__":
 #    z2_golden_dragon = Fractal(S0,[z2gd1,z2gd2,z2gd3,z2gd4])
 #    z2_golden_dragon.iterate(10)
 #    z2_golden_dragon.plot()
-    pentigree = Fractal(S0,[pent1,pent2,pent3,pent4,pent5,pent6])
-    pentigree.iterate(7)
-    pentigree.plot()
+#    pentigree = Fractal(S0,[pent1,pent2,pent3,pent4,pent5,pent6])
+#    pentigree.iterate(7)
+#    pentigree.plot()
 #    pentadentrite = Fractal([0,1],[pend1,pend2,pend3,pend4,pend5,pend6])
 #    pentadentrite.iterate(7)
 #    pentadentrite.plot()
     Koch_fake = Fractal(S0,[koch1,koch2,koch3,koch4])
-    Koch_fake.iterate(8)
+    Koch_fake.iterate(3)
     Koch_fake.plot()
