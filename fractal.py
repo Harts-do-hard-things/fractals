@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 import cmath
-
+import gif
 
 class Fractal:
     def __init__(self,S0,func_list):
@@ -32,7 +32,6 @@ class Fractal:
         for k in self.angle:
             S = [i*cmath.exp(k*1j) for i in self.S]
             self.plot_list.append(S)
-            print(S)
 
 
     def plot(self):
@@ -40,8 +39,22 @@ class Fractal:
         ax = fig.add_subplot(111)
         # Previously was naming this variable self.plot which breaks self.plot()
         for S in self.plot_list:
-            self.plot_handle = ax.plot(np.real(S),np.imag(S))            
+            self.plot_handle = ax.plot(np.real(S),np.imag(S))
         plt.axis('equal')
+        
+    @gif.frame    
+    def gif_plot(self):
+        plt.plot(np.real(self.S),np.imag(self.S))
+        plt.ylim((-1,1))
+        plt.axis('equal')
+        
+    def save_gif(self,path,iterations,duration = 1000):
+        frames = []
+        for i in range(iterations):
+            self.iterate(1)
+            frame = self.gif_plot()
+            frames.append(frame)
+        gif.save(frames, '{0}_{1}.gif'.format(path,iterations), duration)
         
 
 # Another option for making the code cleaner... 
@@ -233,47 +246,60 @@ def koch4(z):
     return kr*(z + 2)
 
 
+
 # Builds a unit-pentagon in complex plane
 star = np.exp(1j*np.arange(0,361,72)*math.pi/180)
 pentagon = np.cumsum(star)
 
 
 if __name__ == "__main__":
-#    dragon = Fractal(S0,IFS_function['dragon'])
-#    dragon.iterate(16)
-#    dragon.rotate(- math.pi*.5)
-#    dragon.plot()
-#    heighway = HeighwayDragon()
-#    heighway.iterate(17)
-#    heighway.plot()
-#    levy = Fractal(S0,[func1,func2])
-#    levy.iterate(17)
-#    levy.plot()
-#    z2_dragon = Fractal(S0,IFS_function['z2_dragon'])
-#    z2_dragon.iterate(10)
-#    z2_dragon.plot()
-#    z2levy = Fractal([0,1],[func1,z2levy2,func2,z2levy4])
-#    z2levy.iterate(10)
-#    z2levy.plot()
-#    twin_dragon = Fractal(S0_twin,[twin1,twin2])
-#    twin_dragon.iterate(17)
-#    twin_dragon.plot()
-#    terdragon = Fractal(S0,[ter1,ter2,ter3])
-#    terdragon.iterate(3)
-#    terdragon.rotate([math.pi/3,2*math.pi/3])
-#    terdragon.plot()
-#    golden_dragon = Fractal(S0,[gd1,gd2])
-#    golden_dragon.iterate(14)
-#    golden_dragon.plot()
-#    z2_golden_dragon = Fractal(S0,[z2gd1,z2gd2,z2gd3,z2gd4])
-#    z2_golden_dragon.iterate(10)
-#    z2_golden_dragon.plot()
-#    pentigree = Fractal(S0,[pent1,pent2,pent3,pent4,pent5,pent6])
-#    pentigree.iterate(7)
-#    pentigree.plot()
-#    pentadentrite = Fractal([0,1],[pend1,pend2,pend3,pend4,pend5,pend6])
-#    pentadentrite.iterate(7)
-#    pentadentrite.plot()
+    # dragon = Fractal(S0,IFS_function['dragon'])
+    # dragon.save_gif('Dragon',18)
+    # dragon.iterate(5)
+    # dragon.rotate(- math.pi*.5)
+    # dragon.plot()
+    # heighway = HeighwayDragon()
+    # heighway.iterate(17)
+    # heighway.plot()
+    # levy = Fractal(S0,[func1,func2])
+    # levy.save_gif('levy_C', 19)
+    # levy.iterate(17)
+    # levy.plot()
+    # z2_dragon = Fractal(S0,IFS_function['z2_dragon'])
+    # z2_dragon.save_gif('z2_dragon',10)
+    # z2_dragon.iterate(10)
+    # z2_dragon.plot()
+    # z2levy = Fractal([0,1],[func1,z2levy2,func2,z2levy4])
+    # z2levy.save_gif('z2levy', 10)
+    # z2levy.iterate(10)
+    # z2levy.plot()
+    # twin_dragon = Fractal(S0_twin,[twin1,twin2])
+    # twin_dragon.save_gif('Twin dragon', 17)
+    # twin_dragon.iterate(17)
+    # twin_dragon.plot()
+    # terdragon = Fractal(S0,[ter1,ter2,ter3])
+    # terdragon.save_gif('terdragon',12)
+    # terdragon.rotate([math.pi/3,2*math.pi/3])
+    # terdragon.plot()
+    # golden_dragon = Fractal(S0,[gd1,gd2])
+    # golden_dragon.save_gif('Golden_Dragon', 21)
+    # golden_dragon.iterate(21)
+    # golden_dragon.plot()
+    z2_golden_dragon = Fractal(S0,[z2gd1,z2gd2,z2gd3,z2gd4])
+    z2_golden_dragon.save_gif('z2_golden_dragon',10)
+    # z2_golden_dragon.iterate(10)
+    # z2_golden_dragon.plot()
+    # pentigree = Fractal(S0,[pent1,pent2,pent3,pent4,pent5,pent6])
+    # pentigree.save_gif('Pentigree', 8)
+    # pentigree.iterate(8)
+    # pentigree.plot()
+    # pentadentrite = Fractal([0,1],[pend1,pend2,pend3,pend4,pend5,pend6])
+    # pentadentrite.save_gif('Pentadentrite', 8)
+    # pentadentrite.iterate(8)
+    # pentadentrite.plot()
     Koch_fake = Fractal(S0,[koch1,koch2,koch3,koch4])
-    Koch_fake.iterate(3)
-    Koch_fake.plot()
+    Koch_fake.save_gif('Koch_flake', 10)
+    # Koch_fake.iterate(3)
+    # Koch_fake.plot()
+    pass
+    
