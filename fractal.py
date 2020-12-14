@@ -11,45 +11,49 @@ import math
 import cmath
 import gif
 
+flatten = lambda t: [item for sublist in t for item in sublist]
+
+def segment(S):
+    S_ = [(S[i],S[i+1],np.NaN) for i in range(len(S)-1)]
+    return flatten(S_)
+    
+
 class Fractal:
-    def __init__(self,S0,func_list):
+    def __init__(self, S0, func_list):
         self.S0 = S0
-        self.S  = S0
+        self.S = [S0]
         self.func_list = func_list
         self.plot_list = []
         self.angle = [0]
-        self.i = 0
+        # self.i = 0
 
     def iterate(self, i):
         for j in range(i):
-            S = []
-            for func in self.func_list:
-                S.extend(list(map(func,self.S)))
-                S.append(float('nan'))
+            # TODO clarify syntax
+            S = [[func(k) for k in s] for s in self.S for func in self.func_list]
             self.S = S
+            self.flatS = flatten(self.S)
 
-    def iterate_return_points(self, i):
-        for j in range(i):
-            S = []
-            for func in self.func_list:
-                S.extend(list(map(func,self.S)))
-            self.S = S
-        self. S = [item for sublist in [(S[i],S[i+1],math.nan) for i in range(len(S)) if i%2 == 0] for item in sublist]
-
-    def rotate(self,angle):
+    # TODO Fix This code to be usable for rotations
+    def rotate(self, angle):
         for k in self.angle:
             S = [i*cmath.exp(k*1j) for i in self.S]
-            self.plot_list.append(S)
+            self.plot_list.appendH(S)
 
-
+    # TODO Add code for a transformation
+    def translate(self, offset, vector):
+        S_trans = [vector*i + offset for i in self.flatS]
+        self.plot_list.append(S_trans)
+    
+    # TODO Fix so that plot plots one object
     def plot(self):
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        # Previously was naming this variable self.plot which breaks self.plot()
-        # for S in self.plot_list:
-        self.plot_handle = ax.plot(np.real(self.S),np.imag(self.S))
-        plt.axis('equal')
 
+        self.plot_handle = [ax.plot(np.real(s),np.imag(s),color='b') for s in self.S]
+        plt.axis('equal')
+    
+    # Not intended for Call except through save_gif method
     @gif.frame
     def gif_plot(self):
         plt.plot(np.real(self.S),np.imag(self.S))
@@ -68,23 +72,31 @@ class Fractal:
 # Another option for making the code cleaner...
 class HeighwayDragon(Fractal):
     def __init__(self):
-        Fractal.__init__(self,
-                         S0 = [0,1],
-                         func_list =
-                         [lambda z :  0.5*(1+1j)*z,
-                          lambda z : 1-0.5*(1-1j)*z])
+        super().__init__(S0=[0, 1],
+                         func_list=
+                         [lambda z:  0.5*(1+1j)*z,
+                          lambda z: 1-0.5*(1-1j)*z])
 
 lamda = .5 - 1j/2/math.sqrt(3)
 lamdaconj = .5 + 1j/2/math.sqrt(3)
 
 class fudgeflake(Fractal):
     def __init__(self):
-        Fractal.__init__(self,
-                         S0 = [0,1],
+        super().__init__(S0 = [0,1],
                          func_list =
                          [lambda z :  lamda*z,
                           lambda z : 1j/math.sqrt(3)*z+lamda,
                           lambda z : lamda*z + lamdaconj])
+    def tile(self):
+        # TODO add code in terms of super() that will make the necesary transformation
+        pass
+
+class Levy_C(Fractal):
+    def __init__(self):
+        super().__init__(S0=[0,1],
+                         func_list=
+                         [lambda z : 0.5*(1-1j)*z,
+                          lambda z : 1+0.5*(1+1j)*(z-1)])
 
 SF =[]
 S0i = [0,1]
@@ -269,13 +281,12 @@ if __name__ == "__main__":
     # dragon.iterate(5)
     # dragon.rotate(- math.pi*.5)
     # dragon.plot()
-    heighway = HeighwayDragon()
-    heighway.iterate(17)
-    heighway.plot()
-    # levy = Fractal(S0i,[func1,func2])
-    # levy.save_gif('levy_C', 19)
-    # levy.iterate(17)
-    # levy.plot()
+    # heighway = HeighwayDragon()
+    # heighway.iterate(4)
+    # heighway.plot()
+    levy = Levy_C()
+    levy.iterate(1)
+    levy.plot()
     # z2_dragon = Fractal(S0i,IFS_function['z2_dragon'])
     # z2_dragon.save_gif('z2_dragon',10)
     # z2_dragon.iterate(10)
