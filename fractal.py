@@ -5,20 +5,18 @@ Created on Thu Dec 15 17:14:22 2016
 @author: Harts
 """
 
+# Maybe I went a little overboard with super(), 
+# but I don't know better, and the code feels better
+# N.B. I used flatten and segment in the HeighwayDragon code
+#   Under the @staticmethod decorator (currently broken)
+# All fractals requiring segmentation should use HeighwayDragon as parent
+
 import cmath
 import math
 
 import gif
 import matplotlib.pyplot as plt
 import numpy as np
-
-
-def flatten(t): return [item for sublist in t for item in sublist]
-
-
-def segment(S):
-    S_ = [(S[i], S[i + 1], np.NaN) for i in range(len(S) - 1)]
-    return flatten(S_)
 
 
 class Fractal:
@@ -32,57 +30,43 @@ class Fractal:
 
     # TODO Optimize
     def iterate(self, i):
+        # self.plot_list.clear()
         for _ in range(i):
-            # TODO clarify syntax
             S = []
             for func in self.func_list:
                 S.extend(list(map(func,self.S)))
             self.S = S
         self.plot_list.append(S)
+        # TODO: Get this code Usable for gif_plot()
 
-    # TODO Fix This code to be usable for rotations
-    def rotate(self, angle):
-        S = [i * cmath.exp(angle * 1j) for i in self.S]
-        self.S = S
-        self.plot_list.append(S)
-
-    # TODO Add code for a transformation
+    # Rotate and translate (in that order)
     def translate(self, offset, angle):
-        S_trans = [i * cmath.exp(angle * 1j) + offset for i in self.S]
+        S_trans = [i * cmath.exp(angle * 1j) + offset for i in self.plot_list[0]]
         self.S = S_trans
         self.plot_list.append(S_trans)
 
-    # TODO Fix so that plot plots one object
     def plot(self):
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        self.plot_handle = ax.plot(np.real(self.S), np.imag(self.S),color = 'tab:blue')
+        self.plot_handle = [ax.plot(np.real(s), np.imag(s),color='tab:blue') for s in self.plot_list]
         plt.axis('equal')
-    
-    def plot_wo_new_fig(self):
-        plt.plot(np.real(self.S), np.imag(self.S),color = 'tab:blue')
-    
-    def plot_several(self):
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        plt.axis('equal')
-        [ax.plot(np.real(s), np.imag(s),color='tab:blue') for s in self.plot_list]
         plt.show()
         
     # Not intended for Call except through save_gif method
     @gif.frame
     def gif_plot(self):
-        plt.plot(np.real(self.S), np.imag(self.S))
+        [plt.plot(np.real(s), np.imag(s),color='tab:blue') for s in self.plot_list]
         plt.ylim((-1, 1))
+        plt.xlim((-1.5,1.5))
         plt.axis('equal')
 
-    def save_gif(self, path, iterations, duration=1000):
+    def save_gif(self, iterations, duration=1000):
         frames = []
         for _ in range(iterations):
             self.iterate(1)
             frame = self.gif_plot()
             frames.append(frame)
-        gif.save(frames, '{0}_{1}.gif'.format(path, iterations), duration)
+        gif.save(frames, '{0}_{1}.gif'.format(type(self).__name__, iterations), duration)
 
 
 # Another option for making the code cleaner...
@@ -91,40 +75,97 @@ class HeighwayDragon(Fractal):
         super().__init__(S0=[0, 1],
                          func_list=[lambda z:  0.5 * (1 + 1j) * z,
                                     lambda z: 1 - 0.5 * (1 - 1j) * z])
+    
+    # TODO figure out why HeighwayDragon is able to be replotted without doubling
+    def iterate(self, i):
+        for _ in range(i):
+            S = []
+            for func in self.func_list:
+                S.extend(list(map(func,self.S)))
+                S.append(np.nan)
+            self.S = S
+        self.plot_list.append(S)
 
+    # TODO Implement these to do a better nan break
+    @staticmethod
+    def flatten(t):
+        return [item for sublist in t for item in sublist]
+    
+    def segment(self,points):
+        nan_array = self.flatten([[points[i],points[i+1],math.nan] for i in range(len(points) -1)])
+        segments = np.ma.masked_invalid(nan_array)
+        return segments
 
+# Vars Used in terdragon
 lamda = .5 - 1j / 2 / math.sqrt(3)
 lamdaconj = .5 + 1j / 2 / math.sqrt(3)
 
 
-class fudgeflake(Fractal):
+class Terdragon(Fractal):
     def __init__(self):
         super().__init__(S0=[0, 1],
                          func_list=[lambda z:  lamda * z,
                                     lambda z: 1j / math.sqrt(3) * z + lamda,
                                     lambda z: lamda * z + lamdaconj])
 
+
+class FudgeFlake(Terdragon):
     def plot(self):
         super().translate(0, math.pi/3)
-        super().translate(1, math.pi/3)
-        super().plot_several()
-
-    def tile(self):
-        # TODO add code in terms of super() that will make the necesary transformation
-        pass
+        super().translate(1, 2*math.pi/3)
+        super().plot()
 
 
-class Levy_C(Fractal):
+class LevyC(Fractal):
     def __init__(self):
         super().__init__(S0=[0, 1],
                          func_list=[lambda z: 0.5 * (1 - 1j) * z,
                                     lambda z: 1 + 0.5 * (1 + 1j) * (z - 1)])
 
 
+class LevyTapestryOutside(LevyC):
+    # TODO Get this to be able to iterate, then re-plot
+    def plot(self):
+        super().translate(1, math.pi)
+        super().plot()
+        
+
+class LevyTapestryInside(LevyC):
+    def plot(self):
+        translations = [(-1j,math.pi*.5),
+                        (1,-math.pi*.5),
+                        (1-1j,math.pi)]
+        [super(LevyC,self).translate(off, theta) for off,theta in translations]
+        super().plot()
+
+# Vars used in koch snowflake
+K0 = (0 + 1j)
+Ka = (.5 + .5 * 1j * math.sqrt(3))
+Kna = (.5 - .5 * 1j * math.sqrt(3))
+kr = 1 / 3
+SK = [-1, 0]
+
+
+class KochFlake(Fractal):
+    def __init__(self):
+        super().__init__(S0=[0, 1],
+                         func_list=[lambda z: kr * (z),
+                                    lambda z: kr * (Ka * z + 1),
+                                    lambda z: kr * (Kna * z + 1 + Ka),
+                                    lambda z: kr * (z + 2)])
+        self.translations = [
+            (cmath.rect(-1, 2*math.pi/3),2*math.pi/3),
+            (1,-2*math.pi/3)]
+
+    def plot(self):
+        [super(KochFlake,self).translate(off, theta) for off,theta in self.translations]
+        super().plot()
+
+
 SF = []
 S0i = [0, 1]
 
-# Vars Used in terdragon
+
 
 
 # Vars used in twindragon
@@ -152,14 +193,12 @@ SA = (math.pi * 0.4)
 BA = (1 * math.cos(RA + SA) + 1j * math.sin(RA + SA))
 CA = (1 * math.cos(RA - SA) + 1j * math.sin(RA - SA))
 DA = (1 * math.cos(RA - 2 * SA) + 1j * math.sin(RA - 2 * SA))
+star = np.exp(1j * np.arange(0, 361, 72) * math.pi / 180)
+pentagon = np.cumsum(star)
 
-# Vars used in koch snowflake
-K0 = (0 + 1j)
-Ka = (.5 + .5 * 1j * math.sqrt(3))
-Kna = (.5 - .5 * 1j * math.sqrt(3))
-kr = 1 / 3
-SK = [-1, 0]
 
+class Pentadendrite(Fractal):
+    pass
 
 # This seems like a cleaner way to make the IFS functions... Probably as
 # members of the class
@@ -311,41 +350,18 @@ def pend6(z):
 # Koch Snowflake
 
 
-def koch1(z):
-    return kr * (z)
 
 
-def koch2(z):
-    return kr * (Ka * z + 1)
 
 
-def koch3(z):
-    return kr * (Kna * z + 1 + Ka)
-
-
-def koch4(z):
-    return kr * (z + 2)
-
-
-# Builds a unit-pentagon in complex plane
-star = np.exp(1j * np.arange(0, 361, 72) * math.pi / 180)
-pentagon = np.cumsum(star)
 
 
 if __name__ == "__main__":
-    # dragon = Fractal(S0i,IFS_function['dragon'])
-    # dragon.save_gif('Dragon',18)
-    # dragon.iterate(5)
-    # dragon.rotate(- math.pi*.5)
-    # dragon.plot()
-    # heighway = HeighwayDragon()
-    # heighway.iterate(4)
-    # heighway.plot()
-    # levy = Levy_C()
-    # levy.iterate(10)
-    # levy.plot()
-    # levy.translate(1,math.pi)
-    # levy.plot_wo_new_fig()
+    heighway = HeighwayDragon()
+    heighway.iterate(1)
+    heighway.plot()
+    # levy = LevyC()
+    # levy.save_gif(5)
     # z2_dragon = Fractal(S0i,IFS_function['z2_dragon'])
     # z2_dragon.save_gif('z2_dragon',10)
     # z2_dragon.iterate(10)
@@ -378,11 +394,16 @@ if __name__ == "__main__":
     # pentadentrite.save_gif('Pentadentrite', 8)
     # pentadentrite.iterate(8)
     # pentadentrite.plot()
-    # Koch_fake = Fractal(S0i,[koch1,koch2,koch3,koch4])
-    # Koch_fake.save_gif('Koch_flake', 10)
-    # Koch_fake.iterate(3)
-    # Koch_fake.plot()
-    fudge = fudgeflake()
-    fudge.iterate(9)
-    fudge.plot()
+    # koch = KochFlake()
+    # koch.iterate(9)
+    # koch.plot()
+    # fudge = FudgeFlake()
+    # fudge.iterate(9)
+    # fudge.plot()
+    tap_outside = LevyTapestryOutside()
+    # tap_outside.save_gif(5)
+    tap_outside.iterate(4)
+    tap_outside.plot()
+    tap_outside.iterate(4)
+    tap_outside.plot()
     pass
