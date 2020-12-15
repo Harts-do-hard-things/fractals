@@ -5,11 +5,12 @@ Created on Thu Dec 15 17:14:22 2016
 @author: Harts
 """
 
+import cmath
+import math
+
+import gif
 import matplotlib.pyplot as plt
 import numpy as np
-import math
-import cmath
-import gif
 
 
 def flatten(t): return [item for sublist in t for item in sublist]
@@ -23,40 +24,51 @@ def segment(S):
 class Fractal:
     def __init__(self, S0, func_list):
         self.S0 = S0
-        self.S = [S0]
+        self.S = S0
         self.func_list = func_list
         self.plot_list = []
         self.angle = [0]
         # self.i = 0
 
+    # TODO Optimize
     def iterate(self, i):
-        for j in range(i):
+        for _ in range(i):
             # TODO clarify syntax
-            S = [[func(k) for k in s]
-                 for s in self.S for func in self.func_list]
+            S = []
+            for func in self.func_list:
+                S.extend(list(map(func,self.S)))
             self.S = S
-            self.flatS = flatten(self.S)
+        self.plot_list.append(S)
 
     # TODO Fix This code to be usable for rotations
     def rotate(self, angle):
-        for k in self.angle:
-            S = [i * cmath.exp(k * 1j) for i in self.S]
-            self.plot_list.appendH(S)
+        S = [i * cmath.exp(angle * 1j) for i in self.S]
+        self.S = S
+        self.plot_list.append(S)
 
     # TODO Add code for a transformation
-    def translate(self, offset, vector):
-        S_trans = [vector * i + offset for i in self.flatS]
+    def translate(self, offset, angle):
+        S_trans = [i * cmath.exp(angle * 1j) + offset for i in self.S]
+        self.S = S_trans
         self.plot_list.append(S_trans)
 
     # TODO Fix so that plot plots one object
     def plot(self):
         fig = plt.figure()
         ax = fig.add_subplot(111)
-
-        self.plot_handle = [
-            ax.plot(np.real(s), np.imag(s), color='b') for s in self.S]
+        self.plot_handle = ax.plot(np.real(self.S), np.imag(self.S),color = 'tab:blue')
         plt.axis('equal')
-
+    
+    def plot_wo_new_fig(self):
+        plt.plot(np.real(self.S), np.imag(self.S),color = 'tab:blue')
+    
+    def plot_several(self):
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        plt.axis('equal')
+        [ax.plot(np.real(s), np.imag(s),color='tab:blue') for s in self.plot_list]
+        plt.show()
+        
     # Not intended for Call except through save_gif method
     @gif.frame
     def gif_plot(self):
@@ -66,7 +78,7 @@ class Fractal:
 
     def save_gif(self, path, iterations, duration=1000):
         frames = []
-        for i in range(iterations):
+        for _ in range(iterations):
             self.iterate(1)
             frame = self.gif_plot()
             frames.append(frame)
@@ -91,6 +103,11 @@ class fudgeflake(Fractal):
                          func_list=[lambda z:  lamda * z,
                                     lambda z: 1j / math.sqrt(3) * z + lamda,
                                     lambda z: lamda * z + lamdaconj])
+
+    def plot(self):
+        super().translate(0, math.pi/3)
+        super().translate(1, math.pi/3)
+        super().plot_several()
 
     def tile(self):
         # TODO add code in terms of super() that will make the necesary transformation
@@ -324,9 +341,11 @@ if __name__ == "__main__":
     # heighway = HeighwayDragon()
     # heighway.iterate(4)
     # heighway.plot()
-    levy = Levy_C()
-    levy.iterate(1)
-    levy.plot()
+    # levy = Levy_C()
+    # levy.iterate(10)
+    # levy.plot()
+    # levy.translate(1,math.pi)
+    # levy.plot_wo_new_fig()
     # z2_dragon = Fractal(S0i,IFS_function['z2_dragon'])
     # z2_dragon.save_gif('z2_dragon',10)
     # z2_dragon.iterate(10)
@@ -363,4 +382,7 @@ if __name__ == "__main__":
     # Koch_fake.save_gif('Koch_flake', 10)
     # Koch_fake.iterate(3)
     # Koch_fake.plot()
+    fudge = fudgeflake()
+    fudge.iterate(9)
+    fudge.plot()
     pass
