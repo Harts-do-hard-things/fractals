@@ -11,7 +11,8 @@ Created on Thu Dec 15 17:14:22 2016
 #   Under the @staticmethod decorator (now works for any arbitrary starting line)
 # All fractals requiring segmentation should use DragonFractal as parent
 # TODO: Write some docstrings
-
+# TODO: Add fractal Flowsnake
+# TODO: Check out some pythagoras Trees
 
 import cmath
 import math
@@ -120,6 +121,7 @@ S0_twin = [0, 1, 1 - 1j]
 def twin1(z): return 0.5 * (1 + 1j) * z
 def twin2(z): return 1 - 0.5 * (1 + 1j) * z
 
+
 # Vars used in koch snowflake
 K0 = (0 + 1j)
 Ka = (.5 + .5 * 1j * math.sqrt(3))
@@ -199,9 +201,10 @@ IFS_function['pentadendrite'] = [
     lambda z: Dr * (PA * z + 2 * PA + BA + CA + DA)]
 
 IFS_function['koch_flake'] = [lambda z: Kr * (z),
-    lambda z: Kr * (Ka * z + 1),
-    lambda z: Kr * (Kna * z + 1 + Ka),
-    lambda z: Kr * (z + 2)]
+                              lambda z: Kr * (Ka * z + 1),
+                              lambda z: Kr * (Kna * z + 1 + Ka),
+                              lambda z: Kr * (z + 2)]
+
 
 class HeighwayDragon(DragonFractal):
     def __init__(self):
@@ -253,7 +256,7 @@ class LevyTapestryInside(LevyC):
 
 class KochFlake(Fractal):
     def __init__(self):
-        super().__init__(S0i,func_list=IFS_function['koch_flake'])
+        super().__init__(S0i, func_list=IFS_function['koch_flake'])
 
     def tile(self):
         translations = [
