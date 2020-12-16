@@ -7,9 +7,11 @@ Created on Thu Dec 15 17:14:22 2016
 
 
 # Need to Fix Dragon Fractals (See todo list)
-# N.B. I used flatten and segment in the HeighwayDragon code
+# N.B. I used flatten and segment in the DragonFractal code
 #   Under the @staticmethod decorator (now works for any arbitrary starting line)
-# All fractals requiring segmentation should use HeighwayDragon as parent
+# All fractals requiring segmentation should use DragonFractal as parent
+# TODO: Write some docstrings
+
 
 import cmath
 import math
@@ -24,7 +26,7 @@ class Fractal:
         self.S0 = S0
         self.S = S0
         self.func_list = func_list
-        self.plot_list = []
+        self.plot_list = [S0]
         self.angle = [0]
         # self.i = 0
 
@@ -38,7 +40,7 @@ class Fractal:
         self.plot_list.append(S)
 
     # Rotate and translate (in that order) & create a copy
-    def translate(self, offset, angle, copy = False):
+    def translate(self, offset, angle, copy=False):
         S_trans = [i * cmath.exp(angle * 1j) +
                    offset for i in self.plot_list[0]]
         if copy:
@@ -70,9 +72,10 @@ class Fractal:
         plt.axis('equal')
 
     def save_gif(self, iterations, duration=1000):
-        frames = []
+        self.tile()
+        frames = [self.gif_plot()]
         # TODO set plot axes to some good values
-        for _ in range(iterations):
+        for _ in range(iterations - 1):
             self.iterate(1)
             self.tile()
             frame = self.gif_plot()
@@ -81,12 +84,7 @@ class Fractal:
             type(self).__name__, iterations), duration)
 
 
-# Another option for making the code cleaner...
-class HeighwayDragon(Fractal):
-    def __init__(self):
-        super().__init__(S0=[0, 1],
-                         func_list=[lambda z:  0.5 * (1 + 1j) * z,
-                                    lambda z: 1 - 0.5 * (1 - 1j) * z])
+class DragonFractal(Fractal):
 
     @staticmethod
     def flatten(t):
@@ -104,92 +102,30 @@ class HeighwayDragon(Fractal):
         super().plot()
 
 
-# Vars used in twindragon
-S0_twin = [0, 1, 1 - 1j]
-def twin1(z): return 0.5 * (1 + 1j) * z
-def twin2(z): return 1 - 0.5 * (1 + 1j) * z
-
-
-class TwinDragon(HeighwayDragon):
-    def __init__(self):
-        # TODO Fix this super statement
-        super(HeighwayDragon, self).__init__(S0=S0_twin,
-                                             func_list=[
-                                                 twin1,
-                                                 twin2])
-
-
-# Vars Used in terdragon
-lamda = .5 - 1j / 2 / math.sqrt(3)
-lamdaconj = .5 + 1j / 2 / math.sqrt(3)
-
-
-class Terdragon(Fractal):
-    def __init__(self):
-        super().__init__(S0=[0, 1],
-                         func_list=[lambda z:  lamda * z,
-                                    lambda z: 1j / math.sqrt(3) * z + lamda,
-                                    lambda z: lamda * z + lamdaconj])
-
-
-class FudgeFlake(Terdragon):
-    def tile(self):
-        self.translate(0, math.pi/3)
-        self.translate(1, 2*math.pi/3)
-
-
-class LevyC(Fractal):
-    def __init__(self):
-        super().__init__(S0=[0, 1],
-                         func_list=[lambda z: 0.5 * (1 - 1j) * z,
-                                    lambda z: 1 + 0.5 * (1 + 1j) * (z - 1)])
-
-
-class LevyTapestryOutside(LevyC):
-    def tile(self):
-        self.translate(1, math.pi)
-
-
-class LevyTapestryInside(LevyC):
-    def tile(self):
-        translations = [(-1j, math.pi*.5),
-                        (1, -math.pi*.5),
-                        (1-1j, math.pi)]
-        [self.translate(off, theta) for off, theta in translations]
-
-
-# Vars used in koch snowflake
-K0 = (0 + 1j)
-Ka = (.5 + .5 * 1j * math.sqrt(3))
-Kna = (.5 - .5 * 1j * math.sqrt(3))
-kr = 1 / 3
-SK = [-1, 0]
-
-
-class KochFlake(Fractal):
-    def __init__(self):
-        super().__init__(S0=[0, 1],
-                         func_list=[lambda z: kr * (z),
-                                    lambda z: kr * (Ka * z + 1),
-                                    lambda z: kr * (Kna * z + 1 + Ka),
-                                    lambda z: kr * (z + 2)])
-
-    def tile(self):
-        translations = [
-            (cmath.rect(-1, 2*math.pi/3), 2*math.pi/3),
-            (1, -2*math.pi/3)]
-        [self.translate(off, theta) for off, theta in translations]
-
-
-SF = []
+# GLOBALS
 S0i = [0, 1]
-
 
 # Vars used in golden dragon
 phi = (1 + math.sqrt(5)) * .5
 r = (1 / phi)**(1 / phi)
 A = math.acos((1 + r**2 - r**4) / 2 / r)
 B = math.acos((1 - r**2 + r**4) / 2 / r**2)
+
+# Vars Used in terdragon
+lamda = .5 - 1j / 2 / math.sqrt(3)
+lamdaconj = .5 + 1j / 2 / math.sqrt(3)
+
+# Vars used in twindragon
+S0_twin = [0, 1, 1 - 1j]
+def twin1(z): return 0.5 * (1 + 1j) * z
+def twin2(z): return 1 - 0.5 * (1 + 1j) * z
+
+# Vars used in koch snowflake
+K0 = (0 + 1j)
+Ka = (.5 + .5 * 1j * math.sqrt(3))
+Kna = (.5 - .5 * 1j * math.sqrt(3))
+Kr = 1 / 3
+SK = [-1, 0]
 
 # Vars used in Pentigree
 P_r = (3 - math.sqrt(5)) * .5
@@ -209,49 +145,15 @@ DA = (1 * math.cos(RA - 2 * SA) + 1j * math.sin(RA - 2 * SA))
 star = np.exp(1j * np.arange(0, 361, 72) * math.pi / 180)
 pentagon = np.cumsum(star)
 
-# Pentadendrite
-
-def pend1(z): return Dr * (PA * z)
-
-
-def pend2(z): return Dr * (BA * z + PA)
-
-
-def pend3(z): return Dr * (PA * z + PA + BA)
-
-
-def pend4(z): return Dr * (DA * z + 2 * PA + BA)
-
-
-def pend5(z): return Dr * (CA * z + DA + 2 * PA + BA)
-
-
-def pend6(z): return Dr * (PA * z + 2 * PA + BA + CA + DA)
-
-
-class Pentadendrite(Fractal):
-    def __init__(self):
-        super().__init__(S0 = [0,1],
-                 func_list = [
-                     pend1,
-                     pend2,
-                     pend3,
-                     pend4,
-                     pend5,
-                     pend6])
-
-    def tile(self):
-        translations = zip(pentagon[:4], np.arange(72, 361, 72) * math.pi / 180)
-        [self.translate(offset, angle) for offset, angle in translations]
-
-
-# This seems like a cleaner way to make the IFS functions... Probably as
-# members of the class
 IFS_function = dict()
 # Plain Ole' Dragon Curve
 IFS_function['dragon'] = [
     lambda z:  0.5 * (1 + 1j) * z,
     lambda z: 1 - 0.5 * (1 - 1j) * z]
+
+IFS_function['golden_dragon'] = [
+    lambda z: r * z * cmath.exp(A * 1j),
+    lambda z: r**2 * z * cmath.exp((math.pi - B) * 1j) + 1]
 # z2 dragon curve
 IFS_function['z2_dragon'] = [
     lambda z:  0.5 * (1 + 1j) * z,
@@ -259,87 +161,142 @@ IFS_function['z2_dragon'] = [
     lambda z: 1 - 0.5 * (1 - 1j) * z,
     lambda z: -(0.5 * (1 + 1j) * z)]
 
-# Levy C
+IFS_function['levy_c'] = [
+    lambda z: 0.5 * (1 - 1j) * z,
+    lambda z: 1 + 0.5 * (1 + 1j) * (z - 1)]
+
+IFS_function['z2_levy'] = [
+    lambda z: 0.5 * (1 - 1j) * z,
+    lambda z: -(1 + 0.5 * (1 + 1j) * (z - 1)),
+    lambda z: 1 + 0.5 * (1 + 1j) * (z - 1),
+    lambda z: -(0.5 * (1 - 1j) * z)]
+
+IFS_function['terdragon'] = [
+    lambda z: lamda * z,
+    lambda z: 1j / math.sqrt(3) * z + lamda,
+    lambda z: lamda * z + lamdaconj]
+
+IFS_function['z2_golden_dragon'] = [
+    lambda z: r * z * cmath.exp(A * 1j),
+    lambda z: r * z * cmath.exp((A - math.pi) * 1j),
+    lambda z: r**2 * z * cmath.exp((math.pi - B) * 1j) + 1,
+    lambda z: r**2 * z * cmath.exp(-B * 1j) - 1, ]
+
+IFS_function['pentigree'] = [
+    lambda z: P_r * P_a1 * z,
+    lambda z: P_r * P_a2 * z + P_r * (P_a1),
+    lambda z: P_r * P_na1 * z + P_r * (P_a1 + P_a2),
+    lambda z: P_r * P_na2 * z + P_r * (P_a1 + P_a2 + P_na1),
+    lambda z: P_r * P_na1 * z + P_r * (P_a1 + P_a2 + P_na1 + P_na2),
+    lambda z: P_r * P_a1 * z + P_r * (P_a1 + P_a2 + P_na1 + P_na2 + P_na1)]
+
+IFS_function['pentadendrite'] = [
+    lambda z: Dr * (PA * z),
+    lambda z: Dr * (BA * z + PA),
+    lambda z: Dr * (PA * z + PA + BA),
+    lambda z: Dr * (DA * z + 2 * PA + BA),
+    lambda z: Dr * (CA * z + DA + 2 * PA + BA),
+    lambda z: Dr * (PA * z + 2 * PA + BA + CA + DA)]
+
+IFS_function['koch_flake'] = [lambda z: Kr * (z),
+    lambda z: Kr * (Ka * z + 1),
+    lambda z: Kr * (Kna * z + 1 + Ka),
+    lambda z: Kr * (z + 2)]
+
+class HeighwayDragon(DragonFractal):
+    def __init__(self):
+        super().__init__(S0i, func_list=IFS_function['dragon'])
 
 
-def func1(z): return 0.5 * (1 - 1j) * z
+class TwinDragon(DragonFractal):
+    def __init__(self):
+        super().__init__(S0=S0_twin,
+                         func_list=[
+                             twin1,
+                             twin2])
 
 
-def func2(z): return 1 + 0.5 * (1 + 1j) * (z - 1)
-
-# Twin Dragon
-
-
-# Terdragon xtreme
+class GoldenDragon(DragonFractal):
+    def __init__(self):
+        super().__init__(S0i, IFS_function['golden_dragon'])
 
 
-def ter1(z): return lamda * z
+class Terdragon(Fractal):
+    def __init__(self):
+        super().__init__(S0i, func_list=IFS_function['terdragon'])
 
 
-def ter2(z): return 1j / math.sqrt(3) * z + lamda
+class FudgeFlake(Terdragon):
+    def tile(self):
+        self.translate(0, math.pi/3)
+        self.translate(1, 2*math.pi/3)
 
 
-def ter3(z): return lamda * z + lamdaconj
-
-# golden dragon
-
-
-def gd1(z): return r * z * cmath.exp(A * 1j)
+class LevyC(Fractal):
+    def __init__(self):
+        super().__init__(S0=[0, 1],
+                         func_list=IFS_function['levy_c'])
 
 
-def gd2(z): return r**2 * z * cmath.exp((math.pi - B) * 1j) + 1
-
-# z2 golden dragon
-
-
-def z2gd1(z): return gd1(z)
+class LevyTapestryOutside(LevyC):
+    def tile(self):
+        self.translate(1, math.pi)
 
 
-def z2gd2(z): return r * z * cmath.exp((A - math.pi) * 1j)
+class LevyTapestryInside(LevyC):
+    def tile(self):
+        translations = [(-1j, math.pi*.5),
+                        (1, -math.pi*.5),
+                        (1-1j, math.pi)]
+        [self.translate(off, theta) for off, theta in translations]
 
 
-def z2gd3(z): return gd2(z)
+class KochFlake(Fractal):
+    def __init__(self):
+        super().__init__(S0i,func_list=IFS_function['koch_flake'])
+
+    def tile(self):
+        translations = [
+            (cmath.rect(-1, 2*math.pi/3), 2*math.pi/3),
+            (1, -2*math.pi/3)]
+        [self.translate(off, theta) for off, theta in translations]
 
 
-def z2gd4(z): return r**2 * z * cmath.exp(-B * 1j) - 1
+class Pentadendrite(Fractal):
+    def __init__(self):
+        super().__init__(S0=[0, 1],
+                         func_list=IFS_function['pentadendrite'])
 
-# z2 levy curve
-
-
-def z2levy1(z): return func1(z)
-
-
-def z2levy2(z): return -(1 + 0.5 * (1 + 1j) * (z - 1))
-
-
-def z2levy3(z): return func2(z)
+    def tile(self):
+        translations = zip(pentagon[:4], np.arange(
+            72, 361, 72) * math.pi / 180)
+        [self.translate(offset, angle) for offset, angle in translations]
+        pass
 
 
-def z2levy4(z): return -(0.5 * (1 - 1j) * z)
+class Z2Dragon(DragonFractal):
+    def __init__(self):
+        super().__init__([0, 1],
+                         IFS_function['z2_dragon'])
 
 
-# Pentigree
-
-def pent1(z): return P_r * P_a1 * z
-
-
-def pent2(z): return P_r * P_a2 * z + P_r * (P_a1)
-
-
-def pent3(z): return P_r * P_na1 * z + P_r * (P_a1 + P_a2)
-
-
-def pent4(z): return P_r * P_na2 * z + P_r * (P_a1 + P_a2 + P_na1)
-
-
-def pent5(z): return P_r * P_na1 * z + P_r * (P_a1 + P_a2 + P_na1 + P_na2)
-
-
-def pent6(z): return P_r * P_a1 * z + P_r * \
-    (P_a1 + P_a2 + P_na1 + P_na2 + P_na1)
+class Z2Levy(DragonFractal):
+    def __init__(self):
+        super().__init__(S0i, IFS_function['z2_levy'])
 
 
 if __name__ == "__main__":
-    pentadendrite = Pentadendrite()
-    pentadendrite.iterate(1)
-    pentadendrite.plot()
+    dragon = KochFlake()
+    dragon.iterate(10)
+    dragon.plot()
+    # pentadendrite = Pentadendrite()
+    # pentadendrite.save_gif(5)
+    # twindragon = TwinDragon()
+    # twindragon.iterate(5)
+    # twindragon.plot()
+    # golden_dragon = GoldenDragon()
+    # golden_dragon.iterate(18)
+    # golden_dragon.plot()
+    # koch_snowflake = KochFlake()
+    # koch_snowflake.save_gif(7)
+    pass
