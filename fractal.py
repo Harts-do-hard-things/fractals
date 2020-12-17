@@ -11,7 +11,6 @@ Created on Thu Dec 15 17:14:22 2016
 #   Under the @staticmethod decorator (now works for any arbitrary starting line)
 # All fractals requiring segmentation should use DragonFractal as parent
 # TODO: Write some docstrings
-# TODO: Add fractal Flowsnake
 # TODO: Check out some pythagoras Trees
 
 import cmath
@@ -29,7 +28,7 @@ class Fractal:
         self.func_list = func_list
         self.plot_list = [S0]
         self.angle = [0]
-        # self.i = 0
+        self.xlim_ = (0,1)
 
     def iterate(self, i):
         self.plot_list.clear()
@@ -66,11 +65,17 @@ class Fractal:
     # Not intended for Call except through save_gif method
     @gif.frame
     def gif_plot(self):
-        [plt.plot(np.real(s), np.imag(s), color='tab:blue')
-         for s in self.plot_list]
-        plt.ylim((-1, 1))
-        plt.xlim((-1.5, 1.5))
+        
+        
         plt.axis('equal')
+        plt.axis([-1,2,-.4,1])
+        plt.autoscale(False)
+        
+        
+        for s in self.plot_list:
+            plt.plot(np.real(s), np.imag(s), color='tab:blue')
+
+
 
     def save_gif(self, iterations, duration=1000):
         self.tile()
@@ -102,6 +107,19 @@ class DragonFractal(Fractal):
         self.plot_list = [self.segment(s) for s in self.plot_list]
         super().plot()
 
+    def save_gif(self, iterations, duration=1000):
+        self.tile()
+        frames = [self.gif_plot()]
+        # TODO set plot axes to some good values
+        for _ in range(iterations - 1):
+            self.iterate(1)
+            self.plot_list = [self.segment(s) for s in self.plot_list]
+            self.tile()
+            frame = self.gif_plot()
+            frames.append(frame)
+        gif.save(frames, '{0}_{1}.gif'.format(
+            type(self).__name__, iterations), duration)
+
 
 # GLOBALS
 S0i = [0, 1]
@@ -118,40 +136,61 @@ lamdaconj = .5 + 1j / 2 / math.sqrt(3)
 
 # Vars used in twindragon
 S0_twin = [0, 1, 1 - 1j]
-def twin1(z): return 0.5 * (1 + 1j) * z
-def twin2(z): return 1 - 0.5 * (1 + 1j) * z
-
-
-# Vars used in koch snowflake
-K0 = (0 + 1j)
-Ka = (.5 + .5 * 1j * math.sqrt(3))
-Kna = (.5 - .5 * 1j * math.sqrt(3))
-Kr = 1 / 3
-SK = [-1, 0]
 
 # Vars used in Pentigree
 P_r = (3 - math.sqrt(5)) * .5
-P_a1 = (math.cos(.2 * math.pi) + 1j * math.sin(.2 * math.pi))
-P_a2 = (math.cos(.6 * math.pi) + 1j * math.sin(.6 * math.pi))
-P_na1 = (1 * math.cos(.2 * math.pi) + -1j * math.sin(.2 * math.pi))
-P_na2 = (1 * math.cos(.6 * math.pi) + -1j * math.sin(.6 * math.pi))
+P_a1 = cmath.rect(1, .2 * math.pi)
+P_a2 = cmath.rect(1, .6 * math.pi)
+P_na1 = cmath.rect(1, -.2 * math.pi)
+P_na2 = cmath.rect(1, -.6 * math.pi)
+P_angle = [P_a1, P_a2, P_na1, P_na2, P_na1, P_a1]
+P_offset = np.cumsum([0,*P_angle[:-1]])
+
+
+def make_func(scale, vector, offset):
+    return lambda z: scale * (vector * z + offset)
 
 # Vars used in pentadendrite
 Dr = math.sqrt((6 - math.sqrt(5)) / 31)
 RA = 0.20627323391771757578747269015392
 PA = (1 * math.cos(RA) + 1j * math.sin(RA))
 SA = (math.pi * 0.4)
-BA = (1 * math.cos(RA + SA) + 1j * math.sin(RA + SA))
-CA = (1 * math.cos(RA - SA) + 1j * math.sin(RA - SA))
-DA = (1 * math.cos(RA - 2 * SA) + 1j * math.sin(RA - 2 * SA))
+BA = cmath.rect(1, RA + SA)
+CA = cmath.rect(1, RA - SA)
+DA = cmath.rect(1, RA - 2 * SA)
 star = np.exp(1j * np.arange(0, 361, 72) * math.pi / 180)
 pentagon = np.cumsum(star)
+VVectors = [PA, BA, PA, DA, CA, PA]
+VOffset = np.cumsum([0,*VVectors[:-1]])
 
+# Vars used in Flowsnake
+F_A = math.asin(math.sqrt(3)/math.sqrt(7)*.5)
+F_A1 = F_A - 2 * math.pi/3
+F_r = math.sqrt(7)**-1
+F_angles = [F_A1, F_A, F_A, F_A1, F_A, F_A + 2*math.pi/3, F_A]
+F_vectors = [cmath.rect(1, phi) for phi in F_angles]
+
+# trans_matrix = [0]
 IFS_function = dict()
 # Plain Ole' Dragon Curve
+IFS_function['flowsnake'] = [
+    lambda z: F_r * (z * F_vectors[0] - F_vectors[0]),
+    lambda z: F_r * (z * F_vectors[1] - F_vectors[0]),
+    lambda z: F_r * (z * F_vectors[2] + F_vectors[1] - F_vectors[0]),
+    lambda z: F_r * (z * F_vectors[3] + 2*F_vectors[2] - F_vectors[0]),
+    lambda z: F_r * (z * F_vectors[4] + F_vectors[3] + F_vectors[2] - F_vectors[0]),
+    lambda z: F_r * (z * F_vectors[5] - F_vectors[5] + F_vectors[3] + F_vectors[2] - F_vectors[0]),
+    lambda z: F_r * (z * F_vectors[6] - F_vectors[5] + F_vectors[3] + F_vectors[2] - F_vectors[0]),
+    ]
+
 IFS_function['dragon'] = [
-    lambda z:  0.5 * (1 + 1j) * z,
+    lambda z: 0.5 * (1 + 1j) * z,
     lambda z: 1 - 0.5 * (1 - 1j) * z]
+
+IFS_function['twin_dragon'] = [
+    lambda z: 0.5 * (1 + 1j) * z,
+    lambda z: 1 - 0.5 * (1 + 1j) * z
+    ]
 
 IFS_function['golden_dragon'] = [
     lambda z: r * z * cmath.exp(A * 1j),
@@ -185,25 +224,25 @@ IFS_function['z2_golden_dragon'] = [
     lambda z: r**2 * z * cmath.exp(-B * 1j) - 1, ]
 
 IFS_function['pentigree'] = [
-    lambda z: P_r * P_a1 * z,
-    lambda z: P_r * P_a2 * z + P_r * (P_a1),
-    lambda z: P_r * P_na1 * z + P_r * (P_a1 + P_a2),
-    lambda z: P_r * P_na2 * z + P_r * (P_a1 + P_a2 + P_na1),
-    lambda z: P_r * P_na1 * z + P_r * (P_a1 + P_a2 + P_na1 + P_na2),
-    lambda z: P_r * P_a1 * z + P_r * (P_a1 + P_a2 + P_na1 + P_na2 + P_na1)]
+    make_func(P_r, vector, offset)
+    for vector,offset in zip(P_angle, P_offset)]
 
 IFS_function['pentadendrite'] = [
-    lambda z: Dr * (PA * z),
-    lambda z: Dr * (BA * z + PA),
-    lambda z: Dr * (PA * z + PA + BA),
-    lambda z: Dr * (DA * z + 2 * PA + BA),
-    lambda z: Dr * (CA * z + DA + 2 * PA + BA),
-    lambda z: Dr * (PA * z + 2 * PA + BA + CA + DA)]
+    make_func(Dr, vector, offset)
+    for vector,offset in zip(VVectors, VOffset)]
 
-IFS_function['koch_flake'] = [lambda z: Kr * (z),
-                              lambda z: Kr * (Ka * z + 1),
-                              lambda z: Kr * (Kna * z + 1 + Ka),
-                              lambda z: Kr * (z + 2)]
+# Vars used in koch snowflake
+K0 = (0 + 1j)
+Ka = (.5 + .5 * 1j * math.sqrt(3))
+Kna = (.5 - .5 * 1j * math.sqrt(3))
+Kr = 1 / 3
+K_vectors = [1, Ka, Kna, 1]
+
+IFS_function['koch_flake'] = [
+    lambda z: Kr * (z),
+    lambda z: Kr * (Ka * z + 1),
+    lambda z: Kr * (Kna * z + 1 + Ka),
+    lambda z: Kr * (z + 2)]
 
 
 class HeighwayDragon(DragonFractal):
@@ -213,10 +252,7 @@ class HeighwayDragon(DragonFractal):
 
 class TwinDragon(DragonFractal):
     def __init__(self):
-        super().__init__(S0=S0_twin,
-                         func_list=[
-                             twin1,
-                             twin2])
+        super().__init__(S0_twin, IFS_function['twin_dragon'])
 
 
 class GoldenDragon(DragonFractal):
@@ -274,13 +310,16 @@ class Pentadendrite(Fractal):
         translations = zip(pentagon[:4], np.arange(
             72, 361, 72) * math.pi / 180)
         [self.translate(offset, angle) for offset, angle in translations]
-        pass
 
+
+class Pentigree(Fractal):
+    def __init__(self):
+        super().__init__(S0i, IFS_function['pentigree'])
 
 class Z2Dragon(DragonFractal):
     def __init__(self):
         super().__init__([0, 1],
-                         IFS_function['z2_dragon'])
+                         IFS_function['z2_golden_dragon'])
 
 
 class Z2Levy(DragonFractal):
@@ -288,10 +327,14 @@ class Z2Levy(DragonFractal):
         super().__init__(S0i, IFS_function['z2_levy'])
 
 
+class Flowsnake(DragonFractal):
+    def __init__(self):
+        super().__init__(S0i, IFS_function['flowsnake'])
+
 if __name__ == "__main__":
-    dragon = KochFlake()
-    dragon.iterate(10)
-    dragon.plot()
+    # dragon = TwinDragon()
+    # dragon.iterate(10)
+    # dragon.plot()
     # pentadendrite = Pentadendrite()
     # pentadendrite.save_gif(5)
     # twindragon = TwinDragon()
@@ -301,5 +344,11 @@ if __name__ == "__main__":
     # golden_dragon.iterate(18)
     # golden_dragon.plot()
     # koch_snowflake = KochFlake()
+    # koch_snowflake.iterate(2)
+    # koch_snowflake.plot()
     # koch_snowflake.save_gif(7)
-    pass
+    snake = Flowsnake()
+    snake.save_gif(5)
+    # pent = Pentadendrite()
+    # pent.iterate(5)
+    # pent.plot()
