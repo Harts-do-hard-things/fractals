@@ -5,152 +5,196 @@ Created on Thu Dec 15 17:14:22 2016
 @author: Harts
 """
 
+
+# Need to Fix Dragon Fractals (See todo list)
+# N.B. I used flatten and segment in the DragonFractal code
+#   Under the @staticmethod decorator (now works for any arbitrary starting line)
+# All fractals requiring segmentation should use DragonFractal as parent
+# TODO: Write some docstrings
+# TODO: Check out some pythagoras Trees
+
+import cmath
+import math
+
+import gif
 import matplotlib.pyplot as plt
 import numpy as np
-import math
-import cmath
-import gif
-
-
-def flatten(t): return [item for sublist in t for item in sublist]
-
-
-def segment(S):
-    S_ = [(S[i], S[i + 1], np.NaN) for i in range(len(S) - 1)]
-    return flatten(S_)
 
 
 class Fractal:
     def __init__(self, S0, func_list):
         self.S0 = S0
-        self.S = [S0]
+        self.S = S0
         self.func_list = func_list
-        self.plot_list = []
+        self.plot_list = [S0]
         self.angle = [0]
-        # self.i = 0
+        self.xlim_ = (0,1)
 
     def iterate(self, i):
-        for j in range(i):
-            # TODO clarify syntax
-            S = [[func(k) for k in s]
-                 for s in self.S for func in self.func_list]
+        self.plot_list.clear()
+        for _ in range(i):
+            S = []
+            for func in self.func_list:
+                S.extend(list(map(func, self.S)))
             self.S = S
-            self.flatS = flatten(self.S)
+        self.plot_list.append(S)
 
-    # TODO Fix This code to be usable for rotations
-    def rotate(self, angle):
-        for k in self.angle:
-            S = [i * cmath.exp(k * 1j) for i in self.S]
-            self.plot_list.appendH(S)
+    # Rotate and translate (in that order) & create a copy
+    def translate(self, offset, angle, copy=False):
+        S_trans = [i * cmath.exp(angle * 1j) +
+                   offset for i in self.plot_list[0]]
+        if copy:
+            self.plot_list[-1] = S_trans
+        else:
+            self.plot_list.append(S_trans)
 
-    # TODO Add code for a transformation
-    def translate(self, offset, vector):
-        S_trans = [vector * i + offset for i in self.flatS]
-        self.plot_list.append(S_trans)
+    def tile(self):
+        pass
+        # Designed to be overridden, Not sure of the Syntax
+        # TODO Determine if this way of doing this is any good
 
-    # TODO Fix so that plot plots one object
     def plot(self):
+        self.tile()
         fig = plt.figure()
         ax = fig.add_subplot(111)
-
-        self.plot_handle = [
-            ax.plot(np.real(s), np.imag(s), color='b') for s in self.S]
+        self.plot_handle = [ax.plot(np.real(s), np.imag(
+            s), color='tab:blue') for s in self.plot_list]
         plt.axis('equal')
+        plt.show()
 
     # Not intended for Call except through save_gif method
     @gif.frame
     def gif_plot(self):
-        plt.plot(np.real(self.S), np.imag(self.S))
-        plt.ylim((-1, 1))
+        
+        
         plt.axis('equal')
+        plt.axis([-1,2,-.4,1])
+        plt.autoscale(False)
+        
+        
+        for s in self.plot_list:
+            plt.plot(np.real(s), np.imag(s), color='tab:blue')
 
-    def save_gif(self, path, iterations, duration=1000):
-        frames = []
-        for i in range(iterations):
+
+
+    def save_gif(self, iterations, duration=1000):
+        self.tile()
+        frames = [self.gif_plot()]
+        # TODO set plot axes to some good values
+        for _ in range(iterations - 1):
             self.iterate(1)
+            self.tile()
             frame = self.gif_plot()
             frames.append(frame)
-        gif.save(frames, '{0}_{1}.gif'.format(path, iterations), duration)
+        gif.save(frames, '{0}_{1}.gif'.format(
+            type(self).__name__, iterations), duration)
 
 
-# Another option for making the code cleaner...
-class HeighwayDragon(Fractal):
-    def __init__(self):
-        super().__init__(S0=[0, 1],
-                         func_list=[lambda z:  0.5 * (1 + 1j) * z,
-                                    lambda z: 1 - 0.5 * (1 - 1j) * z])
+class DragonFractal(Fractal):
+
+    @staticmethod
+    def flatten(t):
+        return [item for sublist in t for item in sublist]
+
+    def segment(self, points):
+        len_ = len(self.S0)
+        lines = [[*points[i:i+len_], np.nan]
+                 for i in range(len(points)-len_+1) if i % len_ == 0]
+        S_ = self.flatten(lines)
+        return S_
+
+    def plot(self):
+        self.plot_list = [self.segment(s) for s in self.plot_list]
+        super().plot()
+
+    def save_gif(self, iterations, duration=1000):
+        self.tile()
+        frames = [self.gif_plot()]
+        # TODO set plot axes to some good values
+        for _ in range(iterations - 1):
+            self.iterate(1)
+            self.plot_list = [self.segment(s) for s in self.plot_list]
+            self.tile()
+            frame = self.gif_plot()
+            frames.append(frame)
+        gif.save(frames, '{0}_{1}.gif'.format(
+            type(self).__name__, iterations), duration)
 
 
-lamda = .5 - 1j / 2 / math.sqrt(3)
-lamdaconj = .5 + 1j / 2 / math.sqrt(3)
-
-
-class fudgeflake(Fractal):
-    def __init__(self):
-        super().__init__(S0=[0, 1],
-                         func_list=[lambda z:  lamda * z,
-                                    lambda z: 1j / math.sqrt(3) * z + lamda,
-                                    lambda z: lamda * z + lamdaconj])
-
-    def tile(self):
-        # TODO add code in terms of super() that will make the necesary transformation
-        pass
-
-
-class Levy_C(Fractal):
-    def __init__(self):
-        super().__init__(S0=[0, 1],
-                         func_list=[lambda z: 0.5 * (1 - 1j) * z,
-                                    lambda z: 1 + 0.5 * (1 + 1j) * (z - 1)])
-
-
-SF = []
+# GLOBALS
 S0i = [0, 1]
 
-# Vars Used in terdragon
-
-
-# Vars used in twindragon
-S0_twin = [0, 1, 1 - 1j]
-
 # Vars used in golden dragon
-
 phi = (1 + math.sqrt(5)) * .5
 r = (1 / phi)**(1 / phi)
 A = math.acos((1 + r**2 - r**4) / 2 / r)
 B = math.acos((1 - r**2 + r**4) / 2 / r**2)
 
+# Vars Used in terdragon
+lamda = .5 - 1j / 2 / math.sqrt(3)
+lamdaconj = .5 + 1j / 2 / math.sqrt(3)
+
+# Vars used in twindragon
+S0_twin = [0, 1, 1 - 1j]
+
 # Vars used in Pentigree
 P_r = (3 - math.sqrt(5)) * .5
-P_a1 = (math.cos(.2 * math.pi) + 1j * math.sin(.2 * math.pi))
-P_a2 = (math.cos(.6 * math.pi) + 1j * math.sin(.6 * math.pi))
-P_na1 = (1 * math.cos(.2 * math.pi) + -1j * math.sin(.2 * math.pi))
-P_na2 = (1 * math.cos(.6 * math.pi) + -1j * math.sin(.6 * math.pi))
+P_a1 = cmath.rect(1, .2 * math.pi)
+P_a2 = cmath.rect(1, .6 * math.pi)
+P_na1 = cmath.rect(1, -.2 * math.pi)
+P_na2 = cmath.rect(1, -.6 * math.pi)
+P_angle = [P_a1, P_a2, P_na1, P_na2, P_na1, P_a1]
+P_offset = np.cumsum([0,*P_angle[:-1]])
+
+
+def make_func(scale, vector, offset):
+    return lambda z: scale * (vector * z + offset)
 
 # Vars used in pentadendrite
 Dr = math.sqrt((6 - math.sqrt(5)) / 31)
 RA = 0.20627323391771757578747269015392
 PA = (1 * math.cos(RA) + 1j * math.sin(RA))
 SA = (math.pi * 0.4)
-BA = (1 * math.cos(RA + SA) + 1j * math.sin(RA + SA))
-CA = (1 * math.cos(RA - SA) + 1j * math.sin(RA - SA))
-DA = (1 * math.cos(RA - 2 * SA) + 1j * math.sin(RA - 2 * SA))
+BA = cmath.rect(1, RA + SA)
+CA = cmath.rect(1, RA - SA)
+DA = cmath.rect(1, RA - 2 * SA)
+star = np.exp(1j * np.arange(0, 361, 72) * math.pi / 180)
+pentagon = np.cumsum(star)
+VVectors = [PA, BA, PA, DA, CA, PA]
+VOffset = np.cumsum([0,*VVectors[:-1]])
 
-# Vars used in koch snowflake
-K0 = (0 + 1j)
-Ka = (.5 + .5 * 1j * math.sqrt(3))
-Kna = (.5 - .5 * 1j * math.sqrt(3))
-kr = 1 / 3
-SK = [-1, 0]
+# Vars used in Flowsnake
+F_A = math.asin(math.sqrt(3)/math.sqrt(7)*.5)
+F_A1 = F_A - 2 * math.pi/3
+F_r = math.sqrt(7)**-1
+F_angles = [F_A1, F_A, F_A, F_A1, F_A, F_A + 2*math.pi/3, F_A]
+F_vectors = [cmath.rect(1, phi) for phi in F_angles]
 
-
-# This seems like a cleaner way to make the IFS functions... Probably as
-# members of the class
+# trans_matrix = [0]
 IFS_function = dict()
 # Plain Ole' Dragon Curve
+IFS_function['flowsnake'] = [
+    lambda z: F_r * (z * F_vectors[0] - F_vectors[0]),
+    lambda z: F_r * (z * F_vectors[1] - F_vectors[0]),
+    lambda z: F_r * (z * F_vectors[2] + F_vectors[1] - F_vectors[0]),
+    lambda z: F_r * (z * F_vectors[3] + 2*F_vectors[2] - F_vectors[0]),
+    lambda z: F_r * (z * F_vectors[4] + F_vectors[3] + F_vectors[2] - F_vectors[0]),
+    lambda z: F_r * (z * F_vectors[5] - F_vectors[5] + F_vectors[3] + F_vectors[2] - F_vectors[0]),
+    lambda z: F_r * (z * F_vectors[6] - F_vectors[5] + F_vectors[3] + F_vectors[2] - F_vectors[0]),
+    ]
+
 IFS_function['dragon'] = [
-    lambda z:  0.5 * (1 + 1j) * z,
+    lambda z: 0.5 * (1 + 1j) * z,
     lambda z: 1 - 0.5 * (1 - 1j) * z]
+
+IFS_function['twin_dragon'] = [
+    lambda z: 0.5 * (1 + 1j) * z,
+    lambda z: 1 - 0.5 * (1 + 1j) * z
+    ]
+
+IFS_function['golden_dragon'] = [
+    lambda z: r * z * cmath.exp(A * 1j),
+    lambda z: r**2 * z * cmath.exp((math.pi - B) * 1j) + 1]
 # z2 dragon curve
 IFS_function['z2_dragon'] = [
     lambda z:  0.5 * (1 + 1j) * z,
@@ -158,209 +202,153 @@ IFS_function['z2_dragon'] = [
     lambda z: 1 - 0.5 * (1 - 1j) * z,
     lambda z: -(0.5 * (1 + 1j) * z)]
 
-# Levy C
+IFS_function['levy_c'] = [
+    lambda z: 0.5 * (1 - 1j) * z,
+    lambda z: 1 + 0.5 * (1 + 1j) * (z - 1)]
 
+IFS_function['z2_levy'] = [
+    lambda z: 0.5 * (1 - 1j) * z,
+    lambda z: -(1 + 0.5 * (1 + 1j) * (z - 1)),
+    lambda z: 1 + 0.5 * (1 + 1j) * (z - 1),
+    lambda z: -(0.5 * (1 - 1j) * z)]
 
-def func1(z):
-    return 0.5 * (1 - 1j) * z
+IFS_function['terdragon'] = [
+    lambda z: lamda * z,
+    lambda z: 1j / math.sqrt(3) * z + lamda,
+    lambda z: lamda * z + lamdaconj]
 
+IFS_function['z2_golden_dragon'] = [
+    lambda z: r * z * cmath.exp(A * 1j),
+    lambda z: r * z * cmath.exp((A - math.pi) * 1j),
+    lambda z: r**2 * z * cmath.exp((math.pi - B) * 1j) + 1,
+    lambda z: r**2 * z * cmath.exp(-B * 1j) - 1, ]
 
-def func2(z):
-    return 1 + 0.5 * (1 + 1j) * (z - 1)
+IFS_function['pentigree'] = [
+    make_func(P_r, vector, offset)
+    for vector,offset in zip(P_angle, P_offset)]
 
-# Twin Dragon
+IFS_function['pentadendrite'] = [
+    make_func(Dr, vector, offset)
+    for vector,offset in zip(VVectors, VOffset)]
 
+# Vars used in koch snowflake
+K0 = (0 + 1j)
+Ka = (.5 + .5 * 1j * math.sqrt(3))
+Kna = (.5 - .5 * 1j * math.sqrt(3))
+Kr = 1 / 3
+K_vectors = [1, Ka, Kna, 1]
 
-def twin1(z):
-    return 0.5 * (1 + 1j) * z
+IFS_function['koch_flake'] = [
+    lambda z: Kr * (z),
+    lambda z: Kr * (Ka * z + 1),
+    lambda z: Kr * (Kna * z + 1 + Ka),
+    lambda z: Kr * (z + 2)]
 
 
-def twin2(z):
-    return 1 - 0.5 * (1 + 1j) * z
+class HeighwayDragon(DragonFractal):
+    def __init__(self):
+        super().__init__(S0i, func_list=IFS_function['dragon'])
 
-# Terdragon xtreme
 
+class TwinDragon(DragonFractal):
+    def __init__(self):
+        super().__init__(S0_twin, IFS_function['twin_dragon'])
 
-def ter1(z):
-    return lamda * z
 
+class GoldenDragon(DragonFractal):
+    def __init__(self):
+        super().__init__(S0i, IFS_function['golden_dragon'])
 
-def ter2(z):
-    return 1j / math.sqrt(3) * z + lamda
 
+class Terdragon(Fractal):
+    def __init__(self):
+        super().__init__(S0i, func_list=IFS_function['terdragon'])
 
-def ter3(z):
-    return lamda * z + lamdaconj
 
-# golden dragon
+class FudgeFlake(Terdragon):
+    def tile(self):
+        self.translate(0, math.pi/3)
+        self.translate(1, 2*math.pi/3)
 
 
-def gd1(z):
+class LevyC(Fractal):
+    def __init__(self):
+        super().__init__(S0=[0, 1],
+                         func_list=IFS_function['levy_c'])
 
-    return r * z * cmath.exp(A * 1j)
 
+class LevyTapestryOutside(LevyC):
+    def tile(self):
+        self.translate(1, math.pi)
 
-def gd2(z):
-    return r**2 * z * cmath.exp((math.pi - B) * 1j) + 1
 
-# z2 golden dragon
+class LevyTapestryInside(LevyC):
+    def tile(self):
+        translations = [(-1j, math.pi*.5),
+                        (1, -math.pi*.5),
+                        (1-1j, math.pi)]
+        [self.translate(off, theta) for off, theta in translations]
 
 
-def z2gd1(z):
-    return gd1(z)
+class KochFlake(Fractal):
+    def __init__(self):
+        super().__init__(S0i, func_list=IFS_function['koch_flake'])
 
+    def tile(self):
+        translations = [
+            (cmath.rect(-1, 2*math.pi/3), 2*math.pi/3),
+            (1, -2*math.pi/3)]
+        [self.translate(off, theta) for off, theta in translations]
 
-def z2gd2(z):
-    return r * z * cmath.exp((A - math.pi) * 1j)
 
+class Pentadendrite(Fractal):
+    def __init__(self):
+        super().__init__(S0=[0, 1],
+                         func_list=IFS_function['pentadendrite'])
 
-def z2gd3(z):
-    return gd2(z)
+    def tile(self):
+        translations = zip(pentagon[:4], np.arange(
+            72, 361, 72) * math.pi / 180)
+        [self.translate(offset, angle) for offset, angle in translations]
 
 
-def z2gd4(z):
-    return r**2 * z * cmath.exp(-B * 1j) - 1
+class Pentigree(Fractal):
+    def __init__(self):
+        super().__init__(S0i, IFS_function['pentigree'])
 
-# z2 levy curve
+class Z2Dragon(DragonFractal):
+    def __init__(self):
+        super().__init__([0, 1],
+                         IFS_function['z2_golden_dragon'])
 
 
-def z2levy1(z):
-    return func1(z)
+class Z2Levy(DragonFractal):
+    def __init__(self):
+        super().__init__(S0i, IFS_function['z2_levy'])
 
 
-def z2levy2(z):
-    return -(1 + 0.5 * (1 + 1j) * (z - 1))
-
-
-def z2levy3(z):
-    return func2(z)
-
-
-def z2levy4(z):
-    return -(0.5 * (1 - 1j) * z)
-
-
-# Pentigree
-
-def pent1(z):
-    return P_r * P_a1 * z
-
-
-def pent2(z):
-    return P_r * P_a2 * z + P_r * (P_a1)
-
-
-def pent3(z):
-    return P_r * P_na1 * z + P_r * (P_a1 + P_a2)
-
-
-def pent4(z):
-    return P_r * P_na2 * z + P_r * (P_a1 + P_a2 + P_na1)
-
-
-def pent5(z):
-    return P_r * P_na1 * z + P_r * (P_a1 + P_a2 + P_na1 + P_na2)
-
-
-def pent6(z):
-    return P_r * P_a1 * z + P_r * (P_a1 + P_a2 + P_na1 + P_na2 + P_na1)
-
-# Pentadendrite
-
-
-def pend1(z):
-    return Dr * (PA * z)
-
-
-def pend2(z):
-    return Dr * (BA * z + PA)
-
-
-def pend3(z):
-    return Dr * (PA * z + PA + BA)
-
-
-def pend4(z):
-    return Dr * (DA * z + 2 * PA + BA)
-
-
-def pend5(z):
-    return Dr * (CA * z + DA + 2 * PA + BA)
-
-
-def pend6(z):
-    return Dr * (PA * z + 2 * PA + BA + CA + DA)
-
-# Koch Snowflake
-
-
-def koch1(z):
-    return kr * (z)
-
-
-def koch2(z):
-    return kr * (Ka * z + 1)
-
-
-def koch3(z):
-    return kr * (Kna * z + 1 + Ka)
-
-
-def koch4(z):
-    return kr * (z + 2)
-
-
-# Builds a unit-pentagon in complex plane
-star = np.exp(1j * np.arange(0, 361, 72) * math.pi / 180)
-pentagon = np.cumsum(star)
-
+class Flowsnake(DragonFractal):
+    def __init__(self):
+        super().__init__(S0i, IFS_function['flowsnake'])
 
 if __name__ == "__main__":
-    # dragon = Fractal(S0i,IFS_function['dragon'])
-    # dragon.save_gif('Dragon',18)
-    # dragon.iterate(5)
-    # dragon.rotate(- math.pi*.5)
+    # dragon = TwinDragon()
+    # dragon.iterate(10)
     # dragon.plot()
-    # heighway = HeighwayDragon()
-    # heighway.iterate(4)
-    # heighway.plot()
-    levy = Levy_C()
-    levy.iterate(1)
-    levy.plot()
-    # z2_dragon = Fractal(S0i,IFS_function['z2_dragon'])
-    # z2_dragon.save_gif('z2_dragon',10)
-    # z2_dragon.iterate(10)
-    # z2_dragon.plot()
-    # z2levy = Fractal([0,1],[func1,z2levy2,func2,z2levy4])
-    # z2levy.save_gif('z2levy', 10)
-    # z2levy.iterate(10)
-    # z2levy.plot()
-    # twin_dragon = Fractal(S0i_twin,[twin1,twin2])
-    # twin_dragon.save_gif('Twin dragon', 17)
-    # twin_dragon.iterate(17)
-    # twin_dragon.plot()
-    # terdragon = Fractal(S0i,[ter1,ter2,ter3])
-    # terdragon.save_gif('terdragon',12)
-    # terdragon.rotate([math.pi/3,2*math.pi/3])
-    # terdragon.plot()
-    # golden_dragon = Fractal(S0i,[gd1,gd2])
-    # golden_dragon.save_gif('Golden_Dragon', 21)
-    # golden_dragon.iterate(21)
+    # pentadendrite = Pentadendrite()
+    # pentadendrite.save_gif(5)
+    # twindragon = TwinDragon()
+    # twindragon.iterate(5)
+    # twindragon.plot()
+    # golden_dragon = GoldenDragon()
+    # golden_dragon.iterate(18)
     # golden_dragon.plot()
-    # z2_golden_dragon = Fractal(S0i,[z2gd1,z2gd2,z2gd3,z2gd4])
-    # z2_golden_dragon.save_gif('z2_golden_dragon',10)
-    # z2_golden_dragon.iterate(10)
-    # z2_golden_dragon.plot()
-    # pentigree = Fractal(S0i,[pent1,pent2,pent3,pent4,pent5,pent6])
-    # pentigree.save_gif('Pentigree', 8)
-    # pentigree.iterate(8)
-    # pentigree.plot()
-    # pentadentrite = Fractal([0,1],[pend1,pend2,pend3,pend4,pend5,pend6])
-    # pentadentrite.save_gif('Pentadentrite', 8)
-    # pentadentrite.iterate(8)
-    # pentadentrite.plot()
-    # Koch_fake = Fractal(S0i,[koch1,koch2,koch3,koch4])
-    # Koch_fake.save_gif('Koch_flake', 10)
-    # Koch_fake.iterate(3)
-    # Koch_fake.plot()
-    pass
+    # koch_snowflake = KochFlake()
+    # koch_snowflake.iterate(2)
+    # koch_snowflake.plot()
+    # koch_snowflake.save_gif(7)
+    snake = Flowsnake()
+    snake.save_gif(5)
+    # pent = Pentadendrite()
+    # pent.iterate(5)
+    # pent.plot()
