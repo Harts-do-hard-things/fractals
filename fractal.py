@@ -11,7 +11,6 @@ Created on Thu Dec 15 17:14:22 2016
 #   Under the @staticmethod decorator (now works for any arbitrary starting line)
 # All fractals requiring segmentation should use DragonFractal as parent
 # TODO: Write some docstrings
-# TODO: Check out some pythagoras Trees
 
 import cmath
 import math
@@ -28,7 +27,7 @@ class Fractal:
         self.func_list = func_list
         self.plot_list = [S0]
         self.angle = [0]
-        self.xlim_ = (0,1)
+        self.limits = [-1,2,-.4,1]
 
     def iterate(self, i):
         self.plot_list.clear()
@@ -40,13 +39,10 @@ class Fractal:
         self.plot_list.append(S)
 
     # Rotate and translate (in that order) & create a copy
-    def translate(self, offset, angle, copy=False):
+    def translate(self, offset, angle):
         S_trans = [i * cmath.exp(angle * 1j) +
                    offset for i in self.plot_list[0]]
-        if copy:
-            self.plot_list[-1] = S_trans
-        else:
-            self.plot_list.append(S_trans)
+        self.plot_list.append(S_trans)
 
     def tile(self):
         pass
@@ -65,13 +61,13 @@ class Fractal:
     # Not intended for Call except through save_gif method
     @gif.frame
     def gif_plot(self):
-        
-        
+
+
         plt.axis('equal')
-        plt.axis([-1,2,-.4,1])
+        plt.axis(self.limits)
         plt.autoscale(False)
-        
-        
+
+
         for s in self.plot_list:
             plt.plot(np.real(s), np.imag(s), color='tab:blue')
 
@@ -110,7 +106,6 @@ class DragonFractal(Fractal):
     def save_gif(self, iterations, duration=1000):
         self.tile()
         frames = [self.gif_plot()]
-        # TODO set plot axes to some good values
         for _ in range(iterations - 1):
             self.iterate(1)
             self.plot_list = [self.segment(s) for s in self.plot_list]
@@ -120,6 +115,30 @@ class DragonFractal(Fractal):
         gif.save(frames, '{0}_{1}.gif'.format(
             type(self).__name__, iterations), duration)
 
+# TODO fix implementation (problem lies with translating the fractal)
+class BinaryTree(DragonFractal):
+    def __init__(self, B_r, theta):
+        super().__init__(S0 = [0,1j], func_list= [
+            lambda z: B_r*z*cmath.rect(1, theta) + 1j,
+            lambda z: B_r*z*cmath.rect(1, -theta) + 1j])
+        self.iterations = 0
+
+    def iterate(self, i):
+        for _ in range(i):
+            S = []
+            for func in self.func_list:
+                S.extend(list(map(func, self.S)))
+                self.plot_list.append(S)
+                self.iterations += 1
+            self.S = S
+
+    def translate(self, offset, angle):
+        for j in range(self.iterations+1):
+            # print(j)
+            S_trans = [i * cmath.exp(angle * 1j) +
+                       offset for i in self.plot_list[j]]
+            self.plot_list.append(S_trans)
+            
 
 # GLOBALS
 S0i = [0, 1]
@@ -127,12 +146,12 @@ S0i = [0, 1]
 # Vars used in golden dragon
 phi = (1 + math.sqrt(5)) * .5
 r = (1 / phi)**(1 / phi)
-A = math.acos((1 + r**2 - r**4) / 2 / r)
-B = math.acos((1 - r**2 + r**4) / 2 / r**2)
+A = math.acos((1 + r**2 - r**4) * .5 / r)
+B = math.acos((1 - r**2 + r**4) * .5 / r**2)
 
 # Vars Used in terdragon
-lamda = .5 - 1j / 2 / math.sqrt(3)
-lamdaconj = .5 + 1j / 2 / math.sqrt(3)
+lamda = .5 - 1j * .5 / math.sqrt(3)
+lamdaconj = .5 + 1j * .5 / math.sqrt(3)
 
 # Vars used in twindragon
 S0_twin = [0, 1, 1 - 1j]
@@ -287,7 +306,8 @@ class LevyTapestryInside(LevyC):
         translations = [(-1j, math.pi*.5),
                         (1, -math.pi*.5),
                         (1-1j, math.pi)]
-        [self.translate(off, theta) for off, theta in translations]
+        for off, theta in translations:
+            self.translate(off, theta)
 
 
 class KochFlake(Fractal):
@@ -298,7 +318,8 @@ class KochFlake(Fractal):
         translations = [
             (cmath.rect(-1, 2*math.pi/3), 2*math.pi/3),
             (1, -2*math.pi/3)]
-        [self.translate(off, theta) for off, theta in translations]
+        for off, theta in translations:
+            self.translate(off, theta)
 
 
 class Pentadendrite(Fractal):
@@ -309,7 +330,8 @@ class Pentadendrite(Fractal):
     def tile(self):
         translations = zip(pentagon[:4], np.arange(
             72, 361, 72) * math.pi / 180)
-        [self.translate(offset, angle) for offset, angle in translations]
+        for offset, angle in translations:
+            self.translate(offset, angle)
 
 
 class Pentigree(Fractal):
@@ -331,6 +353,27 @@ class Flowsnake(DragonFractal):
     def __init__(self):
         super().__init__(S0i, IFS_function['flowsnake'])
 
+class GoldenFlake(BinaryTree):
+    def __init__(self):
+        super().__init__(1/phi, .8*math.pi)
+
+    def tile(self):
+        for angle in np.linspace(0, 2*math.pi, 6):
+            self.translate(0, angle)
+
+    def iterate(self, i):
+        for _ in range(i):
+            self.plot_list.clear()
+            S = []
+            for func in self.func_list:
+                S.extend(list(map(func, self.S)))
+                self.plot_list.append(S)
+                self.iterations += 1
+            self.S = S
+
+G_A = .5*math.pi - math.acos(.75*(math.sqrt(5) - 1))
+# TODO: Add Golden Snowflake
+
 if __name__ == "__main__":
     # dragon = TwinDragon()
     # dragon.iterate(10)
@@ -344,11 +387,17 @@ if __name__ == "__main__":
     # golden_dragon.iterate(18)
     # golden_dragon.plot()
     # koch_snowflake = KochFlake()
-    # koch_snowflake.iterate(2)
+    # koch_snowflake.iterate(5)
     # koch_snowflake.plot()
-    # koch_snowflake.save_gif(7)
-    snake = Flowsnake()
-    snake.save_gif(5)
+    # # koch_snowflake.save_gif(7)
+    # snake = Flowsnake()
+    # snake.iterate(4)
+    # snake.plot()
+    # snake.save_gif(5)
     # pent = Pentadendrite()
     # pent.iterate(5)
     # pent.plot()
+    tree = BinaryTree(.5,.9*math.pi)
+    
+    # tree.iterate(10)
+    # tree.plot()
