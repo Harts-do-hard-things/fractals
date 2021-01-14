@@ -1,3 +1,4 @@
 
 *.pyc
 .pylint.d/fractal1.stats
+.ipynb_checkpoints/README-checkpoint.md
