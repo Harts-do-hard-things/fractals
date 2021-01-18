@@ -6,7 +6,8 @@ Plots fractals in the complex plane.
 
 ## Installation
 Clone the repo  
-If you want, you can install the Gif package for gif creation 
+If you want, you can install the Gif package for gif creation  
+
 There are now docstrings! You will want to look at the source code (Sorry!)
 
 ## The Docstrings
