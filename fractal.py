@@ -22,18 +22,19 @@ try:
     import gif
 except ModuleNotFoundError:
     gif = None
-    
+
+from collections.abc import Callable
+from typing import List
 
 class Fractal:
     limits = False
-    def __init__(self, S0, func_list):
+    def __init__(self, S0: List[complex], func_list: List[Callable]):
         self.S0 = S0
         self.S = S0
         self.func_list = func_list
         self.plot_list = [S0]
-        # self.limits = [-1, 2, -.4, 1]
 
-    def iterate(self, i):
+    def iterate(self, i: int) -> None:
         self.plot_list.clear()
         for _ in range(i):
             S = []
@@ -43,7 +44,7 @@ class Fractal:
         self.plot_list.append(S)
 
     # Rotate and translate (in that order) & create a copy
-    def translate(self, offset, angle):
+    def translate(self, offset: complex, angle: float) -> None:
         s_trans = [i * cmath.exp(angle * 1j) +
                    offset for i in self.plot_list[0]]
         self.plot_list.append(s_trans)
@@ -70,20 +71,19 @@ class Fractal:
     # Not intended for Call except through save_gif method
     if gif:
         @gif.frame
-        def gif_plot(self):
-            
+        def gif_plot(self) -> None:
             if self.limits:
                 plt.axis(self.limits)
             else:
                 plt.axis('equal')
             # plt.autoscale(False)
-    
+
             for s in self.plot_list:
                 plt.plot(np.real(s), np.imag(s), color='tab:blue')
             # print(plt.gca().get_xlim())
             # print(plt.gca().get_ylim())
-    
-        def save_gif(self, iterations, duration=1000):
+
+        def save_gif(self, iterations: int, duration=1000) -> None:
             self.tile()
             frames = [self.gif_plot()]
             # TODO set plot axes to some good values
@@ -108,12 +108,12 @@ class DragonFractal(Fractal):
         s_ = self.flatten(lines)
         return s_
 
-    def plot(self):
+    def plot(self, autoscale = True):
         self.plot_list = [self.segment(s) for s in self.plot_list]
-        super().plot()
+        super().plot(autoscale)
 
     if gif:
-        def save_gif(self, iterations, duration=1000):
+        def save_gif(self, iterations: int, duration=1000):
             self.tile()
             frames = [self.gif_plot()]
             for _ in range(iterations - 1):
@@ -127,13 +127,13 @@ class DragonFractal(Fractal):
 
 
 class BinaryTree(DragonFractal):
-    def __init__(self, B_r, theta):
+    def __init__(self, B_r: float, theta: float):
         super().__init__(S0=[0, 1j], func_list=[
             lambda z: B_r*z*cmath.rect(1, theta) + 1j,
             lambda z: B_r*z*cmath.rect(1, -theta) + 1j])
         self.iterations = 0
 
-    def iterate(self, i):
+    def iterate(self, i: int):
         for _ in range(i):
             S = []
             for func in self.func_list:
@@ -142,7 +142,7 @@ class BinaryTree(DragonFractal):
                 self.iterations += 1
             self.S = S
 
-    def translate(self, offset, angle):
+    def translate(self, offset: complex, angle: float):
         for j in range(self.iterations+1):
             # print(j)
             s_trans = [i * cmath.exp(angle * 1j) +
@@ -281,9 +281,9 @@ IFS_function['koch_flake'] = [
 class HeighwayDragon(DragonFractal):
     def __init__(self):
         super().__init__(S0i, func_list=IFS_function['dragon'])
-        self.limits = (-0.4068359375, 1.2388671875, -0.3818359375, 0.7138671875)
+        self.limits = (-0.407, 1.24, -0.382, 0.714)
 
-
+# TODO Figure Out why this plot doesn't scale properly
 class TwinDragon(DragonFractal):
     limits = (-0.4, 1.4, -0.75, 0.75)
     def __init__(self):
@@ -291,38 +291,40 @@ class TwinDragon(DragonFractal):
 
 
 class GoldenDragon(DragonFractal):
-    limits = (-0.3165525227467976, 1.159431805687454,-0.24334063454067523, 0.6164118418762187)
+    limits = (-0.317, 1.16,-0.243, 0.616)
     def __init__(self):
         super().__init__(S0i, IFS_function['golden_dragon'])
 
 
 class Terdragon(Fractal):
-    limits = (-0.11790123456790128, 1.1179012345679014, -0.35674544411037995, 0.35674544411037995)
+    limits = (-0.12, 1.12, -0.357, 0.357)
     def __init__(self):
         super().__init__(S0i, func_list=IFS_function['terdragon'])
 
 
 
 class FudgeFlake(Terdragon):
+    limits = -0.55, 1.6, -0.4, 1.04
     def tile(self):
         self.translate(0, math.pi/3)
         self.translate(1, 2*math.pi/3)
 
 
 class LevyC(Fractal):
-    limits = -0.595703125, 1.595703125, -1.058203125, 0.308203125
+    limits = -0.6, 1.6, -1.06, 0.308
     def __init__(self):
         super().__init__(S0=[0, 1],
                          func_list=IFS_function['levy_c'])
 
 
 class LevyTapestryOutside(LevyC):
+    limits = -1.1, 2.1, -1.08, 1.08
     def tile(self):
         self.translate(1, math.pi)
 
 
 class LevyTapestryInside(LevyC):
-    limits = -0.595703125, 1.595703125, -1.595703125, 0.595703125
+    limits = -1.2, 2.2, -1.6, 0.6
     def tile(self):
         translations = [(-1j, math.pi*.5),
                         (1, -math.pi*.5),
@@ -332,6 +334,7 @@ class LevyTapestryInside(LevyC):
 
 
 class KochFlake(Fractal):
+    limits = -.5, 1.5, -.924, .346
     def __init__(self):
         super().__init__(S0i, func_list=IFS_function['koch_flake'])
 
@@ -344,6 +347,7 @@ class KochFlake(Fractal):
 
 
 class Pentadendrite(Fractal):
+    limits = .85, 1.85, -0.152, 1.622
     def __init__(self):
         super().__init__(S0=[0, 1],
                          func_list=IFS_function['pentadendrite'])
@@ -356,6 +360,7 @@ class Pentadendrite(Fractal):
 
 
 class Pentigree(Fractal):
+    limits = -.4,1.3,-.312,.8
     def __init__(self):
         super().__init__(S0i, IFS_function['pentigree'])
 
@@ -372,11 +377,13 @@ class Z2Levy(DragonFractal):
 
 
 class Flowsnake(DragonFractal):
+    limits = [-1, 2, -.4, 1]
     def __init__(self):
         super().__init__(S0i, IFS_function['flowsnake'])
 
 
 class GoldenFlake(BinaryTree):
+    limits = -1.64,1.64,-1.09,1.09
     def __init__(self):
         super().__init__(1/phi, .8*math.pi)
 
@@ -396,9 +403,9 @@ class GoldenFlake(BinaryTree):
 
 
 if __name__ == "__main__":
-    dragon = LevyTapestryInside()
-    dragon.save_gif(20)
-    # dragon.iterate(15)
+    # dragon = LevyTapestryOutside()
+    # dragon.save_gif(12)
+    # dragon.iterate(12)
     # dragon.plot()
     # pentadendrite = Pentadendrite()
     # pentadendrite.iterate(7)
@@ -418,9 +425,10 @@ if __name__ == "__main__":
     # snake.iterate(4)
     # snake.plot()
     # snake.save_gif(5)
-    # pent = Pentadendrite()
-    # pent.iterate(5)
+    # pent = Pentigree()
+    # pent.iterate(6)
     # pent.plot()
-    # tree = GoldenFlake()
-    # tree.iterate(13)
-    # tree.plot()
+    tree = GoldenFlake()
+    # tree.save_gif(7)
+    tree.iterate(10)
+    tree.plot()
