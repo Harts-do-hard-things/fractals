@@ -11,6 +11,9 @@ Created on Thu Dec 15 17:14:22 2016
 # All fractals requiring segmentation should use DragonFractal as parent
 
 # TODO: Write some docstrings
+# TODO Implement L system fractals
+# TODO Create animations
+# TODO Morph LevyC into HeighwayDragon using animation
 
 import cmath
 import math
@@ -30,7 +33,7 @@ class Fractal:
     """
     A class used to draw and calculate Fractals.
 
-    Based loosely on research by
+    Based on research by
     `Larry Riddle <https://larryriddle.agnesscott.org/ifs/ifs.htm>`_
 
     Attributes
@@ -138,6 +141,7 @@ class Fractal:
 
 class DragonFractal(Fractal):
     """
+    .. _dragon-fractal:
     A class used to draw and calculate Fractals that require nans inbetween segments
 
     Based loosely on research by
@@ -217,7 +221,7 @@ class BinaryTree(DragonFractal):
     Creates Binary Trees Based off of
     `Larry Riddle's Webpage <https://larryriddle.agnesscott.org/ifs/pythagorean/symbinarytree.htm>`_
     
-    See Documentation for DragonFractal for implementation details
+    See Documentation for :class:`~fractal.DragonFractal` for implementation details
     and Attached Resource for Creation Details
     """
     def __init__(self, B_r: float, theta: float):
@@ -242,6 +246,7 @@ class BinaryTree(DragonFractal):
                        offset for i in self.plot_list[j]]
             self.plot_list.append(s_trans)
 
+# TODO N-Branched Trees
 
 # GLOBALS
 S0i = [0, 1]
@@ -372,28 +377,28 @@ IFS_function['koch_flake'] = [
 
 
 class HeighwayDragon(DragonFractal):
-    """`Heighway Dragon <https://larryriddle.agnesscott.org/ifs/heighway/heighway.htm>`_ Fractal inheriting from DragonFractal"""
+    """`Heighway Dragon <https://larryriddle.agnesscott.org/ifs/heighway/heighway.htm>`_ Fractal inheriting from :class:`~fractal.DragonFractal`"""
     def __init__(self):
         super().__init__(S0i, func_list=IFS_function['dragon'])
         self.limits = (-0.407, 1.24, -0.382, 0.714)
 
 
 class TwinDragon(DragonFractal):
-    """`Twin Dragon <https://larryriddle.agnesscott.org/ifs/heighway/twindragon.htm>`_ Fractal inheriting from DragonFractal"""
+    """`Twin Dragon <https://larryriddle.agnesscott.org/ifs/heighway/twindragon.htm>`_ Fractal inheriting from :class:`~fractal.DragonFractal`"""
     limits = (-0.4, 1.4, -0.75, 0.75)
     def __init__(self):
         super().__init__(S0_twin, IFS_function['twin_dragon'])
 
 
 class GoldenDragon(DragonFractal):
-    """`Golden Dragon <https://larryriddle.agnesscott.org/ifs/heighway/goldenDragon.htm>`_ Fractal inheriting from DragonFractal"""
+    """`Golden Dragon <https://larryriddle.agnesscott.org/ifs/heighway/goldenDragon.htm>`_ Fractal inheriting from :class:`~fractal.DragonFractal`"""
     limits = (-0.317, 1.16,-0.243, 0.616)
     def __init__(self):
         super().__init__(S0i, IFS_function['golden_dragon'])
 
 
 class Terdragon(Fractal):
-    """`Terdragon <https://larryriddle.agnesscott.org/ifs/heighway/terdragon.htm>`_ Fractal inheriting from **Fractal**"""
+    """`Terdragon <https://larryriddle.agnesscott.org/ifs/heighway/terdragon.htm>`_ Fractal inheriting from :class:`~fractal.Fractal`"""
     limits = (-0.12, 1.12, -0.357, 0.357)
     def __init__(self):
         super().__init__(S0i, func_list=IFS_function['terdragon'])
@@ -409,7 +414,7 @@ class FudgeFlake(Terdragon):
 
 
 class LevyC(Fractal):
-    """`Levy C Curve <https://larryriddle.agnesscott.org/ifs/levy/levy.htm>`_ inheriting from Fractal"""
+    """`Levy C Curve <https://larryriddle.agnesscott.org/ifs/levy/levy.htm>`_ inheriting from :class:`~fractal.Fractal`"""
     limits = -0.6, 1.6, -1.06, 0.308
     def __init__(self):
         super().__init__(S0=[0, 1],
@@ -417,14 +422,14 @@ class LevyC(Fractal):
 
 
 class LevyTapestryOutside(LevyC):
-    """`Levy Tapestry <https://larryriddle.agnesscott.org/ifs/levy/tapestryOutside.htm>`_ inheriting from LevyC"""
+    """`Levy Tapestry <https://larryriddle.agnesscott.org/ifs/levy/tapestryOutside.htm>`_ inheriting from :class:`~fractal.LevyC`"""
     limits = -1.1, 2.1, -1.08, 1.08
     def tile(self):
         self.translate(1, math.pi)
 
 
 class LevyTapestryInside(LevyC):
-    """`Levy Tapestry <https://larryriddle.agnesscott.org/ifs/levy/tapestryInside.htm>`_ inheriting from LevyC"""
+    """`Levy Tapestry <https://larryriddle.agnesscott.org/ifs/levy/tapestryInside.htm>`_ inheriting from :class:`~fractal.LevyC`"""
     limits = -1.2, 2.2, -1.6, 0.6
     def tile(self):
         translations = [(-1j, math.pi*.5),
@@ -435,6 +440,11 @@ class LevyTapestryInside(LevyC):
 
 
 class KochFlake(Fractal):
+    """
+    `Koch Flake <https://larryriddle.agnesscott.org/ifs/kcurve/kcurve.htm>`_ inheriting from :class:`~fractal.Fractal`
+    
+    Note: this is constructed as a koch curve, then tiled.
+    """
     limits = -.5, 1.5, -.924, .346
     def __init__(self):
         super().__init__(S0i, func_list=IFS_function['koch_flake'])
@@ -448,6 +458,7 @@ class KochFlake(Fractal):
 
 
 class Pentadendrite(Fractal):
+    """`Pentadendrite <https://larryriddle.agnesscott.org/ifs/pentaden/penta.htm>`_ inheriting from :class:`~fractal.Fractal` """
     limits = .85, 1.85, -0.152, 1.622
     def __init__(self):
         super().__init__(S0=[0, 1],
