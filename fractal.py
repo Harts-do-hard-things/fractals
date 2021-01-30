@@ -18,8 +18,8 @@ import math
 
 import matplotlib.pyplot as plt
 import numpy as np
-# import dataclasses as dtcls
 import animatplot as amp
+# from matplotlib.collections import LineCollection
 
 try:
     import gif
@@ -29,10 +29,7 @@ except ModuleNotFoundError:
 from collections.abc import Callable
 from typing import List
 
-# @dtcls.dataclass()
 class Fractal:
-    # S0: List[complex]
-    # func_list: List[Callable]
     limits = False
     def __init__(self, S0: List[complex], func_list: List[Callable]):
         self.S0 = S0
@@ -40,36 +37,7 @@ class Fractal:
         self.func_list = func_list
         self.plot_list = [S0]
 
-    # def __post_init__(self):
-    #     self.S = self.S0
-    #     self.plot_list = [self.S0]
-    #     self.limits = False
-
-    @staticmethod
-    def real(t: list):
-        return [i.real for i in t]
-
-    @staticmethod
-    def imag(t: list):
-        return [i.imag for i in t]
-
     def iterate(self, i: int) -> None:
-        """
-        clears the plot list (ensures proper gif plotting)
-        maps the functions to S, reassigning S
-        appends S back to plot list
-
-        Parameters
-        ----------
-        i : int
-            The number of iterations to advance from the current state
-
-        Returns
-        -------
-        None
-
-        """
-
         self.plot_list.clear()
         for _ in range(i):
             S = []
@@ -80,45 +48,11 @@ class Fractal:
 
     # Rotate and translate (in that order) & create a copy
     def translate(self, offset: complex, angle: float) -> None:
-        """
-        Translates the fractal by offset, then rotates it by angle (rads)
-        In that Order. Is used in Fudgeflake to tile the terdragon around an
-        equilateral triangle. Appends the translated S onto plot_list
-        
-        .. code-block:: python
-           # Fudgeflake tile method
-           def tile(self):
-               self.translate(0, math.pi/3)
-               self.translate(1, 2*math.pi/3)
-        
-
-        Parameters
-        ----------
-        offset : complex
-            The complex to offset the fractal.
-        angle : float
-            The angle, in radians, that rotates the fractal
-
-        Returns
-        -------
-        None
-
-        """
-        
         s_trans = [i * cmath.exp(angle * 1j) +
                    offset for i in self.plot_list[0]]
         self.plot_list.append(s_trans)
 
     def tile(self):
-        """
-        Empty method called by plot; intended to be filled with calls of the
-        translate method in child classes
-
-        Returns
-        -------
-        None.
-
-        """
         pass
         # Designed to be overridden, Not sure of the Syntax
 
@@ -133,6 +67,23 @@ class Fractal:
             ax.set_ylim(self.limits[2:])
         ax.set_aspect('equal')
         plt.show()
+
+    # def reshape(self, points: list) -> list:
+    #     len_ = len(self.S0)
+    #     lines = [[[points[j].real, points[j].imag] for j in range(i,i+len_)]
+    #              for i in range(len(points)-len_+1) if i % len_ == 0]
+    #     return lines
+
+    # def plot(self):
+    #     self.tile()
+    #     fig = plt.figure()
+    #     ax = fig.add_subplot(111)
+    #     lines = LineCollection(self.reshape(self.S))
+    #     ax.add_collection(lines)
+    #     ax.set_xlim(self.limits[:2])
+    #     ax.set_ylim(self.limits[2:])
+    #     ax.set_aspect('equal')
+    #     fig.show()
 
     # Not intended for Call except through save_gif method
     if gif:
@@ -167,7 +118,10 @@ class DragonFractal(Fractal):
 
     def segment(self, points: list) -> list:
         len_ = len(self.S0)
-        lines = [[*points[i:i+len_], np.nan]
+        # lines = [[[points[j].real, points[j].imag] for j in range(i,i+len_)]
+        #          for i in range(len(points)-len_+1) if i % len_ == 0]
+        # return lines
+        lines = [[*points[i:i+len_], np.nan] 
                  for i in range(len(points)-len_+1) if i % len_ == 0]
         s_ = self.flatten(lines)
         return s_
@@ -175,6 +129,17 @@ class DragonFractal(Fractal):
     def plot(self, autoscale = True):
         self.plot_list = [self.segment(s) for s in self.plot_list]
         super().plot(autoscale)
+
+    # def plot(self):
+    #     points = np.array(self.reshape(self.S))
+    #     fig = plt.figure()
+    #     ax = fig.add_subplot(111)
+    #     lines = LineCollection(points)
+    #     self.plot_handle = ax.add_collection(lines)
+    #     ax.set_xlim(self.limits[:2])
+    #     ax.set_ylim(self.limits[2:])
+    #     ax.set_aspect('equal')
+    #     fig.show()
 
     if gif:
         def save_gif(self, iterations: int, duration=1000):
@@ -239,8 +204,9 @@ class AnimFractal(Fractal):
         timeline = amp.Timeline(range(i+1),units='iter',fps=2)
         block = amp.blocks.Line(np.array(x, dtype=object), np.array(y, dtype=object), ax=ax)
         anim = amp.Animation([block],timeline)
-        anim.controls()
-        anim.save_gif('test')
+        # anim.controls()
+        anim.timeline_slider()
+        # anim.save("levy2heighway", writer='ffmpeg', fps=timeline.fps)
         plt.show()
 
 class AnimateOverIter(DragonFractal):
@@ -261,7 +227,7 @@ class AnimateOverIter(DragonFractal):
     def animate(self):
         x = []
         y = []
-        time = np.linspace(0, 1, 100)
+        time = np.linspace(0, 1, 50)
         for t in time:
             self.iterate(15, t)
             x.append(np.real(self.segment(self.S)))
@@ -273,14 +239,14 @@ class AnimateOverIter(DragonFractal):
         ax.set_aspect('equal')
         ax.set_ylim([-0.35,1.75])
         ax.set_xlim([-.76,2.5])
-        timeline = amp.Timeline(time, fps=20)
+        timeline = amp.Timeline(time, fps=10)
         block = amp.blocks.Line(x, y)
         anim = amp.Animation([block], timeline)
         anim.controls()
-        anim.save_gif('test1')
+        anim.save_gif(f'{type(self).__name__}_15')
         plt.show()
 
-    
+
 
 
 # GLOBALS
@@ -412,9 +378,10 @@ IFS_function['koch_flake'] = [
 
 
 class HeighwayDragon(DragonFractal):
+    limits = (-0.407, 1.24, -0.382, 0.714)
     def __init__(self):
         super().__init__(S0i, func_list=IFS_function['dragon'])
-        self.limits = (-0.407, 1.24, -0.382, 0.714)
+
 
 
 class TwinDragon(DragonFractal):
@@ -537,17 +504,18 @@ class GoldenFlake(BinaryTree):
 class TestLevy(LevyC, AnimFractal):
     pass
 
+
 if __name__ == "__main__":
-    dragon = LevyTapestryOutside()
-    dragon.save_gif(12)
-    # dragon.iterate(12)
-    # dragon.plot()
+    dragon = HeighwayDragon()
+    # dragon.save_gif(12)
+    dragon.iterate(20)
+    dragon.plot()
     # pentadendrite = Pentadendrite()
     # pentadendrite.iterate(7)
     # pentadendrite.plot()
     # pentadendrite.save_gif(3)
     # twindragon = TwinDragon()
-    # twindragon.iterate(5)
+    # twindragon.iterate(2)
     # twindragon.plot()
     # golden_dragon = GoldenDragon()
     # golden_dragon.iterate(18)
@@ -568,7 +536,8 @@ if __name__ == "__main__":
     # tree.save_gif(7)
     # tree.iterate(10)
     # tree.plot()
-    test = AnimateOverIter(S0i, func_list=[
-        lambda z,t: z*.5*(1+1j),
-        lambda z,t: z*cmath.rect(math.sqrt(2)*.5, -math.pi*.25 + math.pi*t)+(.5 + .5*t)+(.5 - .5*t)*1j])
+    # test = AnimateOverIter(S0i, func_list=[
+    #     lambda z,t: z*.5*(1+1j),
+    #     lambda z,t: z*cmath.rect(math.sqrt(2)*.5, -math.pi*.25 + math.pi*t)+(.5 + .5*t)+(.5 - .5*t)*1j])
     # test.animate()
+    pass

@@ -6,6 +6,56 @@ Created on Tue Jan 26 20:02:10 2021
 """
 
 from fractal import *
+Fractal.translate.__doc__= """
+Translates the fractal by offset, then rotates it by angle (rads)
+In that Order. Is used in Fudgeflake to tile the terdragon around an
+equilateral triangle. Appends the translated S onto plot_list
+
+.. code-block:: python
+   # Fudgeflake tile method
+   def tile(self):
+       self.translate(0, math.pi/3)
+       self.translate(1, 2*math.pi/3)
+
+
+Parameters
+----------
+offset : complex
+    The complex to offset the fractal.
+angle : float
+    The angle, in radians, that rotates the fractal
+
+Returns
+-------
+None
+
+"""
+
+Fractal.tile.__doc__ = """
+Empty method called by plot; intended to be filled with calls of the
+translate method in child classes
+
+Returns
+-------
+None.
+
+"""
+
+Fractal.iterate.__doc__ = """
+clears the plot list (ensures proper gif plotting)
+maps the functions to S, reassigning S
+appends S back to plot list
+
+Parameters
+----------
+i : int
+    The number of iterations to advance from the current state
+
+Returns
+-------
+None
+
+"""
 
 Fractal.__doc__ = """
 A class used to draw and calculate Fractals.
@@ -48,6 +98,7 @@ save_gif(iterations: int, duration: int = 1000)
 saves a gif at '__name__ _iterations.gif' with a frame duration of duration milliseconds
 
 """
+
 
 DragonFractal.__doc__ = """
 .. _dragon-fractal:
