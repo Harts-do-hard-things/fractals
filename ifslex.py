@@ -23,7 +23,7 @@ states = (("inside", "exclusive"),)
 
 tokens = [
     "ID",
-    "ARRAY",
+    "ARRAY"
 ]
 
 t_ANY_ignore = " \t"
@@ -46,7 +46,7 @@ def t_ANY_COMMENT(t):
 
 def t_ANY_error(t):
     # raise NameError(f"name '{t.value}' is not defined")
-    print(t)
+    # print(t)
     t.lexer.skip(1)
 
 
@@ -103,9 +103,16 @@ def p_obj_list_2(p):
 
 
 def p_object(p):
-    """ object : ID 2D_ARRAY """
+    """ object : Name 2D_ARRAY """
     p[0] = type(p[1], (IFSystem,), {"eq": np.array(p[2])})
 
+def p_name(p):
+    """ Name : ID"""
+    p[0] = p[1]
+
+def p_name_1(p):
+    """ Name : Name ID"""
+    p[0] = p[1] + p[2]
 
 def p_2D_ARRAY_1(p):
     """2D_ARRAY : ARRAY"""
@@ -150,24 +157,24 @@ parser = yacc.yacc(debug=True)
 # if __name__ == "ifslex":
 
 if __name__ == "__main__":
-    test_string = """binary { ; comment allowed here
+    test_string = """my binary { ; comment allowed here
   ; and here
   .5  .0 .0 .5 -2.563477 -0.000003 .333333   ; also comment allowed here
   .5  .0 .0 .5  2.436544 -0.000003 .333333
   .0 -.5 .5 .0  4.873085  7.563492 .333333
   }
 """
-    lexer.input(test_string)
-    while True:
-        tok = lexer.token()
-        if not tok:
-            break
-        print(tok)
+    # lexer.input(test_string)
+    # while True:
+    #     tok = lexer.token()
+    #     if not tok:
+    #         break
+    #     print(tok)
     # while True:
     #     try:
     #         s = input(">> ")
     #     except (EOFError, KeyboardInterrupt):
     #         break
     #     parser.parse(s)
-    # parser.parse(test_string)
+    parser.parse(test_string)
     # interpret_file("fractint.ifs")

@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import mpl_scatter_density
 
 from typing import List
-from tabulate import tabulate
 from pprint import pprint
 import ifslex
 import time
@@ -24,6 +23,7 @@ S0I = [[0, 0], [1, 0]]
 
 
 class FunctionSystem:
+    prob_list = False
     def __init__(self, S0: List[float], trans_list: np.ndarray):
         self.S0 = S0
         self.S = np.array(S0)
@@ -61,6 +61,31 @@ class FunctionSystem:
 
         return npoints
 
+    def random_iterate(self):
+        point = np.array([0,0])
+        self.S1 = []
+        colors = []
+
+        def iterate(self, initial_point):
+            index = np.random.choice(len(self.prob_list), p=self.prob_list)
+            final_point = self.apply(initial_point, self.trans_list[index])
+            return final_point, index
+
+        for _ in range(50):
+            point, _ = iterate(self, point)
+
+        for _ in range(200000):
+            point, index = iterate(self, point)
+            colors.append('C' + str(index))
+            self.S1.append(point)
+
+        S1 = np.array(self.S1)
+        fig = plt.figure()
+        ax = fig.add_subplot(1,1,1, projection='scatter_density')
+        ax.set_aspect("equal")
+        self.plot_handle = ax.scatter_density(
+            S1[:, 0], S1[:, 1])#, c = colors, marker='o', s=(72./fig.dpi)**2)
+        fig.show()
 
 class IFSystem(FunctionSystem):
     def __init__(self):
@@ -78,57 +103,20 @@ class IFSystem(FunctionSystem):
 
     def fs_to_arrays(self):
         i = (len(self.eq[0]) - 1) // 3
-        # print(self.eq[0][-1-i:-1])
         self.trans_list = [
             np.append(e[: 2 * i].reshape((2, -1)), e[-1 - i : -1].reshape(-1, 1), 1)
             for e in np.array(self.eq)
         ]
-        # self.prob_list = self.eq[:,-1].flatten()
-        self.prob_list = self.calculate_prob()
-        # pprint(self.trans_list)
-
-    def random_iterate(self):
-        point = np.array([0,0])
-        self.S1 = []
-        colors = []
-
-        def iterate(self, initial_point):
-            index = np.random.choice(len(self.prob_list), p=self.prob_list)
-            final_point = self.apply(initial_point, self.trans_list[index])
-            return final_point, index
-
-        for _ in range(50):
-            point, _ = iterate(self, point)
-
-        for _ in range(2000000):
-            point, index = iterate(self, point)
-            colors.append('C' + str(index))
-            self.S1.append(point)
-
-        S1 = np.array(self.S1)
-        fig = plt.figure()
-        ax = fig.add_subplot(1,1,1, projection='scatter_density')
-        ax.set_aspect("equal")
-        self.plot_handle = ax.scatter_density(
-            S1[:, 0], S1[:, 1])#, c = colors, marker='o', s=(72./fig.dpi)**2)
-        fig.show()
-
+        # self.prob_list = self.calculate_prob()
 
 
 if __name__ == "__main__":
     my_ifslist = ifslex.interpret_file(path)
     pprint(my_ifslist.__dict__)
-    h = my_ifslist.IFS_fern()
-    h.random_iterate()
+    # h = my_ifslist.IFS_BarnsleysWreath()
+    # h.random_iterate()
     # h.iterate(15)
     # h.plot()
-    # tabulate(my_ifslist.__dict__, headers='keys')
-    # h = my_ifslist.4x4Cross([
-    #     [0,0],
-    #     [1,0], [1,1], [0,1], [0,0]])
-    # h.iterate(8)
-    # # h.segment(h.S)
-    # h.plot()
-    # l = IFSystem([[0,0],[1,0]], [LEVY_1, LEVY_2])
-    # l.iterate(10)
+    # l = FunctionSystem([[0,0],[1,0]], [LEVY_1, LEVY_2])
+    # l.random_iterate()
     pass

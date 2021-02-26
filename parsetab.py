@@ -6,9 +6,9 @@ _tabversion = '3.10'
 
 _lr_method = 'LALR'
 
-_lr_signature = 'ARRAY ID\n    calc : obj_list\n         | expression\n         | none\n     obj_list : object obj_list : obj_list object object : ID 2D_ARRAY 2D_ARRAY : ARRAY2D_ARRAY : 2D_ARRAY ARRAY\n    expression : ID\n               | ARRAY\n    \n    none :\n    '
+_lr_signature = 'ARRAY ID\n    calc : obj_list\n         | expression\n         | none\n     obj_list : object obj_list : obj_list object object : Name 2D_ARRAY  Name : ID Name : Name ID2D_ARRAY : ARRAY2D_ARRAY : 2D_ARRAY ARRAY\n    expression : ID\n               | ARRAY\n    \n    none :\n    '
     
-_lr_action_items = {'ID':([0,2,5,8,10,11,12,],[6,9,-4,-5,-6,-7,-8,]),'ARRAY':([0,6,9,10,11,12,],[7,11,11,12,-7,-8,]),'$end':([0,1,2,3,4,5,6,7,8,10,11,12,],[-11,0,-1,-2,-3,-4,-9,-10,-5,-6,-7,-8,]),}
+_lr_action_items = {'ID':([0,2,5,6,8,9,10,11,12,13,14,],[6,10,-4,-7,12,-5,-7,-6,-8,-9,-10,]),'ARRAY':([0,6,8,10,11,12,13,14,],[7,-7,13,-7,14,-8,-9,-10,]),'$end':([0,1,2,3,4,5,6,7,9,11,13,14,],[-13,0,-1,-2,-3,-4,-11,-12,-5,-6,-9,-10,]),}
 
 _lr_action = {}
 for _k, _v in _lr_action_items.items():
@@ -17,7 +17,7 @@ for _k, _v in _lr_action_items.items():
       _lr_action[_x][_k] = _y
 del _lr_action_items
 
-_lr_goto_items = {'calc':([0,],[1,]),'obj_list':([0,],[2,]),'expression':([0,],[3,]),'none':([0,],[4,]),'object':([0,2,],[5,8,]),'2D_ARRAY':([6,9,],[10,10,]),}
+_lr_goto_items = {'calc':([0,],[1,]),'obj_list':([0,],[2,]),'expression':([0,],[3,]),'none':([0,],[4,]),'object':([0,2,],[5,9,]),'Name':([0,2,],[8,8,]),'2D_ARRAY':([8,],[11,]),}
 
 _lr_goto = {}
 for _k, _v in _lr_goto_items.items():
@@ -27,15 +27,17 @@ for _k, _v in _lr_goto_items.items():
 del _lr_goto_items
 _lr_productions = [
   ("S' -> calc","S'",1,None,None,None),
-  ('calc -> obj_list','calc',1,'p_calc','ifslex.py',63),
-  ('calc -> expression','calc',1,'p_calc','ifslex.py',64),
-  ('calc -> none','calc',1,'p_calc','ifslex.py',65),
-  ('obj_list -> object','obj_list',1,'p_obj_list_1','ifslex.py',75),
-  ('obj_list -> obj_list object','obj_list',2,'p_obj_list_2','ifslex.py',79),
-  ('object -> ID 2D_ARRAY','object',2,'p_object','ifslex.py',83),
-  ('2D_ARRAY -> ARRAY','2D_ARRAY',1,'p_2D_ARRAY_1','ifslex.py',87),
-  ('2D_ARRAY -> 2D_ARRAY ARRAY','2D_ARRAY',2,'p_2D_ARRAY_2','ifslex.py',91),
-  ('expression -> ID','expression',1,'p_expression','ifslex.py',96),
-  ('expression -> ARRAY','expression',1,'p_expression','ifslex.py',97),
-  ('none -> <empty>','none',0,'p_none','ifslex.py',103),
+  ('calc -> obj_list','calc',1,'p_calc','ifslex.py',83),
+  ('calc -> expression','calc',1,'p_calc','ifslex.py',84),
+  ('calc -> none','calc',1,'p_calc','ifslex.py',85),
+  ('obj_list -> object','obj_list',1,'p_obj_list_1','ifslex.py',96),
+  ('obj_list -> obj_list object','obj_list',2,'p_obj_list_2','ifslex.py',101),
+  ('object -> Name 2D_ARRAY','object',2,'p_object','ifslex.py',106),
+  ('Name -> ID','Name',1,'p_name','ifslex.py',110),
+  ('Name -> Name ID','Name',2,'p_name_1','ifslex.py',114),
+  ('2D_ARRAY -> ARRAY','2D_ARRAY',1,'p_2D_ARRAY_1','ifslex.py',118),
+  ('2D_ARRAY -> 2D_ARRAY ARRAY','2D_ARRAY',2,'p_2D_ARRAY_2','ifslex.py',123),
+  ('expression -> ID','expression',1,'p_expression','ifslex.py',129),
+  ('expression -> ARRAY','expression',1,'p_expression','ifslex.py',130),
+  ('none -> <empty>','none',0,'p_none','ifslex.py',137),
 ]
