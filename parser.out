@@ -1,1 +1,185 @@
 Created by PLY version 3.11 (http://www.dabeaz.com/ply)
+
+Grammar
+
+Rule 0     S' -> calc
+Rule 1     calc -> obj_list
+Rule 2     calc -> expression
+Rule 3     calc -> none
+Rule 4     obj_list -> object
+Rule 5     obj_list -> obj_list object
+Rule 6     object -> Name 2D_ARRAY
+Rule 7     Name -> ID
+Rule 8     Name -> Name ID
+Rule 9     2D_ARRAY -> ARRAY
+Rule 10    2D_ARRAY -> 2D_ARRAY ARRAY
+Rule 11    expression -> ID
+Rule 12    expression -> ARRAY
+Rule 13    none -> <empty>
+
+Terminals, with rules where they appear
+
+ARRAY                : 9 10 12
+ID                   : 7 8 11
+error                : 
+
+Nonterminals, with rules where they appear
+
+2D_ARRAY             : 6 10
+Name                 : 6 8
+calc                 : 0
+expression           : 2
+none                 : 3
+obj_list             : 1 5
+object               : 4 5
+
+Parsing method: LALR
+
+state 0
+
+    (0) S' -> . calc
+    (1) calc -> . obj_list
+    (2) calc -> . expression
+    (3) calc -> . none
+    (4) obj_list -> . object
+    (5) obj_list -> . obj_list object
+    (11) expression -> . ID
+    (12) expression -> . ARRAY
+    (13) none -> .
+    (6) object -> . Name 2D_ARRAY
+    (7) Name -> . ID
+    (8) Name -> . Name ID
+
+    ID              shift and go to state 6
+    ARRAY           shift and go to state 7
+    $end            reduce using rule 13 (none -> .)
+
+    calc                           shift and go to state 1
+    obj_list                       shift and go to state 2
+    expression                     shift and go to state 3
+    none                           shift and go to state 4
+    object                         shift and go to state 5
+    Name                           shift and go to state 8
+
+state 1
+
+    (0) S' -> calc .
+
+
+
+state 2
+
+    (1) calc -> obj_list .
+    (5) obj_list -> obj_list . object
+    (6) object -> . Name 2D_ARRAY
+    (7) Name -> . ID
+    (8) Name -> . Name ID
+
+    $end            reduce using rule 1 (calc -> obj_list .)
+    ID              shift and go to state 10
+
+    object                         shift and go to state 9
+    Name                           shift and go to state 8
+
+state 3
+
+    (2) calc -> expression .
+
+    $end            reduce using rule 2 (calc -> expression .)
+
+
+state 4
+
+    (3) calc -> none .
+
+    $end            reduce using rule 3 (calc -> none .)
+
+
+state 5
+
+    (4) obj_list -> object .
+
+    ID              reduce using rule 4 (obj_list -> object .)
+    $end            reduce using rule 4 (obj_list -> object .)
+
+
+state 6
+
+    (11) expression -> ID .
+    (7) Name -> ID .
+
+    $end            reduce using rule 11 (expression -> ID .)
+    ID              reduce using rule 7 (Name -> ID .)
+    ARRAY           reduce using rule 7 (Name -> ID .)
+
+
+state 7
+
+    (12) expression -> ARRAY .
+
+    $end            reduce using rule 12 (expression -> ARRAY .)
+
+
+state 8
+
+    (6) object -> Name . 2D_ARRAY
+    (8) Name -> Name . ID
+    (9) 2D_ARRAY -> . ARRAY
+    (10) 2D_ARRAY -> . 2D_ARRAY ARRAY
+
+    ID              shift and go to state 12
+    ARRAY           shift and go to state 13
+
+    2D_ARRAY                       shift and go to state 11
+
+state 9
+
+    (5) obj_list -> obj_list object .
+
+    ID              reduce using rule 5 (obj_list -> obj_list object .)
+    $end            reduce using rule 5 (obj_list -> obj_list object .)
+
+
+state 10
+
+    (7) Name -> ID .
+
+    ID              reduce using rule 7 (Name -> ID .)
+    ARRAY           reduce using rule 7 (Name -> ID .)
+
+
+state 11
+
+    (6) object -> Name 2D_ARRAY .
+    (10) 2D_ARRAY -> 2D_ARRAY . ARRAY
+
+    ID              reduce using rule 6 (object -> Name 2D_ARRAY .)
+    $end            reduce using rule 6 (object -> Name 2D_ARRAY .)
+    ARRAY           shift and go to state 14
+
+
+state 12
+
+    (8) Name -> Name ID .
+
+    ID              reduce using rule 8 (Name -> Name ID .)
+    ARRAY           reduce using rule 8 (Name -> Name ID .)
+
+
+state 13
+
+    (9) 2D_ARRAY -> ARRAY .
+
+    ARRAY           reduce using rule 9 (2D_ARRAY -> ARRAY .)
+    ID              reduce using rule 9 (2D_ARRAY -> ARRAY .)
+    $end            reduce using rule 9 (2D_ARRAY -> ARRAY .)
+
+
+state 14
+
+    (10) 2D_ARRAY -> 2D_ARRAY ARRAY .
+
+    ARRAY           reduce using rule 10 (2D_ARRAY -> 2D_ARRAY ARRAY .)
+    ID              reduce using rule 10 (2D_ARRAY -> 2D_ARRAY ARRAY .)
+    $end            reduce using rule 10 (2D_ARRAY -> 2D_ARRAY ARRAY .)
+

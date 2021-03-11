@@ -8,11 +8,8 @@ Created on Wed Feb  3 08:37:09 2021
 from ply import lex, yacc
 import sys
 import numpy as np
+from matrixfractal import IFSystemRand
 
-try:
-    from matrixfractal import IFSystem
-except ImportError:
-    IFSystem = object
 
 class obj_container(object):
     def __init__(self, object_dict):
@@ -103,8 +100,8 @@ def p_obj_list_2(p):
 
 
 def p_object(p):
-    """ object : Name 2D_ARRAY """
-    p[0] = type(p[1], (IFSystem,), {"eq": np.array(p[2])})
+    """ object : Name 2D_ARRAY"""
+    p[0] = type(p[1], (IFSystemRand,), {"eq": np.array(p[2])})
 
 def p_name(p):
     """ Name : ID"""

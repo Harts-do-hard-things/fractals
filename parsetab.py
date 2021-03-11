@@ -6,7 +6,7 @@ _tabversion = '3.10'
 
 _lr_method = 'LALR'
 
-_lr_signature = 'ARRAY ID\n    calc : obj_list\n         | expression\n         | none\n     obj_list : object obj_list : obj_list object object : Name 2D_ARRAY  Name : ID Name : Name ID2D_ARRAY : ARRAY2D_ARRAY : 2D_ARRAY ARRAY\n    expression : ID\n               | ARRAY\n    \n    none :\n    '
+_lr_signature = 'ARRAY ID\n    calc : obj_list\n         | expression\n         | none\n     obj_list : object obj_list : obj_list object object : Name 2D_ARRAY Name : ID Name : Name ID2D_ARRAY : ARRAY2D_ARRAY : 2D_ARRAY ARRAY\n    expression : ID\n               | ARRAY\n    \n    none :\n    '
     
 _lr_action_items = {'ID':([0,2,5,6,8,9,10,11,12,13,14,],[6,10,-4,-7,12,-5,-7,-6,-8,-9,-10,]),'ARRAY':([0,6,8,10,11,12,13,14,],[7,-7,13,-7,14,-8,-9,-10,]),'$end':([0,1,2,3,4,5,6,7,9,11,13,14,],[-13,0,-1,-2,-3,-4,-11,-12,-5,-6,-9,-10,]),}
 

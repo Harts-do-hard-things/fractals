@@ -10,7 +10,6 @@ Created on Thu Dec 15 17:14:22 2016
 # Under the @staticmethod decorator (now works for any arbitrary starting line)
 # All fractals requiring segmentation should use DragonFractal as parent
 
-# TODO Add back the docstrings
 
 import cmath
 import math
@@ -18,8 +17,6 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import animatplot as amp
-
-# from matplotlib.collections import LineCollection
 
 try:
     import gif
