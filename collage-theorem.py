@@ -10,19 +10,14 @@ import numpy as np
 from scipy.special import expit
 from matrixfractal import IFSystemRand
 import matplotlib.pyplot as plt
-# data = np.array(Image.open("Test_Fractal.bmp").convert("L")).reshape([-1,1])
-
-
-
-
-def training_set():
-    tr = []
-    while len(tr) < 4:
-        if v_trans(t := np.random.uniform(-1,1,[2,3])):
-            tr.append(t)
-    tr = np.array(tr)
-    print(tr)
-        
+import json
+# def training_set():
+#     tr = []
+#     while len(tr) < 4:
+#         if v_trans(t := np.random.uniform(-1,1,[2,3])):
+#             tr.append(t)
+#     tr = np.array(tr)
+#     print(tr)
 
 def v_trans(t):
     return 1 > sum(t[:,0]) and 1 > sum(t[:,1]) and np.sum(t[:,:2]) < 1 + np.linalg.det(t[:2,:2])**2
@@ -36,7 +31,7 @@ class RandomIFSystem(IFSystemRand):
         self.trans_list = np.array(tr)
         self.S = []
         self.prob_list = self.calculate_prob()
-        self.iterate(65536)
+        self.iterate(2**16)
         self.im_data = self.get_data()
 
     def get_data(self):
@@ -47,26 +42,60 @@ class RandomIFSystem(IFSystemRand):
         ax.plot(points[:, 0], points[:, 1], linestyle='', marker=',', color='k')
         plt.show()
         fig.canvas.draw()
-        data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8).reshape(256,256,3)[:,:,0]
+        data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8).reshape(-1, 3)[:,0]/255
+        plt.close()
         return data
-        
-        
-t = RandomIFSystem()
 
-# def train_dat(self):
-#         point = np.array([0,0])
-#         self.S1 = []
+    def jsonize(self):
+        return {"yhat": list(self.trans_list.reshape((-1))), "input": list(self.im_data)}
+
+def create_training_data(n: int, file = 'NNData/training_data.json'):
+    test = input("Will overwrite previous data, continue? ([y]/n) ")
+    if test in 'yY ':
+        with open(file, 'w') as f:
+            for i in range(n):
+                json.dump(RandomIFSystem().jsonize(),f)
+                f.write("\n")
+    else:
+        print("Canceled")
+        return
+            
+
+class Layer:
+    def __init__(self, size: int, to_size: int, data = False):
+        self.data = data if data else np.empty((size,))
+        self.weights = np.random.random((to_size, size))
+        self.bias = np.random.random((to_size))
+        self.out = np.empty((to_size))
+
+    def calc_data(self) -> np.ndarray:
+        self.out = expit(self.weights.dot(self.data) + self.bias)
+        return self.out
+
+    def back_prop():
+        pass
+
+    def __repr__(self):
+        return f"Layer({self.data.size}, {self.out.size})"
+
+class CollageNetwork:
+    def __init__(self, layer_sizes):
+        self.layers = [Layer(layer_sizes[i], layer_sizes[i+1]) 
+         for i in range(len(layer_sizes) - 1)]
+
+    def propogate(self) -> np.ndarray:
+        for i in range(len(self.layers) - 1):
+            self.layers[i + 1].data = self.layers[i].calc_data()
+        return self.layers[-1].out
+
+    def train(self):
+        with open("NNData/training_data1.json", "r") as f:
+            for line in f:
+                sample = json.load(line)
         
-#         for _ in range(50):
-#             point, _ = self.r_iterate(point)
-        
-#         for _ in range(65536):
-#             point, _ = self.r_iterate(point)
-#             self.S1.append(point)
-#         S1 = np.array(self.S1)
-#         fig = plt.figure(figsize=(1,1), dpi=256)
-#         ax = fig.add_subplot(111)
-#         ax.axis('off')
-#         ax.plot(S1[:, 0], S1[:,1], color='k', marker=',', linestyle='')#, s=(72./fig.dpi)**2)
-#         fig.savefig("test.png", format='png')
-#         fig.show()
+# print("Test")
+
+t = CollageNetwork([2**16, 32, 32, 24])
+t.train()
+# print(a := t.propogate())
+

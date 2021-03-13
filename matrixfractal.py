@@ -22,7 +22,7 @@ class FunctionSystem:
         ax.plot(points[:, 0], points[:, 1], linestyle='', marker=',')
         plt.show()
 
-class DeterministicSystem(FunctionSystem):
+class IFSystemDet(FunctionSystem):
     def __init__(self, S0, trans_list):
         self.S0 = S0
         self.S = np.array(S0)
@@ -50,8 +50,8 @@ class DeterministicSystem(FunctionSystem):
 
 
 class IFSystemRand(FunctionSystem):
-    def __init__(self, *args):
-        self.fs_to_arrays()
+    def __init__(self, run_prob = True):
+        self.fs_to_arrays(run_prob)
         self.S = []
 
     def calculate_prob(self):
@@ -78,13 +78,16 @@ class IFSystemRand(FunctionSystem):
             self.S.append(point)
 
 
-    def fs_to_arrays(self):
+    def fs_to_arrays(self, run_prob):
         i = (len(self.eq[0]) - 1) // 3
         self.trans_list = [
             np.append(e[: 2 * i].reshape((2, -1)), e[-1 - i : -1].reshape(-1, 1), 1)
             for e in np.array(self.eq)
         ]
-        self.prob_list = self.calculate_prob()
+        if run_prob:
+            self.prob_list = self.calculate_prob()
+        else:
+            self.prob_list = self.eq[:,-1]
 
     def plot(self):
         super().plot(np.array)

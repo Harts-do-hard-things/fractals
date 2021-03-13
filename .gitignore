@@ -145,3 +145,5 @@ dmypy.json
 .prof
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+NNData/training_data.json
+NNData/training_data1.json
