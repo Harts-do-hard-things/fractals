@@ -7,6 +7,8 @@ Created on Wed Mar 10 17:04:34 2021
 
 from pprint import pprint
 import ifsread as ifs
+from timeit import timeit
+
 if __name__ == "__main__":
     path = r"fractint.ifs"
     my_ifslist = ifs.interpret_file(path)
@@ -14,4 +16,5 @@ if __name__ == "__main__":
     h = my_ifslist.IFS_crystal(run_prob=False)
     h.iterate(50000)
     h.plot()
+    
     pass
