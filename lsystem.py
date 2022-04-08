@@ -63,7 +63,7 @@ Axiom {self.axiom}
 
 
 if __name__ == '__main__':
-    flowsnake = L_System('F',70,{'F':"+F--F+"}) #L_System.from_input("""Angle 60
+    flowsnake = L_System('F',45,{'F':"+F--F+"}) #L_System.from_input("""Angle 60
     # Axiom F
     # F->F-G--G+F++FF+G-
     # G->+F-GG--G-F++F+G""")

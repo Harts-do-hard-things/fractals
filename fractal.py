@@ -17,6 +17,9 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 import animatplot as amp
+import datashader as ds
+import pandas as pd
+import colorcet as cc
 
 try:
     import gif
@@ -499,10 +502,17 @@ class TestLevy(LevyC, AnimFractal):
 
 
 if __name__ == "__main__":
-    dragon = HeighwayDragon()
+    levy_c = Flowsnake()
+    levy_c.iterate(8)
+    df = pd.DataFrame({"real" :np.real(levy_c.S), "imag": np.imag(levy_c.S)})
+    agg = ds.Canvas(plot_width = 1100, plot_height = 684, x_range = levy_c.limits[:2], y_range = levy_c.limits[2:]).points(df, "real", "imag")
+    ds.tf.set_background(ds.tf.shade(agg, cmap=cc.palette['kbc']), "black")
+    # dragon = HeighwayDragon()
     # dragon.save_gif(12)
     # dragon.iterate(20)
     # dragon.plot()
+    # levy_c = LevyC()
+    # levy_c.iterate(10)
     # pentadendrite = Pentadendrite()
     # pentadendrite.iterate(7)
     # pentadendrite.plot()

@@ -149,7 +149,7 @@ def interpret_file(path):
     return objs
 
 lexer = lex.lex()
-parser = yacc.yacc(debug=True)    
+parser = yacc.yacc(debug=True)
 
 # if __name__ == "ifslex":
 

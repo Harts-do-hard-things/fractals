@@ -26,7 +26,7 @@ cdef class Fractal:
     cdef complex f2(complex z):
         return 1 + 0.5 * (1 + 1j) * (z - 1),
 
-    func_list = [&f1, &f2]
+    # func_list = [&f1, &f2]
 
     def iterate(self, int i):
         for _ in range(i):
