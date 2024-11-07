@@ -1,30 +1,26 @@
 ![Heighway Dragon Gif](GIFs/HeighwayDragon_17.gif)
 # Fractals
 
-Constructs IFS fractals in python.
-Plots fractals in the complex plane.
+Constructs IFS fractals in python and plots them in the complex plane.
 
 ## Installation
-Clone the repo  
-If you want, you can install the Gif package for gif creation  
+Clone the repo
+Install dependancies with pip:
 
-There are now docstrings! You will want to look at the source code (Sorry!)
+```python -m pip install -r requirements.txt```
 
-## The Docstrings
-Will tell you to read about the fractal on Larry Riddle's Website,
-If you have questions on implementation, you will want to look at the source code
+Optionally install gif package for gif creation  
 
-A DragonFractal can be used if your functions don't create a single line
-
-BinaryTree can be used to create [Binary trees](https://larryriddle.agnesscott.org/ifs/pythagorean/symbinarytree.htm)
-
+## Documentation
+Documentation can be found [here](https://tilaloz.github.io/fractals/)
 
 ## Contrubuting
 
-Feel Free to contribute.
+Feel Free to contribute
 
 ## TODO
 - [ ] Finish Docstrings for last few Classes
-- [ ] Create a UI
-- [ ] Create a function creator UI
-- [ ] Make animated Iterative fractals
+- [ ] Finalize animated fractals
+- [ ] Create matrix ifs funtions
+- [ ] Update and finalize documentation
+- [ ] Work on the collage problem
