@@ -95,7 +95,7 @@ class CollageNetwork:
         
 # print("Test")
 
-t = CollageNetwork([2**16, 32, 32, 24])
-t.train()
+# t = CollageNetwork([2**16, 32, 32, 24])
+# t.train()
 # print(a := t.propogate())
 

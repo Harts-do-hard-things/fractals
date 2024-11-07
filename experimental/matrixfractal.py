@@ -79,10 +79,10 @@ class IFSystemRand(FunctionSystem):
 
 
     def fs_to_arrays(self, run_prob):
-        i = (len(self.eq[0]) - 1) // 3
+        i = (len(self.trans_list[0]) - 1) // 3
         self.trans_list = [
             np.append(e[: 2 * i].reshape((2, -1)), e[-1 - i : -1].reshape(-1, 1), 1)
-            for e in np.array(self.eq)
+            for e in np.array(self.trans_list)
         ]
         if run_prob:
             self.prob_list = self.calculate_prob()

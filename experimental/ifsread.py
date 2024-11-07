@@ -173,5 +173,5 @@ if __name__ == "__main__":
     #     except (EOFError, KeyboardInterrupt):
     #         break
     #     parser.parse(s)
-    parser.parse(test_string)
-    # interpret_file("fractint.ifs")
+    # parser.parse(test_string)
+    ifs = interpret_file("ifs_data\\fractint.ifs")
