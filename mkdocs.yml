@@ -1,0 +1,14 @@
+site_name: Fractal Documentation
+
+theme:
+  name: material
+
+plugins:
+  - mkdocstrings
+
+nav:
+  - Fractal Docs: index.md
+
+markdown_extensions:
+  - toc:
+      permalink: "#"

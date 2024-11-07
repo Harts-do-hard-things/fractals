@@ -1,0 +1,10 @@
+matplotlib
+numpy
+animatplot
+gif
+spyder-kernels==3.0.*
+ply
+mkdocs
+mkdocs-material
+mkdocstrings
+mkdocstrings-python
