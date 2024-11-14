@@ -1,4 +1,5 @@
 matplotlib
+mpl_scatter_density
 numpy
 animatplot
 gif

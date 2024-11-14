@@ -7,7 +7,6 @@ Created on Wed Feb  3 08:37:09 2021
 
 from ply import lex, yacc
 import sys
-breakpoint()
 import numpy as np
 from matrixfractal import IFSystemRand
 from dotmap import DotMap
