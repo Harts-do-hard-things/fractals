@@ -14,5 +14,5 @@ if __name__ == "__main__":
     for fractal in ifs:
         print(fractal)
     h = ifs.IFS_maple_leaf(run_prob=False)
-    h.iterate(50000)
+    h.iterate(500000)
     h.plot()

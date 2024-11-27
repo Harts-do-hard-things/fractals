@@ -32,6 +32,7 @@ The fractals available are:
 
 import cmath
 import math
+from typing import Callable
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -42,7 +43,7 @@ try:
 except ModuleNotFoundError:
     gif = None
 
-from collections.abc import Callable
+
 
 
 class Fractal:
@@ -103,6 +104,7 @@ class Fractal:
         self.S = S0
         self.func_list = func_list
         self._plot_list = [S0]
+        self.plot_handle = []
 
     def iterate(self, i: int) -> None:
         """maps the functions to S, reassigning S
@@ -159,6 +161,13 @@ class Fractal:
         ax = fig.add_subplot(111)
         self.plot_handle = [
             ax.plot(np.real(s), np.imag(s), color="tab:blue") for s in self._plot_list
+            # (ax.plot(
+            #     np.real(s)[:len(s)//len(self.func_list)],
+            #     np.imag(s)[:len(s)//len(self.func_list)], color="tab:blue"),
+            # ax.plot(
+            #     np.real(s)[len(s)//len(self.func_list):],
+            #     np.imag(s)[len(s)//len(self.func_list):], color="tab:red"))
+            # for s in self._plot_list
         ]
         if self.limits and not autoscale:
             ax.set_xlim(self.limits[:2])
@@ -204,11 +213,11 @@ class Fractal:
             for _ in range(iterations - 1):
                 self.iterate(1)
                 self.tile()
-                frame = self.gif_plot()
+                frame = self._gif_plot()
                 frames.append(frame)
             gif.save(
                 frames,
-                "{0}_{1}.gif".format(type(self).__name__, iterations),
+                f"{type(self).__name__}_{iterations}.gif",
                 duration
             )
 
@@ -237,12 +246,12 @@ class DragonFractal(Fractal):
     if gif:
         def save_gif(self, iterations: int, duration=1000):
             self.tile()
-            frames = [self.gif_plot()]
+            frames = [self._gif_plot()]
             for _ in range(iterations - 1):
                 self.iterate(1)
                 self._plot_list = [self.segment(s) for s in self._plot_list]
                 self.tile()
-                frame = self.gif_plot()
+                frame = self._gif_plot()
                 frames.append(frame)
             gif.save(
                 frames,
@@ -291,8 +300,8 @@ class _AnimFractal(Fractal):
     """An experimental class
     TODO: Finish and document"""
     def create_block(self, X: list, Y: list) -> list:
-        X.append(self.real(self.S))
-        Y.append(self.imag(self.S))
+        X.append(np.real(self.S))
+        Y.append(np.imag(self.S))
         return X, Y
 
     def animate(self, i: int):
@@ -386,7 +395,7 @@ P_angle = [P_a1, P_a2, P_na1, P_na2, P_na1, P_a1]
 P_offset = np.cumsum([0, *P_angle[:-1]])
 
 
-def make_func(scale, vector, offset):
+def _make_func(scale, vector, offset):
     return lambda z: scale * (vector * z + offset)
 
 
@@ -411,7 +420,7 @@ F_angles = [F_A1, F_A, F_A, F_A1, F_A, F_A + 2 * math.pi / 3, F_A]
 F_vectors = [cmath.rect(1, PHI) for PHI in F_angles]
 
 # trans_matrix = [0]
-IFS_function = dict()
+IFS_function = {}
 # Plain Ole' Dragon Curve
 IFS_function["flowsnake"] = [
     lambda z: F_r * (z * F_vectors[0] - F_vectors[0]),
@@ -473,11 +482,11 @@ IFS_function["z2_golden_dragon"] = [
 ]
 
 IFS_function["pentigree"] = [
-    make_func(P_r, vector, offset) for vector, offset in zip(P_angle, P_offset)
+    _make_func(P_r, vector, offset) for vector, offset in zip(P_angle, P_offset)
 ]
 
 IFS_function["pentadendrite"] = [
-    make_func(Dr, vector, offset) for vector, offset in zip(VVectors, VOffset)
+    _make_func(Dr, vector, offset) for vector, offset in zip(VVectors, VOffset)
 ]
 
 # Vars used in koch snowflake
@@ -494,9 +503,15 @@ IFS_function["koch_flake"] = [
     lambda z: KR * (z + 2),
 ]
 
+IFS_function["kochawave"] = [
+    lambda z: KR * (z),
+    lambda z: KR + 1/math.sqrt(3) * cmath.exp(1j*cmath.pi/6)*z,
+    lambda z: KR + 1/math.sqrt(3) * cmath.exp(1j*cmath.pi/6) + KR * cmath.exp(-1j*2/3*cmath.pi)*z,
+    lambda z: KR * (z + 2)]
+
 
 class HeighwayDragon(DragonFractal):
-    """[Heighway Dragon](https://larryriddle.agnesscott.org/ifs/heighway/heighway.htm) Fractal inheriting from :class:`~fractal.DragonFractal`"""
+    """[Heighway Dragon](https://larryriddle.agnesscott.org/ifs/heighway/heighway.htm)"""
     limits = (-0.407, 1.24, -0.382, 0.714)
 
     def __init__(self):
@@ -504,7 +519,7 @@ class HeighwayDragon(DragonFractal):
 
 
 class TwinDragon(DragonFractal):
-    """[Twin Dragon](https://larryriddle.agnesscott.org/ifs/heighway/twindragon.htm) Fractal inheriting from :class:`~fractal.DragonFractal`"""
+    """[Twin Dragon](https://larryriddle.agnesscott.org/ifs/heighway/twindragon.htm)"""
 
     limits = (-0.4, 1.4, -0.75, 0.75)
 
@@ -513,7 +528,7 @@ class TwinDragon(DragonFractal):
 
 
 class GoldenDragon(DragonFractal):
-    """[Golden Dragon](https://larryriddle.agnesscott.org/ifs/heighway/goldenDragon.htm) Fractal inheriting from :class:`~fractal.DragonFractal`"""
+    """[Golden Dragon](https://larryriddle.agnesscott.org/ifs/heighway/goldenDragon.htm)"""
 
     limits = (-0.317, 1.16, -0.243, 0.616)
 
@@ -522,7 +537,7 @@ class GoldenDragon(DragonFractal):
 
 
 class Terdragon(Fractal):
-    """[Terdragon](https://larryriddle.agnesscott.org/ifs/heighway/terdragon.htm) Fractal inheriting from :class:`~fractal.Fractal`"""
+    """[Terdragon](https://larryriddle.agnesscott.org/ifs/heighway/terdragon.htm)"""
 
     limits = (-0.12, 1.12, -0.357, 0.357)
 
@@ -531,7 +546,7 @@ class Terdragon(Fractal):
 
 
 class FudgeFlake(Terdragon):
-    """[Fudgeflake](https://larryriddle.agnesscott.org/ifs/heighway/fudgeflake.htm) Fractal inheriting from :class:`fractal.Terdragon`"""
+    """[Fudgeflake](https://larryriddle.agnesscott.org/ifs/heighway/fudgeflake.htm)"""
 
     limits = -0.55, 1.6, -0.4, 1.04
 
@@ -541,7 +556,7 @@ class FudgeFlake(Terdragon):
 
 
 class LevyC(Fractal):
-    """[Levy C Curve](https://larryriddle.agnesscott.org/ifs/levy/levy.htm) inheriting from :class:`~fractal.Fractal`"""
+    """[Levy C Curve](https://larryriddle.agnesscott.org/ifs/levy/levy.htm)"""
 
     limits = -0.6, 1.6, -1.06, 0.308
 
@@ -550,7 +565,7 @@ class LevyC(Fractal):
 
 
 class LevyTapestryOutside(LevyC):
-    """[Levy Tapestry](https://larryriddle.agnesscott.org/ifs/levy/tapestryOutside.htm) inheriting from :class:`~fractal.LevyC`"""
+    """[Levy Tapestry](https://larryriddle.agnesscott.org/ifs/levy/tapestryOutside.htm)"""
 
     limits = -1.1, 2.1, -1.08, 1.08
 
@@ -559,7 +574,7 @@ class LevyTapestryOutside(LevyC):
 
 
 class LevyTapestryInside(LevyC):
-    """[Levy Tapestry](https://larryriddle.agnesscott.org/ifs/levy/tapestryInside.htm) inheriting from :class:`~fractal.LevyC`"""
+    """[Levy Tapestry](https://larryriddle.agnesscott.org/ifs/levy/tapestryInside.htm)"""
 
     limits = -1.2, 2.2, -1.6, 0.6
 
@@ -571,7 +586,7 @@ class LevyTapestryInside(LevyC):
 
 class KochFlake(Fractal):
     """
-    [Koch Flake](https://larryriddle.agnesscott.org/ifs/kcurve/kcurve.htm) inheriting from :class:`~fractal.Fractal`
+    [Koch Flake](https://larryriddle.agnesscott.org/ifs/kcurve/kcurve.htm)
 
     Note: this is constructed as a koch curve, then tiled.
     """
@@ -590,26 +605,45 @@ class KochFlake(Fractal):
             self.translate(off, theta)
 
 
+class Kochawave(Fractal):
+    """Kochawave Curve"""
+    def __init__(self):
+        super().__init__(S0i, func_list=IFS_function["kochawave"])
+    
+    def tile(self):
+        translations = [
+            (cmath.rect(1, math.pi / 3), -2 * math.pi / 3),
+            (1, 2 * math.pi / 3),
+        ]
+        for off, theta in translations:
+            self.translate(off, theta)
+
+
 class Pentadendrite(Fractal):
-    """[Pentadendrite](https://larryriddle.agnesscott.org/ifs/pentaden/penta.htm) inheriting from :class:`~fractal.Fractal` """
+    """[Pentadendrite](https://larryriddle.agnesscott.org/ifs/pentaden/penta.htm)"""
 
     limits = 0.85, 1.85, -0.152, 1.622
 
     def __init__(self):
         super().__init__(S0=[0, 1], func_list=IFS_function["pentadendrite"])
 
-    def tile(self):
-        translations = zip(PENTAGON[:4], np.arange(72, 361, 72) * math.pi / 180)
-        for offset, angle in translations:
-            self.translate(offset, angle)
+    # def tile(self):
+    #     translations = zip(PENTAGON[:4], np.arange(72, 361, 72) * math.pi / 180)
+    #     for offset, angle in translations:
+    #         self.translate(offset, angle)
 
 
 class Pentigree(Fractal):
-    """[Pentigree](https://larryriddle.agnesscott.org/ifs/pentaden/pentigree.htm) inheriting from :class:`~fractal.Fractal`"""
+    """[Pentigree](https://larryriddle.agnesscott.org/ifs/pentaden/pentigree.htm)"""
     limits = -0.4, 1.3, -0.312, 0.8
 
     def __init__(self):
         super().__init__(S0i, IFS_function["pentigree"])
+
+    def tile(self):
+        translations = zip(PENTAGON[:4], np.arange(72, 361, 72) * math.pi / 180)
+        for offset, angle in translations:
+            self.translate(offset, angle)
 
 
 class Z2Dragon(DragonFractal):
@@ -652,8 +686,6 @@ class GoldenFlake(BinaryTree):
             self.S = S
 
 if __name__ == "__main__":
-    dragon = HeighwayDragon()
-    dragon.iterate(21)
+    dragon = Kochawave()
+    dragon.iterate(8)
     dragon.plot(autoscale=True)
-
-    pass

@@ -6,7 +6,6 @@ Created on Wed Jan 20 09:13:44 2021
 """
 
 import dataclasses as dtcls
-from typing import Dict
 import turtle
 
 
@@ -16,7 +15,7 @@ class L_System:
     
     axiom: str
     angle: float
-    rules: Dict[str, str]
+    rules: dict[str, str]
     def __post_init__(self):
         self.commands = {
         'F': lambda t:t.forward(20),

@@ -18,13 +18,13 @@ class FunctionSystem:
 
     def plot(self, func=lambda S: S):
         fig = plt.figure()
-        fig.patch.set_facecolor("#440154")
+        # fig.patch.set_facecolor("#440154")
         ax = fig.add_subplot(111, projection="scatter_density")
         ax.axis('off')
         points = func(self.S)
         ax.set_aspect("equal")
-        ax.scatter_density(points[:, 0], points[:, 1])
-        # ax.plot(points[:, 0], points[:, 1], linestyle='', marker=',')
+        # ax.scatter_density(points[:, 0], points[:, 1])
+        ax.plot(points[:, 0], points[:, 1], linestyle='', marker=',')
         plt.show()
 
     def __repr__(self):
