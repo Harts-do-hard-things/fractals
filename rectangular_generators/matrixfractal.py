@@ -18,13 +18,14 @@ class FunctionSystem:
 
     def plot(self, func=lambda S: S):
         fig = plt.figure()
-        # fig.patch.set_facecolor("#440154")
+        # fig.patch.set_facecolor("#000000")
         ax = fig.add_subplot(111, projection="scatter_density")
-        ax.axis('off')
+        # ax.axis('off')
         points = func(self.S)
         ax.set_aspect("equal")
         # ax.scatter_density(points[:, 0], points[:, 1])
-        ax.plot(points[:, 0], points[:, 1], linestyle='', marker=',')
+        ax.plot(points[:, 0], points[:, 1], linestyle='', marker=',', color='tab:red')
+        plt.savefig("emmett1.png", transparent=True)
         plt.show()
 
     def __repr__(self):
@@ -63,6 +64,27 @@ class IFSystemRand(FunctionSystem):
     def __init__(self, run_prob=True):
         self.fs_to_arrays(run_prob)
         self.S = []
+        self.trans_used = []
+        self.limits = self.calculate_limits()
+
+    def calculate_limits(self):
+        values = np.array(((0, 0), (1, 0), (1, 1), (0, 1)))
+        for _ in range(50):
+            for trans in self.trans_list:
+                maxmin = np.array((np.min(values, axis=0), np.max(values, axis=0)))
+                # print(maxmin)
+                values = np.append(maxmin, super().apply(maxmin, trans), 0)
+                # print(values)
+        return maxmin.flatten('F')
+
+    def get_xlim(self):
+        return self.limits[:2]
+    
+    def get_ylim(self):
+        return self.limits[2:]
+    
+    xlim = property(get_xlim)
+    ylim = property(get_ylim)
 
     def calculate_prob(self):
         det_list = [abs(np.linalg.det(a[:2, :2]))
@@ -86,6 +108,7 @@ class IFSystemRand(FunctionSystem):
             point, index = self.apply(point)
             colors.append('C' + str(index))
             self.S.append(point)
+            self.trans_used.append(index)
 
     def fs_to_arrays(self, run_prob):
         i = (len(self.eq[0]) - 1) // 3

@@ -44,8 +44,6 @@ except ModuleNotFoundError:
     gif = None
 
 
-
-
 class Fractal:
     """A class used to draw and calculate Fractals.
 
@@ -106,7 +104,11 @@ class Fractal:
         self._plot_list = [S0]
         self.plot_handle = []
 
-    def iterate(self, i: int) -> None:
+    def reset(self):
+        self.S = self._S0
+        self._plot_list = [self._S0]
+
+    def iterate(self, i: int=1) -> None:
         """maps the functions to S, reassigning S
 
         if used with the gif package
@@ -154,6 +156,12 @@ class Fractal:
     def tile(self):
         pass
 
+    def translate_in_place(self, offset: complex, angle: float) -> None:
+        self._plot_list = [ [i * cmath.exp(angle * 1j) + offset for i in j] for j in self._plot_list]
+
+    def scale(self, scale: float) -> None:
+        self._plot_list = [ [i * scale for i in j] for j in self._plot_list]
+
     def plot(self, autoscale=True):
         """Plots the fractal for human viewing"""
         self.tile()
@@ -188,6 +196,7 @@ class Fractal:
                 ax.set_ylim(self.limits[2:])
             else:
                 ax.set_aspect("equal")
+            ax.axis("off")
             for s in self._plot_list:
                 ax.plot(np.real(s), np.imag(s), color="tab:blue")
 
@@ -313,9 +322,6 @@ class _AnimFractal(Fractal):
         fig = plt.figure()
         ax = fig.add_subplot(111)
         ax.set_title("Test")
-        # ax.set_ylim(self.limits[2:])
-        # ax.set_xlim(self.limits[:2])
-        # ax.axis = self.limits
         plt.axis(self.limits)
         timeline = amp.Timeline(range(i + 1), units="iter", fps=2)
         block = amp.blocks.Line(
@@ -395,8 +401,8 @@ P_angle = [P_a1, P_a2, P_na1, P_na2, P_na1, P_a1]
 P_offset = np.cumsum([0, *P_angle[:-1]])
 
 
-def _make_func(scale, vector, offset):
-    return lambda z: scale * (vector * z + offset)
+def _make_func(DRPR, vector, offset):
+    return lambda z: DRPR * (vector * z + offset)
 
 
 # Vars used in pentadendrite
@@ -509,6 +515,17 @@ IFS_function["kochawave"] = [
     lambda z: KR + 1/math.sqrt(3) * cmath.exp(1j*cmath.pi/6) + KR * cmath.exp(-1j*2/3*cmath.pi)*z,
     lambda z: KR * (z + 2)]
 
+DRPR = 1/(2 + 1/PHI)
+
+IFS_function["durer_pentagon"] = [
+    lambda z: DRPR*z,
+    lambda z: DRPR*(1 + z*cmath.exp(2j*cmath.pi/5)),
+    lambda z: DRPR*(1 + cmath.exp(2j*cmath.pi/5) + cmath.exp(-2j*cmath.pi/5)*z),
+    lambda z: DRPR*(1 + 1/PHI + z)]
+
+R1 = math.sqrt(1/PHI**2 + 1 - 2/PHI*math.cos(3*math.pi/5))
+theta1 = math.asin(math.sin(3*math.pi/5)/R1)
+
 
 class HeighwayDragon(DragonFractal):
     """[Heighway Dragon](https://larryriddle.agnesscott.org/ifs/heighway/heighway.htm)"""
@@ -609,7 +626,7 @@ class Kochawave(Fractal):
     """Kochawave Curve"""
     def __init__(self):
         super().__init__(S0i, func_list=IFS_function["kochawave"])
-    
+
     def tile(self):
         translations = [
             (cmath.rect(1, math.pi / 3), -2 * math.pi / 3),
@@ -627,10 +644,10 @@ class Pentadendrite(Fractal):
     def __init__(self):
         super().__init__(S0=[0, 1], func_list=IFS_function["pentadendrite"])
 
-    # def tile(self):
-    #     translations = zip(PENTAGON[:4], np.arange(72, 361, 72) * math.pi / 180)
-    #     for offset, angle in translations:
-    #         self.translate(offset, angle)
+    def tile(self):
+        translations = zip(PENTAGON[:4], np.arange(72, 361, 72) * math.pi / 180)
+        for offset, angle in translations:
+            self.translate(offset, angle)
 
 
 class Pentigree(Fractal):
@@ -639,6 +656,17 @@ class Pentigree(Fractal):
 
     def __init__(self):
         super().__init__(S0i, IFS_function["pentigree"])
+
+    def tile(self):
+        translations = zip(PENTAGON[:4], np.arange(72, 361, 72) * math.pi / 180)
+        for offset, angle in translations:
+            self.translate(offset, angle)
+
+
+class DurerPentagon(Fractal):
+    """A different implementation of durer's pentagon"""
+    def __init__(self):
+        super().__init__(S0i, IFS_function["durer_pentagon"])
 
     def tile(self):
         translations = zip(PENTAGON[:4], np.arange(72, 361, 72) * math.pi / 180)
@@ -686,6 +714,6 @@ class GoldenFlake(BinaryTree):
             self.S = S
 
 if __name__ == "__main__":
-    dragon = Kochawave()
-    dragon.iterate(8)
+    dragon = LevyC()
+    dragon.iterate()
     dragon.plot(autoscale=True)

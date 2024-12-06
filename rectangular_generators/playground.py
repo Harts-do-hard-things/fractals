@@ -13,6 +13,6 @@ if __name__ == "__main__":
     print("Available rectangular generators:")
     for fractal in ifs:
         print(fractal)
-    h = ifs.IFS_maple_leaf(run_prob=False)
-    h.iterate(500000)
+    h = ifs.IFS_coral(run_prob=False)
+    h.iterate(100_000)
     h.plot()
