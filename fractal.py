@@ -103,9 +103,42 @@ class Fractal:
         self.func_list = func_list
         self._plot_list = [S0]
         self.plot_handle = []
+        # if not self.limits:
+        #     self.limits = self.calculate_limits()
+
+    def calculate_limits(self):
+        self.iterate(10)
+        mins = np.min(self.S, axis=0)
+        maxs = np.max(self.S, axis=0)
+        expected_diff = max(maxs - mins) * 1.05
+        diff = maxs - mins
+        
+        maxmin = np.array(
+            (mins - (expected_diff - diff) / 2,
+             maxs + (expected_diff - diff) / 2))
+        self.reset()
+        return maxmin.flatten('F')
+    
+    def get_xlim(self):
+        return self.limits[:2]
+    
+    def get_ylim(self):
+        return self.limits[2:]
+    
+    xlim = property(get_xlim)
+    ylim = property(get_ylim)
+
 
     def reset(self):
-        self.S = self._S0
+        """
+        Resets the fractal to initial conditions.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.S = self._S0.copy()
         self._plot_list = [self._S0]
 
     def iterate(self, i: int=1) -> None:
@@ -132,6 +165,35 @@ class Fractal:
                 S.extend(list(map(func, self.S)))
             self.S = S
         self._plot_list.append(S)
+    
+    def divided_iterate(self, i:int=1):
+        """maps the functions to S, reassigning S
+
+        if used with the gif package
+        clears the plot list (ensures proper gif plotting)
+        appends the result of each transformation to plot list
+
+        Parameters
+        ----------
+        i : int
+            The number of iterations to advance from the current state
+
+        Returns
+        -------
+        None
+
+        """
+        self._plot_list.clear()
+        if i == 1:
+            S = []
+            for func in self.func_list:
+                S.extend(list(map(func, self.S)))
+                self._plot_list.append(list(map(func, self.S)))
+            self.S = S
+        else:
+            self.iterate(i - 1)
+            self.divided_iterate(1)
+            
 
     # Rotate and translate (in that order) & create a copy
     def translate(self, offset: complex, angle: float) -> None:
@@ -157,6 +219,22 @@ class Fractal:
         pass
 
     def translate_in_place(self, offset: complex, angle: float) -> None:
+        """
+        Translates every element in _plot_list
+
+        Parameters
+        ----------
+        offset : complex
+            DESCRIPTION.
+        angle : float
+            DESCRIPTION.
+
+        Returns
+        -------
+        None
+            DESCRIPTION.
+
+        """
         self._plot_list = [ [i * cmath.exp(angle * 1j) + offset for i in j] for j in self._plot_list]
 
     def scale(self, scale: float) -> None:
@@ -166,16 +244,12 @@ class Fractal:
         """Plots the fractal for human viewing"""
         self.tile()
         fig = plt.figure()
+        self._fig = fig
         ax = fig.add_subplot(111)
+        self._ax = ax
         self.plot_handle = [
-            ax.plot(np.real(s), np.imag(s), color="tab:blue") for s in self._plot_list
-            # (ax.plot(
-            #     np.real(s)[:len(s)//len(self.func_list)],
-            #     np.imag(s)[:len(s)//len(self.func_list)], color="tab:blue"),
-            # ax.plot(
-            #     np.real(s)[len(s)//len(self.func_list):],
-            #     np.imag(s)[len(s)//len(self.func_list):], color="tab:red"))
-            # for s in self._plot_list
+            # ax.plot(np.real(s), np.imag(s), color="tab:blue") for s in self._plot_list
+            ax.plot(np.real(s), np.imag(s)) for s in self._plot_list
         ]
         if self.limits and not autoscale:
             ax.set_xlim(self.limits[:2])
@@ -184,9 +258,16 @@ class Fractal:
         ax.axis("off")
         plt.show()
 
-    # Not intended for Call except through save_gif method
-    if gif:
+    def get_plot_fig(self):
+        return self._fig
+    
+    def get_plot_ax(self):
+        return self._ax
+    
+    plot_fig = property(get_plot_fig)
+    plot_ax = property(get_plot_ax)
 
+    if gif:
         @gif.frame
         def _gif_plot(self) -> None:
             fig = plt.figure()
@@ -624,16 +705,19 @@ class KochFlake(Fractal):
 
 class Kochawave(Fractal):
     """Kochawave Curve"""
+    
+    limits = -0.05, 1.05, -0.04, 0.91
+    
     def __init__(self):
         super().__init__(S0i, func_list=IFS_function["kochawave"])
 
-    def tile(self):
-        translations = [
-            (cmath.rect(1, math.pi / 3), -2 * math.pi / 3),
-            (1, 2 * math.pi / 3),
-        ]
-        for off, theta in translations:
-            self.translate(off, theta)
+    # def tile(self):
+    #     translations = [
+    #         (cmath.rect(1, math.pi / 3), -2 * math.pi / 3),
+    #         (1, 2 * math.pi / 3),
+    #     ]
+    #     for off, theta in translations:
+    #         self.translate(off, theta)
 
 
 class Pentadendrite(Fractal):
@@ -652,7 +736,7 @@ class Pentadendrite(Fractal):
 
 class Pentigree(Fractal):
     """[Pentigree](https://larryriddle.agnesscott.org/ifs/pentaden/pentigree.htm)"""
-    limits = -0.4, 1.3, -0.312, 0.8
+    limits = -0.44, 1.5, -0.35, 1.7
 
     def __init__(self):
         super().__init__(S0i, IFS_function["pentigree"])
@@ -714,6 +798,6 @@ class GoldenFlake(BinaryTree):
             self.S = S
 
 if __name__ == "__main__":
-    dragon = LevyC()
-    dragon.iterate()
+    dragon = Kochawave()
+    dragon.divided_iterate(8)
     dragon.plot(autoscale=True)

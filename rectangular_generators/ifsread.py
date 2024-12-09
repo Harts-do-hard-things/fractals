@@ -8,7 +8,7 @@ Created on Wed Feb  3 08:37:09 2021
 from ply import lex, yacc
 import sys
 import numpy as np
-from matrixfractal import IFSystemRand
+from matrixfractal import FunctionSystemRandom
 from dotmap import DotMap
 
 
@@ -111,12 +111,12 @@ def p_obj_list_2(p):
 
 def p_object(p):
     """ object : Name 2D_ARRAY"""
-    p[0] = type(p[1], (IFSystemRand,), {"eq": np.array(p[2])})
+    p[0] = type(p[1], (FunctionSystemRandom,), {"eq": np.array(p[2])})
 
 
 def p_object_1(p):
     """ object : Name docs 2D_ARRAY"""
-    p[0] = type(p[1], (IFSystemRand,), {"eq": np.array(p[3]), "__doc__": p[2]})
+    p[0] = type(p[1], (FunctionSystemRandom,), {"eq": np.array(p[3]), "__doc__": p[2]})
 
 
 def p_name(p):
@@ -180,3 +180,6 @@ def interpret_file(path):
 lexer = lex.lex()
 parser = yacc.yacc()
 interpret_file("ifs_data\\fractint.ifs")
+interpret_file("ifs_data\\emmett.ifs")
+# interpret_file("ifs_data\\Default.ifs")
+interpret_file("ifs_data\\diamond.ifs")
