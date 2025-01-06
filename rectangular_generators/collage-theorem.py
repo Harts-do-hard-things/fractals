@@ -8,7 +8,7 @@ Created on Tue Mar  9 21:47:46 2021
 import numpy as np
 
 from scipy.special import expit
-from matrixfractal import IFSystemRand
+from matrixfractal import FunctionSystemRandom
 import matplotlib.pyplot as plt
 import json
 # def training_set():

@@ -29,9 +29,7 @@ class FunctionSystem:
         ax.axis('off')
         points = func(self.S)
         ax.set_aspect("equal")
-        # ax.scatter_density(points[:, 0], points[:, 1])
         ax.plot(points[:, 0], points[:, 1], linestyle='', marker=',', color='tab:red')
-        # plt.savefig("emmett1.png", transparent=True)
         plt.show()
 
     def __repr__(self):
@@ -56,19 +54,10 @@ class DeterministicFunctionSystem(FunctionSystem):
     def plot(self):
         super().plot(self.segment)
 
-    def segment(self, points: list) -> list:
-        # len_ = len(self.S0)
-        # s = points.size // (2 * len_)
-        # npoints = np.append(
-        #     points.reshape(-1, 2 * len_), [[np.nan, np.nan]] * s, 1
-        # ).reshape(-1, 2)
-        # return npoints
-        return points
-
 
 class FunctionSystemRandom(FunctionSystem):
     def __init__(self, run_prob=False):
-        self.fs_to_arrays(run_prob)
+        self.ifs_to_arrays(run_prob)
         self.S = []
         self.trans_used = []
         self.limits = self.calculate_limits()
@@ -90,6 +79,12 @@ class FunctionSystemRandom(FunctionSystem):
         self.reset()
         return maxmin.flatten('F')
     
+    def calculate_probabilities(self):
+        det_list = [abs(np.linalg.det(a[:2, :2]))
+                    if abs(np.linalg.det(a[:2, :2])) != 0 else .003
+                    for a in self.trans_list]
+        normalize = [a / sum(det_list) for a in det_list]
+        return normalize
 
     def get_xlim(self):
         return self.limits[:2]
@@ -99,13 +94,6 @@ class FunctionSystemRandom(FunctionSystem):
     
     xlim = property(get_xlim)
     ylim = property(get_ylim)
-
-    def calculate_probabilities(self):
-        det_list = [abs(np.linalg.det(a[:2, :2]))
-                    if abs(np.linalg.det(a[:2, :2])) != 0 else .003
-                    for a in self.trans_list]
-        normalize = [a / sum(det_list) for a in det_list]
-        return normalize
 
     def apply(self, point):
         index = np.random.choice(len(self.prob_list), p=self.prob_list)
@@ -136,17 +124,18 @@ class FunctionSystemRandom(FunctionSystem):
             # pixels[pixely, pixelx] = np.append(COLORS[0], 255)
         return Image.fromarray(pixels, "RGBA")
 
-    def fs_to_arrays(self, run_prob):
-        i = (len(self.eq[0]) - 1) // 3
+    def ifs_to_arrays(self, run_prob):
+        if len(self.eq[0]) % 2 == 1:
+            i = (len(self.eq[0]) - 1) // 3
+        else:
+            i = len(self.eq[0]) // 3
+            run_prob = True
         self.trans_list = [
             np.append(e[: 2 * i].reshape((2, -1)), e[-1 - i: -1]
                       .reshape(-1, 1), 1)
             for e in np.array(self.eq)
         ]
-        if run_prob:
-            self.prob_list = self.calculate_probabilities()
-        else:
-            self.prob_list = self.eq[:, -1]
+        self.prob_list = self.calculate_probabilities() if run_prob else self.eq[:, -1]
 
     def plot(self):
         super().plot(np.array)

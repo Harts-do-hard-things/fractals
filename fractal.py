@@ -798,6 +798,6 @@ class GoldenFlake(BinaryTree):
             self.S = S
 
 if __name__ == "__main__":
-    dragon = Kochawave()
-    dragon.divided_iterate(8)
+    dragon = HeighwayDragon()
+    dragon.iterate(2)
     dragon.plot(autoscale=True)
