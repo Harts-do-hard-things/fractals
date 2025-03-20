@@ -12,8 +12,7 @@ from PIL import Image
 
 COLORS = [(np.array(
     colors.to_rgb(colors.TABLEAU_COLORS[i])) * 255 // 1).astype("uint8")
-    for i in ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple']
-    ]
+    for i in ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple']]
 
 
 class FunctionSystem:
@@ -29,7 +28,9 @@ class FunctionSystem:
         ax.axis('off')
         points = func(self.S)
         ax.set_aspect("equal")
-        ax.plot(points[:, 0], points[:, 1], linestyle='', marker=',', color='tab:red')
+        ax.plot(
+            points[:, 0], points[:, 1], linestyle='',
+            marker=',', color='tab:red')
         plt.show()
 
     def __repr__(self):
@@ -56,12 +57,12 @@ class DeterministicFunctionSystem(FunctionSystem):
 
 
 class FunctionSystemRandom(FunctionSystem):
-    def __init__(self, run_prob=False):
+    def __init__(self, size=1_000_000, run_prob=False):
         self.ifs_to_arrays(run_prob)
         self.S = []
         self.trans_used = []
         self.limits = self.calculate_limits()
-    
+
     def reset(self):
         self.S.clear()
         self.trans_used.clear()
@@ -72,13 +73,13 @@ class FunctionSystemRandom(FunctionSystem):
         maxs = np.max(self.S, axis=0)
         expected_diff = max(maxs - mins) * 1.05
         diff = maxs - mins
-        
+
         maxmin = np.array(
             (mins - (expected_diff - diff) / 2,
              maxs + (expected_diff - diff) / 2))
         self.reset()
         return maxmin.flatten('F')
-    
+
     def calculate_probabilities(self):
         det_list = [abs(np.linalg.det(a[:2, :2]))
                     if abs(np.linalg.det(a[:2, :2])) != 0 else .003
@@ -88,10 +89,10 @@ class FunctionSystemRandom(FunctionSystem):
 
     def get_xlim(self):
         return self.limits[:2]
-    
+
     def get_ylim(self):
         return self.limits[2:]
-    
+
     xlim = property(get_xlim)
     ylim = property(get_ylim)
 
@@ -109,17 +110,16 @@ class FunctionSystemRandom(FunctionSystem):
             point, index = self.apply(point)
             self.S.append(point)
             self.trans_used.append(index)
-    
+
     def make_image(self, resolution=(1080, 1080)):
         pixels = np.uint8(
-            [[(0, 0, 0, 0) for _ in range(resolution[0])] 
-             for _ in range(resolution[1])]
-            )
+            [[(0, 0, 0, 0) for _ in range(resolution[0])]
+             for _ in range(resolution[1])])
         for point, index in zip(self.S, self.trans_used):
             x, y = point
             res = min(resolution)
-            pixelx = int((x - self.xlim[0])/(self.xlim[1] - self.xlim[0])*res)
-            pixely = int((self.ylim[1] - y)/(self.ylim[1] - self.ylim[0])*res)
+            pixelx = int((x - self.xlim[0]) / (self.xlim[1] - self.xlim[0])*res)
+            pixely = int((self.ylim[1] - y) / (self.ylim[1] - self.ylim[0])*res)
             pixels[pixely, pixelx] = np.append(COLORS[index], 255)
             # pixels[pixely, pixelx] = np.append(COLORS[0], 255)
         return Image.fromarray(pixels, "RGBA")

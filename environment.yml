@@ -1,0 +1,15 @@
+name: fractals
+dependencies:
+  - matplotlib
+  - mpl-scatter-density
+  - numpy=1.26.*
+  - animatplot
+  - gif
+  - spyder-kernels=3.0.*
+  - ply
+  - mkdocs
+  - mkdocs-material
+  - mkdocstrings
+  - mkdocstrings-python
+  - manim
+  - dotmap

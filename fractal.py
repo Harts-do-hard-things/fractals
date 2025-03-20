@@ -112,22 +112,21 @@ class Fractal:
         maxs = np.max(self.S, axis=0)
         expected_diff = max(maxs - mins) * 1.05
         diff = maxs - mins
-        
+
         maxmin = np.array(
             (mins - (expected_diff - diff) / 2,
              maxs + (expected_diff - diff) / 2))
         self.reset()
         return maxmin.flatten('F')
-    
+
     def get_xlim(self):
         return self.limits[:2]
-    
+
     def get_ylim(self):
         return self.limits[2:]
-    
+
     xlim = property(get_xlim)
     ylim = property(get_ylim)
-
 
     def reset(self):
         """
@@ -141,7 +140,7 @@ class Fractal:
         self.S = self._S0.copy()
         self._plot_list = [self._S0]
 
-    def iterate(self, i: int=1) -> None:
+    def iterate(self, i: int = 1) -> None:
         """maps the functions to S, reassigning S
 
         if used with the gif package
@@ -165,8 +164,8 @@ class Fractal:
                 S.extend(list(map(func, self.S)))
             self.S = S
         self._plot_list.append(S)
-    
-    def divided_iterate(self, i:int=1):
+
+    def divided_iterate(self, i: int = 1):
         """maps the functions to S, reassigning S
 
         if used with the gif package
@@ -193,9 +192,7 @@ class Fractal:
         else:
             self.iterate(i - 1)
             self.divided_iterate(1)
-            
 
-    # Rotate and translate (in that order) & create a copy
     def translate(self, offset: complex, angle: float) -> None:
         """Translate and rotate the fractal in the complex plane
 
@@ -235,10 +232,11 @@ class Fractal:
             DESCRIPTION.
 
         """
-        self._plot_list = [ [i * cmath.exp(angle * 1j) + offset for i in j] for j in self._plot_list]
+        self._plot_list = [[i * cmath.exp(angle * 1j) + offset
+                             for i in j] for j in self._plot_list]
 
     def scale(self, scale: float) -> None:
-        self._plot_list = [ [i * scale for i in j] for j in self._plot_list]
+        self._plot_list = [[i * scale for i in j] for j in self._plot_list]
 
     def plot(self, autoscale=True):
         """Plots the fractal for human viewing"""
@@ -248,7 +246,8 @@ class Fractal:
         ax = fig.add_subplot(111)
         self._ax = ax
         self.plot_handle = [
-            # ax.plot(np.real(s), np.imag(s), color="tab:blue") for s in self._plot_list
+            # ax.plot(np.real(s), np.imag(s), color="tab:blue")
+            # for s in self._plot_list
             ax.plot(np.real(s), np.imag(s)) for s in self._plot_list
         ]
         if self.limits and not autoscale:
@@ -260,10 +259,10 @@ class Fractal:
 
     def get_plot_fig(self):
         return self._fig
-    
+
     def get_plot_ax(self):
         return self._ax
-    
+
     plot_fig = property(get_plot_fig)
     plot_ax = property(get_plot_ax)
 
@@ -353,7 +352,8 @@ class DragonFractal(Fractal):
 class BinaryTree(DragonFractal):
     """
     Creates Binary Trees Based off of
-    [Larry Riddle's Webpage](https://larryriddle.agnesscott.org/ifs/pythagorean/symbinarytree.htm )
+    [Larry Riddle's Webpage]
+    (https://larryriddle.agnesscott.org/ifs/pythagorean/symbinarytree.htm)
 
     See Documentation for [DragonFractal](index.md#fractal.DragonFractal)
     for implementation details
@@ -514,11 +514,14 @@ IFS_function["flowsnake"] = [
     lambda z: F_r * (z * F_vectors[1] - F_vectors[0]),
     lambda z: F_r * (z * F_vectors[2] + F_vectors[1] - F_vectors[0]),
     lambda z: F_r * (z * F_vectors[3] + 2 * F_vectors[2] - F_vectors[0]),
-    lambda z: F_r * (z * F_vectors[4] + F_vectors[3] + F_vectors[2] - F_vectors[0]),
+    lambda z: F_r * (z * F_vectors[4] + F_vectors[3] +
+                     F_vectors[2] - F_vectors[0]),
     lambda z: F_r
-    * (z * F_vectors[5] - F_vectors[5] + F_vectors[3] + F_vectors[2] - F_vectors[0]),
+    * (z * F_vectors[5] - F_vectors[5] + F_vectors[3] +
+       F_vectors[2] - F_vectors[0]),
     lambda z: F_r
-    * (z * F_vectors[6] - F_vectors[5] + F_vectors[3] + F_vectors[2] - F_vectors[0]),
+    * (z * F_vectors[6] - F_vectors[5] + F_vectors[3] +
+       F_vectors[2] - F_vectors[0]),
 ]
 
 IFS_function["dragon"] = [
@@ -569,7 +572,8 @@ IFS_function["z2_golden_dragon"] = [
 ]
 
 IFS_function["pentigree"] = [
-    _make_func(P_r, vector, offset) for vector, offset in zip(P_angle, P_offset)
+    _make_func(P_r, vector, offset)
+    for vector, offset in zip(P_angle, P_offset)
 ]
 
 IFS_function["pentadendrite"] = [
@@ -592,11 +596,11 @@ IFS_function["koch_flake"] = [
 
 IFS_function["kochawave"] = [
     lambda z: KR * (z),
-    lambda z: KR + 1/math.sqrt(3) * cmath.exp(1j*cmath.pi/6)*z,
-    lambda z: KR + 1/math.sqrt(3) * cmath.exp(1j*cmath.pi/6) + KR * cmath.exp(-1j*2/3*cmath.pi)*z,
+    lambda z: KR + 1 / math.sqrt(3) * cmath.exp(1j * cmath.pi / 6)*z,
+    lambda z: KR + 1 / math.sqrt(3) * cmath.exp(1j * cmath.pi / 6) + KR * cmath.exp(-1j * 2/3 * cmath.pi) * z,
     lambda z: KR * (z + 2)]
 
-DRPR = 1/(2 + 1/PHI)
+DRPR = 1 / (2 + 1 / PHI)
 
 IFS_function["durer_pentagon"] = [
     lambda z: DRPR*z,
@@ -705,9 +709,9 @@ class KochFlake(Fractal):
 
 class Kochawave(Fractal):
     """Kochawave Curve"""
-    
+
     limits = -0.05, 1.05, -0.04, 0.91
-    
+
     def __init__(self):
         super().__init__(S0i, func_list=IFS_function["kochawave"])
 
@@ -799,5 +803,8 @@ class GoldenFlake(BinaryTree):
 
 if __name__ == "__main__":
     dragon = HeighwayDragon()
-    dragon.iterate(2)
+    # levy = LevyC()
+    dragon.divided_iterate(15)
+    # levy.divided_iterate(1)
     dragon.plot(autoscale=True)
+    # levy.plot()
