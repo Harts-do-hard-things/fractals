@@ -3,7 +3,7 @@ using Colors
 using FileIO
 using StatsBase
 
-RESOLUTION = (1504, 2256)
+const RESOLUTION = (1504, 2256)
 
 struct Fractal
     S::Matrix
@@ -12,6 +12,12 @@ struct Fractal
     probabilities::Weights
 end
 
+function matvec_dot(mat::Vector{T}, vec::Vector{T}) where T
+    out = zeros(2)
+    out[1] = mat[1] * vec[1] + mat[2] * vec[2]
+    out[2] = mat[3] * vec[1] + mat[4] * vec[2]
+    return out
+end
 
 function Fractal(S::Matrix, func_list::Vector, weights::Weights)
     return Fractal(S, func_list, get_limits(func_list), weights)
@@ -23,19 +29,26 @@ H = [
 ]
 
 Koch_Curve =  [ 
-   0.333  0  0  0.333  0  0  0.25 
-   0.167 -0.289  0.289  0.167  0.333  0  0.25 
-   0.167  0.289 -0.289  0.167  0.5  0.289  0.25 
-   0.333  0  0  0.333  0.667  0  0.25 
+    0.62367 -0.40337 0.40337 0.62367 0 0
+    −0.37633 −0.40337 0.40337 −0.37633 1 0
  ]
 
 function Fractal(S::Matrix, eq::Matrix)
     func_list = []
+    if size(eq, 2) % 6 == 1
+        probabilities = Weights(eq[:, end])
+    else
+        p::Vector{AbstractFloat} = []
+        for i in 1:size(eq, 1)
+            # create a vector of the determinant of eq[i, 1:4]
+            push!(p, det(reshape(eq[i, 1:4], (2, 2))))
+        end
+        probabilities = Weights(p)
+    end
     for i in 1:size(eq, 1)
         f(x::Vector)::Vector = permutedims(reshape(eq[i, 1:4], (2, 2)))*x .+ eq[i, 5:6]
         push!(func_list, f)
     end
-    probabilities = Weights(eq[:, end])
     return Fractal(S, func_list, get_limits(func_list, probabilities), probabilities)
 end
 
@@ -80,7 +93,6 @@ function get_limits(func_list)
                limits[1][2] + (mdiff*1.05 - diff[1]) * 0.5), 
               (limits[2][1] - (mdiff*1.05 - diff[2]) * 0.5,
                limits[2][2] + (mdiff*1.05 - diff[2]) * 0.5)]
-    # print(limits)
     return limits
 end
 
@@ -123,7 +135,7 @@ function make_image(f::Fractal)
 end
 
 function main()
-    f = Fractal(zeros(2, 1_000_000), H)
+    f = Fractal(zeros(2, 1_000_000), Koch_Curve)
     iterate!(f)
     img = make_image(f)
     imgg = Gray.(img)
