@@ -8,6 +8,14 @@ struct Fractal
     plot_list::Vector{Vector{ComplexF64}}
 end
 
+struct LinearMap
+    a::ComplexF64
+    b::ComplexF64
+end
+
+(m::LinearMap)(z) = m.a * z + m.b
+
+
 # Constructor for Fractal
 function Fractal(S0::Vector{ComplexF64}, func_list::Vector{Function})
     return Fractal(S0, func_list, S0, [S0])
