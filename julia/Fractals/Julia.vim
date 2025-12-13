@@ -14,16 +14,17 @@ if &shortmess =~ 'A'
 else
   set shortmess=aoO
 endif
-badd +194 src\matrixfractal.jl
+badd +70 src\matrixfractal.jl
 badd +156 \Users\emmet\Documents\Code\GitHub\fractals\rectangular_generators\ifs_data\fractint.ifs
 badd +26 \Users\emmet\Documents\Code\GitHub\fractals\rectangular_generators\ifs_data\Default.ifs
 badd +99 \Users\emmet\Documents\Code\GitHub\fractals\rectangular_generators\ifs_data\Edgar.ifs
 badd +7 src\fractal_1.jl
-badd +12 src\matrixfractal_refactored.jl
+badd +222 src\matrixfractal_refactored.jl
+badd +152 src\matrixfractal_faster.jl
 argglobal
 %argdel
 $argadd src\matrixfractal.jl
-edit src\matrixfractal.jl
+edit src\matrixfractal_faster.jl
 let s:save_splitbelow = &splitbelow
 let s:save_splitright = &splitright
 set splitbelow splitright
@@ -45,12 +46,12 @@ set winheight=1
 set winminwidth=0
 set winwidth=1
 exe 'vert 1resize ' . ((&columns * 78 + 78) / 157)
-exe '2resize ' . ((&lines * 21 + 20) / 40)
+exe '2resize ' . ((&lines * 13 + 20) / 40)
 exe 'vert 2resize ' . ((&columns * 78 + 78) / 157)
-exe '3resize ' . ((&lines * 16 + 20) / 40)
+exe '3resize ' . ((&lines * 24 + 20) / 40)
 exe 'vert 3resize ' . ((&columns * 78 + 78) / 157)
 argglobal
-balt src\matrixfractal_refactored.jl
+balt src\fractal_1.jl
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -61,16 +62,16 @@ setlocal fdn=20
 setlocal fen
 silent! normal! zE
 let &fdl = &fdl
-let s:l = 111 - ((1 * winheight(0) + 19) / 38)
+let s:l = 127 - ((36 * winheight(0) + 19) / 38)
 if s:l < 1 | let s:l = 1 | endif
 keepjumps exe s:l
 normal! zt
-keepjumps 111
-normal! 030|
+keepjumps 127
+normal! 0
 wincmd w
 argglobal
-if bufexists(fnamemodify("src\matrixfractal_refactored.jl", ":p")) | buffer src\matrixfractal_refactored.jl | else | edit src\matrixfractal_refactored.jl | endif
-balt src\matrixfractal.jl
+if bufexists(fnamemodify("src\fractal_1.jl", ":p")) | buffer src\fractal_1.jl | else | edit src\fractal_1.jl | endif
+balt src\matrixfractal_faster.jl
 setlocal fdm=manual
 setlocal fde=0
 setlocal fmr={{{,}}}
@@ -81,15 +82,15 @@ setlocal fdn=20
 setlocal fen
 silent! normal! zE
 let &fdl = &fdl
-let s:l = 216 - ((4 * winheight(0) + 10) / 21)
+let s:l = 20 - ((11 * winheight(0) + 6) / 13)
 if s:l < 1 | let s:l = 1 | endif
 keepjumps exe s:l
 normal! zt
-keepjumps 216
-normal! 021|
+keepjumps 20
+normal! 015|
 wincmd w
 argglobal
-terminal ++curwin ++cols=78 ++rows=16 ++type=winpty julia
+terminal ++curwin ++cols=78 ++rows=24 ++type=winpty julia
 let s:term_buf_13 = bufnr()
 setlocal fdm=manual
 setlocal fde=0
@@ -99,17 +100,18 @@ setlocal fdl=0
 setlocal fml=1
 setlocal fdn=20
 setlocal fen
-let s:l = 177 - ((14 * winheight(0) + 8) / 16)
+let s:l = 1291 - ((15 * winheight(0) + 12) / 24)
 if s:l < 1 | let s:l = 1 | endif
 keepjumps exe s:l
 normal! zt
-keepjumps 177
-normal! 05|
+keepjumps 1291
+normal! 013|
 wincmd w
+3wincmd w
 exe 'vert 1resize ' . ((&columns * 78 + 78) / 157)
-exe '2resize ' . ((&lines * 21 + 20) / 40)
+exe '2resize ' . ((&lines * 13 + 20) / 40)
 exe 'vert 2resize ' . ((&columns * 78 + 78) / 157)
-exe '3resize ' . ((&lines * 16 + 20) / 40)
+exe '3resize ' . ((&lines * 24 + 20) / 40)
 exe 'vert 3resize ' . ((&columns * 78 + 78) / 157)
 tabnext 1
 if exists('s:wipebuf') && len(win_findbuf(s:wipebuf)) == 0

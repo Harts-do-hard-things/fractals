@@ -13,8 +13,8 @@ if __name__ == "__main__":
     print("Available rectangular generators:")
     for fractal in ifs:
         print(fractal)
-    h = ifs.IFS_Levy_Dragon(run_prob=False)
-    h.iterate(100_000)
+    h = ifs.IFS_Eisenstein(run_prob=False)
+    h.iterate(1_000_000)
     # h.plot()
     image = h.make_image()
-    # image.save("emmett.png")
+    image.save("Eisenstein.png")

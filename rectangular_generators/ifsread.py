@@ -180,7 +180,7 @@ def interpret_file(path):
 lexer = lex.lex()
 parser = yacc.yacc()
 interpret_file("ifs_data\\Edgar.ifs")
-interpret_file("ifs_data\\Default.ifs")
+# interpret_file("ifs_data\\Default.ifs")
 # interpret_file("ifs_data\\fractint.ifs")
 # interpret_file("ifs_data\\emmett.ifs")
 # interpret_file("ifs_data\\diamond.ifs")
