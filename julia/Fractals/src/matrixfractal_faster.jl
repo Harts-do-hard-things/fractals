@@ -262,15 +262,17 @@ function inverse_iterate(ifs::Fractal, n::Integer, point::SVector{2, Float64}, a
     points = [ point ]
     for j in 1:n
         points = [imap(p) for p in points for imap in inverse_maps if isinspace(p, f.limits)]
-        if any(i -> isapprox(i, SVector(0., 0.), atol=atol * 0.5), points)
-            return true
-        end
+        # if any(i -> isapprox(i, SVector(0., 0.), atol=atol), points)
+        #     return 1.0f0
+        #     println("bounced by zero, ending early")
+        # end
         if length(points) == 0
-            return false
+            return j / n * 0.5f0
         end
     end
     # return points
-    return true
+    # println("Never approached zero")
+    return 1.0f0
 end
 
 function test_image(ifs::Fractal, n::Integer, limits::Tuple{Tuple, Tuple}; resolution::Tuple{Int,Int}=RESOLUTION)
