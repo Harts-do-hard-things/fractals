@@ -1,0 +1,248 @@
+Created by PLY version 3.11 (http://www.dabeaz.com/ply)
+
+Grammar
+
+Rule 0     S' -> calc
+Rule 1     calc -> obj_list
+Rule 2     calc -> expression
+Rule 3     calc -> none
+Rule 4     obj_list -> object
+Rule 5     obj_list -> obj_list object
+Rule 6     object -> Name 2D_ARRAY
+Rule 7     object -> Name docs 2D_ARRAY
+Rule 8     Name -> ID
+Rule 9     Name -> Name ID
+Rule 10    docs -> DOCS
+Rule 11    docs -> docs DOCS
+Rule 12    2D_ARRAY -> ARRAY
+Rule 13    2D_ARRAY -> 2D_ARRAY ARRAY
+Rule 14    expression -> ID
+Rule 15    expression -> ARRAY
+Rule 16    expression -> DOCS
+Rule 17    none -> <empty>
+
+Terminals, with rules where they appear
+
+ARRAY                : 12 13 15
+DOCS                 : 10 11 16
+ID                   : 8 9 14
+error                : 
+
+Nonterminals, with rules where they appear
+
+2D_ARRAY             : 6 7 13
+Name                 : 6 7 9
+calc                 : 0
+docs                 : 7 11
+expression           : 2
+none                 : 3
+obj_list             : 1 5
+object               : 4 5
+
+Parsing method: LALR
+
+state 0
+
+    (0) S' -> . calc
+    (1) calc -> . obj_list
+    (2) calc -> . expression
+    (3) calc -> . none
+    (4) obj_list -> . object
+    (5) obj_list -> . obj_list object
+    (14) expression -> . ID
+    (15) expression -> . ARRAY
+    (16) expression -> . DOCS
+    (17) none -> .
+    (6) object -> . Name 2D_ARRAY
+    (7) object -> . Name docs 2D_ARRAY
+    (8) Name -> . ID
+    (9) Name -> . Name ID
+
+    ID              shift and go to state 6
+    ARRAY           shift and go to state 7
+    DOCS            shift and go to state 8
+    $end            reduce using rule 17 (none -> .)
+
+    calc                           shift and go to state 1
+    obj_list                       shift and go to state 2
+    expression                     shift and go to state 3
+    none                           shift and go to state 4
+    object                         shift and go to state 5
+    Name                           shift and go to state 9
+
+state 1
+
+    (0) S' -> calc .
+
+
+
+state 2
+
+    (1) calc -> obj_list .
+    (5) obj_list -> obj_list . object
+    (6) object -> . Name 2D_ARRAY
+    (7) object -> . Name docs 2D_ARRAY
+    (8) Name -> . ID
+    (9) Name -> . Name ID
+
+    $end            reduce using rule 1 (calc -> obj_list .)
+    ID              shift and go to state 11
+
+    object                         shift and go to state 10
+    Name                           shift and go to state 9
+
+state 3
+
+    (2) calc -> expression .
+
+    $end            reduce using rule 2 (calc -> expression .)
+
+
+state 4
+
+    (3) calc -> none .
+
+    $end            reduce using rule 3 (calc -> none .)
+
+
+state 5
+
+    (4) obj_list -> object .
+
+    ID              reduce using rule 4 (obj_list -> object .)
+    $end            reduce using rule 4 (obj_list -> object .)
+
+
+state 6
+
+    (14) expression -> ID .
+    (8) Name -> ID .
+
+    $end            reduce using rule 14 (expression -> ID .)
+    ID              reduce using rule 8 (Name -> ID .)
+    ARRAY           reduce using rule 8 (Name -> ID .)
+    DOCS            reduce using rule 8 (Name -> ID .)
+
+
+state 7
+
+    (15) expression -> ARRAY .
+
+    $end            reduce using rule 15 (expression -> ARRAY .)
+
+
+state 8
+
+    (16) expression -> DOCS .
+
+    $end            reduce using rule 16 (expression -> DOCS .)
+
+
+state 9
+
+    (6) object -> Name . 2D_ARRAY
+    (7) object -> Name . docs 2D_ARRAY
+    (9) Name -> Name . ID
+    (12) 2D_ARRAY -> . ARRAY
+    (13) 2D_ARRAY -> . 2D_ARRAY ARRAY
+    (10) docs -> . DOCS
+    (11) docs -> . docs DOCS
+
+    ID              shift and go to state 14
+    ARRAY           shift and go to state 15
+    DOCS            shift and go to state 16
+
+    2D_ARRAY                       shift and go to state 12
+    docs                           shift and go to state 13
+
+state 10
+
+    (5) obj_list -> obj_list object .
+
+    ID              reduce using rule 5 (obj_list -> obj_list object .)
+    $end            reduce using rule 5 (obj_list -> obj_list object .)
+
+
+state 11
+
+    (8) Name -> ID .
+
+    ID              reduce using rule 8 (Name -> ID .)
+    ARRAY           reduce using rule 8 (Name -> ID .)
+    DOCS            reduce using rule 8 (Name -> ID .)
+
+
+state 12
+
+    (6) object -> Name 2D_ARRAY .
+    (13) 2D_ARRAY -> 2D_ARRAY . ARRAY
+
+    ID              reduce using rule 6 (object -> Name 2D_ARRAY .)
+    $end            reduce using rule 6 (object -> Name 2D_ARRAY .)
+    ARRAY           shift and go to state 17
+
+
+state 13
+
+    (7) object -> Name docs . 2D_ARRAY
+    (11) docs -> docs . DOCS
+    (12) 2D_ARRAY -> . ARRAY
+    (13) 2D_ARRAY -> . 2D_ARRAY ARRAY
+
+    DOCS            shift and go to state 19
+    ARRAY           shift and go to state 15
+
+    2D_ARRAY                       shift and go to state 18
+
+state 14
+
+    (9) Name -> Name ID .
+
+    ID              reduce using rule 9 (Name -> Name ID .)
+    ARRAY           reduce using rule 9 (Name -> Name ID .)
+    DOCS            reduce using rule 9 (Name -> Name ID .)
+
+
+state 15
+
+    (12) 2D_ARRAY -> ARRAY .
+
+    ARRAY           reduce using rule 12 (2D_ARRAY -> ARRAY .)
+    ID              reduce using rule 12 (2D_ARRAY -> ARRAY .)
+    $end            reduce using rule 12 (2D_ARRAY -> ARRAY .)
+
+
+state 16
+
+    (10) docs -> DOCS .
+
+    DOCS            reduce using rule 10 (docs -> DOCS .)
+    ARRAY           reduce using rule 10 (docs -> DOCS .)
+
+
+state 17
+
+    (13) 2D_ARRAY -> 2D_ARRAY ARRAY .
+
+    ARRAY           reduce using rule 13 (2D_ARRAY -> 2D_ARRAY ARRAY .)
+    ID              reduce using rule 13 (2D_ARRAY -> 2D_ARRAY ARRAY .)
+    $end            reduce using rule 13 (2D_ARRAY -> 2D_ARRAY ARRAY .)
+
+
+state 18
+
+    (7) object -> Name docs 2D_ARRAY .
+    (13) 2D_ARRAY -> 2D_ARRAY . ARRAY
+
+    ID              reduce using rule 7 (object -> Name docs 2D_ARRAY .)
+    $end            reduce using rule 7 (object -> Name docs 2D_ARRAY .)
+    ARRAY           shift and go to state 17
+
+
+state 19
+
+    (11) docs -> docs DOCS .
+
+    DOCS            reduce using rule 11 (docs -> docs DOCS .)
+    ARRAY           reduce using rule 11 (docs -> docs DOCS .)
+
