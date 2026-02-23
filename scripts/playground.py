@@ -3,7 +3,8 @@
 from pathlib import Path
 import sys
 
-_SRC = Path(__file__).resolve().parent / "src"
+_ROOT = Path(__file__).resolve().parents[1]
+_SRC = _ROOT / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 

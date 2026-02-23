@@ -5,16 +5,18 @@ Constructs IFS fractals in python and plots them in the complex plane.
 
 ## Installation
 1. Clone the repo
-2. Install dependancies with pip:
+2. Install as a package:
 
 ```
-python -m pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 Optionally install gif package for gif creation
 
 ## Usage
 ```python
+from fractals import HeighwayDragon
+
 fractal = HeighwayDragon() # See full list of fractals in the documentation
 fractal.iterate(15)
 fractal.plot()

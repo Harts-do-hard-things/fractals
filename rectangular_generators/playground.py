@@ -1,20 +1,10 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Mar 10 17:04:34 2021
+"""Compatibility wrapper for rectangular IFS playground."""
 
-@author: Emmett
-"""
+from pathlib import Path
+import sys
 
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
-from ifsread import ifs
-# from timeit import timeit
-
-if __name__ == "__main__":
-    print("Available rectangular generators:")
-    for fractal in ifs:
-        print(fractal)
-    h = ifs.IFS_Eisenstein(run_prob=False)
-    h.iterate(1_000_000)
-    # h.plot()
-    image = h.make_image()
-    image.save("Eisenstein.png")
+from scripts.rectangular_playground import *  # noqa: F401,F403
