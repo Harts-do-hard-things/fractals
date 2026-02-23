@@ -3,6 +3,8 @@ using LinearAlgebra
 using StaticArrays
 using Fractals
 using Random
+using FileIO
+using Colors
 
 const SMALL_EQ = [
     0.5  0.0  0.0  0.5  0.0  0.0  0.6;
@@ -167,7 +169,30 @@ end
     png_path = render_transformations_png(ifs; outpath=joinpath("media", "maps_$suffix.png"), width=256, height=256)
     @test isfile(png_path)
     @test filesize(png_path) > 0
+    png_img = load(png_path)
+    @test alpha(png_img[1, 1]) == 0
 
     rm(svg_path; force=true)
     rm(png_path; force=true)
+end
+
+@testset "Affine Map Color Assignment By Map" begin
+    ifs = IFS(EISENSTEIN; npoints=50)
+    suffix = randstring(8)
+    svg_path = render_transformations_svg(ifs; outpath=joinpath("media", "maps_colors_$suffix.svg"), width=320, height=320)
+    @test isfile(svg_path)
+
+    svg_text = read(svg_path, String)
+    map_line_count = length(Fractals._base_l_image())
+
+    counts = Dict{String,Int}()
+    for m in eachmatch(r"stroke=\"(#[0-9A-Fa-f]{6})\"", svg_text)
+        c = m.captures[1]
+        counts[c] = get(counts, c, 0) + 1
+    end
+
+    @test length(counts) == length(ifs.maps)
+    @test all(v == map_line_count for v in values(counts))
+
+    rm(svg_path; force=true)
 end

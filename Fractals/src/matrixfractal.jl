@@ -51,23 +51,15 @@ function _base_l_image()
     ]
 end
 
-function _base_l_image_svg(; stroke::AbstractString="black", stroke_width::Real=1.5)
-    return """
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1">
-  <line x1="0" y1="0" x2="1" y2="0" stroke="$stroke" stroke-width="$stroke_width" />
-  <line x1="1" y1="0" x2="1" y2="1" stroke="$stroke" stroke-width="$stroke_width" />
-  <line x1="1" y1="1" x2="0" y2="1" stroke="$stroke" stroke-width="$stroke_width" />
-  <line x1="0" y1="1" x2="0" y2="0" stroke="$stroke" stroke-width="$stroke_width" />
-  <line x1="0.1666666667" y1="0.1666666667" x2="0.1666666667" y2="0.8333333333" stroke="$stroke" stroke-width="$stroke_width" />
-  <line x1="0.1666666667" y1="0.8333333333" x2="0.5555555556" y2="0.8333333333" stroke="$stroke" stroke-width="$stroke_width" />
-</svg>
-"""
+function _map_colors(n::Integer)
+    n <= 0 && return RGB{Float32}[]
+    # Generate visually distinct, deterministic colors and avoid white/black background tones.
+    palette = distinguishable_colors(n, [RGB(1, 1, 1), RGB(0, 0, 0)])
+    return [RGB{Float32}(Float32(c.r), Float32(c.g), Float32(c.b)) for c in palette]
 end
 
-@inline function _map_color_rgb(i::Integer, n::Integer)
-    hue = n <= 1 ? 0.0 : (i - 1) / n
-    c = RGB(HSV(hue, 0.90, 0.92))
-    return RGB{Float32}(Float32(c.r), Float32(c.g), Float32(c.b))
+@inline function _map_color_rgb(i::Integer, colors::Vector{RGB{Float32}})
+    return colors[i]
 end
 
 @inline function _rgb_to_hex(c::RGB{Float32})
@@ -119,17 +111,10 @@ end
     return x, y
 end
 
-function render_transformations_svg(
-    ifs;
-    outpath::AbstractString="media/affine_maps.svg",
-    width::Int=1200,
-    height::Int=1200,
-    show_base::Bool=false,
-    stroke_width::Real=2.0
-)
+function _collect_transformed_base_segments(ifs; show_base::Bool=false)
     base_segments = _base_l_image()
-    all_segments = Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}()
     transformed_by_map = Vector{Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}}(undef, length(ifs.maps))
+    all_segments = Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}()
 
     if show_base
         append!(all_segments, base_segments)
@@ -140,6 +125,21 @@ function render_transformations_svg(
         transformed_by_map[i] = transformed
         append!(all_segments, transformed)
     end
+
+    return base_segments, transformed_by_map, all_segments
+end
+
+function render_transformations_svg(
+    ifs;
+    outpath::AbstractString="media/affine_maps.svg",
+    width::Int=1200,
+    height::Int=1200,
+    show_base::Bool=false,
+    stroke_width::Real=2.0
+)
+    base_segments, transformed_by_map, all_segments =
+        _collect_transformed_base_segments(ifs; show_base=show_base)
+    colors = _map_colors(length(transformed_by_map))
 
     sx, sy, ox, oy = _fit_bounds(all_segments, width, height)
     lines = String[]
@@ -155,7 +155,7 @@ function render_transformations_svg(
     end
 
     for (i, transformed) in enumerate(transformed_by_map)
-        color = _rgb_to_hex(_map_color_rgb(i, length(transformed_by_map)))
+        color = _rgb_to_hex(_map_color_rgb(i, colors))
         for (p1, p2) in transformed
             x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
             x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
@@ -167,7 +167,7 @@ function render_transformations_svg(
 
     body = join(lines, "\n")
     svg = """
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $width $height">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $width $height" style="background: transparent;" fill="none">
 $body
 </svg>
 """
@@ -178,9 +178,9 @@ $body
 end
 
 function _draw_line!(
-    img::Array{RGB{Float32},2},
+    img::AbstractMatrix{RGBA{Float32}},
     x1::Real, y1::Real, x2::Real, y2::Real,
-    color::RGB{Float32}
+    color::RGBA{Float32}
 )
     height, width = size(img)
     dx = x2 - x1
@@ -204,33 +204,25 @@ function render_transformations_png(
     height::Int=1200,
     show_base::Bool=false,
 )
-    base_segments = _base_l_image()
-    all_segments = Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}()
-    transformed_by_map = Vector{Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}}(undef, length(ifs.maps))
-
-    if show_base
-        append!(all_segments, base_segments)
-    end
-
-    for (i, m) in enumerate(ifs.maps)
-        transformed = [(m(p1), m(p2)) for (p1, p2) in base_segments]
-        transformed_by_map[i] = transformed
-        append!(all_segments, transformed)
-    end
+    base_segments, transformed_by_map, all_segments =
+        _collect_transformed_base_segments(ifs; show_base=show_base)
+    colors = _map_colors(length(transformed_by_map))
 
     sx, sy, ox, oy = _fit_bounds(all_segments, width, height)
-    img = fill(RGB{Float32}(1.0f0, 1.0f0, 1.0f0), height, width)
+    img = fill(RGBA{Float32}(0.0f0, 0.0f0, 0.0f0, 0.0f0), height, width)
 
     if show_base
+        base_color = RGBA{Float32}(0.2f0, 0.2f0, 0.2f0, 1.0f0)
         for (p1, p2) in base_segments
             x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
             x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
-            _draw_line!(img, x1, y1, x2, y2, RGB{Float32}(0.2f0, 0.2f0, 0.2f0))
+            _draw_line!(img, x1, y1, x2, y2, base_color)
         end
     end
 
     for (i, transformed) in enumerate(transformed_by_map)
-        color = _map_color_rgb(i, length(transformed_by_map))
+        c = _map_color_rgb(i, colors)
+        color = RGBA{Float32}(c.r, c.g, c.b, 1.0f0)
         for (p1, p2) in transformed
             x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
             x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
