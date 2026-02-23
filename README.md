@@ -1,4 +1,3 @@
-![Heighway Dragon Gif](GIFs/HeighwayDragon_17.gif)
 # Fractals
 
 Constructs IFS fractals in python and plots them in the complex plane.
