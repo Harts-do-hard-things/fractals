@@ -73,17 +73,9 @@ Rasterizes `ifs.points` into a normalized `Float32` image in `[0, 1]`.
 
 Applies all IFS maps to an image and returns a grayscale image.
 
-### `iterate_image_single_map(ifs, img, map_index)`
-
-Like `iterate_image`, but for a single map.
-
 ### `rasterize_image_inversely(ifs, n, limits; resolution=RESOLUTION)`
 
 Inverse method that samples coverage via inverse map recursion.
-
-### `normalize_media_outpath(outpath)`
-
-Normalizes image outputs so they are always written under `media/`, creating directories as needed.
 
 ## Parser API
 
@@ -91,7 +83,6 @@ Parser entry points:
 - `parse_ifs_string(input; npoints=DEFAULT_SAMPLES)`
 - `parse_ifs_file(path; npoints=DEFAULT_SAMPLES)`
 - `lex_ifs(input)`
-- `parse_ifs_tokens(tokens; npoints=DEFAULT_SAMPLES)`
 
 Interactive helper:
 - `prompt_ifs_and_render(path; npoints, resolution, outpath)`

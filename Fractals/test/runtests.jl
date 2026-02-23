@@ -22,15 +22,15 @@ const SMALL_EQ = [
 end
 
 @testset "Build Maps And Weights" begin
-    maps, weights = build_maps_and_weights(SMALL_EQ)
+    maps, weights = Fractals._build_maps_and_weights(SMALL_EQ)
     @test length(maps) == size(SMALL_EQ, 1)
     @test length(weights) == size(SMALL_EQ, 1)
     @test sum(weights) > 0
 end
 
 @testset "Get Limits" begin
-    maps, weights = build_maps_and_weights(SMALL_EQ)
-    limits = get_limits(maps, weights; warmup=10, n=200)
+    maps, weights = Fractals._build_maps_and_weights(SMALL_EQ)
+    limits = Fractals._get_limits(maps, weights; warmup=10, n=200)
     (xlim, ylim) = limits
     @test xlim[1] < xlim[2]
     @test ylim[1] < ylim[2]
@@ -63,7 +63,7 @@ end
     ifs = IFS(SMALL_EQ; npoints=100)
     pmap = make_pixelate_map(ifs.limits; resolution=(32, 32))
     nmap = ifs.maps[1]
-    cmap = make_pixeliterate_map(nmap, pmap)
+    cmap = Fractals._make_pixeliterate_map(nmap, pmap)
 
     p = SVector{2,Float64}(16.0, 16.0)
     direct = pmap(nmap(inv(pmap)(p)))
@@ -133,13 +133,13 @@ end
 end
 
 @testset "Media Output Path" begin
-    p1 = normalize_media_outpath("output.png")
+    p1 = Fractals._normalize_media_outpath("output.png")
     @test p1 == joinpath("media", "output.png")
 
-    p2 = normalize_media_outpath(joinpath("media", "nested", "x.png"))
+    p2 = Fractals._normalize_media_outpath(joinpath("media", "nested", "x.png"))
     @test p2 == joinpath("media", "nested", "x.png")
 
-    p3 = normalize_media_outpath(joinpath("other", "path", "image.png"))
+    p3 = Fractals._normalize_media_outpath(joinpath("other", "path", "image.png"))
     @test p3 == joinpath("media", "image.png")
 
     @test isdir("media")
@@ -156,8 +156,15 @@ end
     @test occursin("<svg", svg_text)
     @test occursin("<line", svg_text)
     @test occursin("stroke=\"#", svg_text)
+    @test !occursin("stroke=\"#222222\"", svg_text)
 
-    png_path = render_transformations_png_from_base_l_svg(ifs; outpath=joinpath("media", "maps_$suffix.png"), width=256, height=256)
+    colors = Set{String}()
+    for m in eachmatch(r"stroke=\"(#[0-9A-Fa-f]{6})\"", svg_text)
+        push!(colors, m.captures[1])
+    end
+    @test length(colors) >= length(ifs.maps)
+
+    png_path = render_transformations_png(ifs; outpath=joinpath("media", "maps_$suffix.png"), width=256, height=256)
     @test isfile(png_path)
     @test filesize(png_path) > 0
 

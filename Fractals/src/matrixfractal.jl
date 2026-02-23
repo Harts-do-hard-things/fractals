@@ -22,7 +22,7 @@ const DEFAULT_SAMPLES = 1_000_000
 const DEFAULT_MEDIA_DIR = "media"
 const DEFAULT_BASE_LIMITS = ((0.0, 1.0), (0.0, 1.0))
 
-function normalize_media_outpath(outpath::AbstractString)
+function _normalize_media_outpath(outpath::AbstractString)
     raw = String(outpath)
     media_prefix = string(DEFAULT_MEDIA_DIR, Base.Filesystem.path_separator)
     normalized = normpath(raw)
@@ -37,9 +37,9 @@ function normalize_media_outpath(outpath::AbstractString)
     return final
 end
 
-base_limits_image() = DEFAULT_BASE_LIMITS
+_base_limits_image() = DEFAULT_BASE_LIMITS
 
-function base_l_image()
+function _base_l_image()
     # Normalized to viewBox [0, 1] x [0, 1]
     return [
         (SVector{2,Float64}(0.0, 0.0), SVector{2,Float64}(1.0, 0.0)),
@@ -51,7 +51,7 @@ function base_l_image()
     ]
 end
 
-function base_l_image_svg(; stroke::AbstractString="black", stroke_width::Real=1.5)
+function _base_l_image_svg(; stroke::AbstractString="black", stroke_width::Real=1.5)
     return """
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1">
   <line x1="0" y1="0" x2="1" y2="0" stroke="$stroke" stroke-width="$stroke_width" />
@@ -64,12 +64,16 @@ function base_l_image_svg(; stroke::AbstractString="black", stroke_width::Real=1
 """
 end
 
-@inline function _color_hex(i::Integer, n::Integer)
+@inline function _map_color_rgb(i::Integer, n::Integer)
     hue = n <= 1 ? 0.0 : (i - 1) / n
-    c = RGB(HSV(hue, 0.85, 0.9))
-    r = round(Int, clamp(c.r, 0.0, 1.0) * 255)
-    g = round(Int, clamp(c.g, 0.0, 1.0) * 255)
-    b = round(Int, clamp(c.b, 0.0, 1.0) * 255)
+    c = RGB(HSV(hue, 0.90, 0.92))
+    return RGB{Float32}(Float32(c.r), Float32(c.g), Float32(c.b))
+end
+
+@inline function _rgb_to_hex(c::RGB{Float32})
+    r = round(Int, clamp(c.r, 0.0f0, 1.0f0) * 255)
+    g = round(Int, clamp(c.g, 0.0f0, 1.0f0) * 255)
+    b = round(Int, clamp(c.b, 0.0f0, 1.0f0) * 255)
     return @sprintf("#%02X%02X%02X", r, g, b)
 end
 
@@ -120,10 +124,10 @@ function render_transformations_svg(
     outpath::AbstractString="media/affine_maps.svg",
     width::Int=1200,
     height::Int=1200,
-    show_base::Bool=true,
+    show_base::Bool=false,
     stroke_width::Real=2.0
 )
-    base_segments = base_l_image()
+    base_segments = _base_l_image()
     all_segments = Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}()
     transformed_by_map = Vector{Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}}(undef, length(ifs.maps))
 
@@ -151,7 +155,7 @@ function render_transformations_svg(
     end
 
     for (i, transformed) in enumerate(transformed_by_map)
-        color = _color_hex(i, length(transformed_by_map))
+        color = _rgb_to_hex(_map_color_rgb(i, length(transformed_by_map)))
         for (p1, p2) in transformed
             x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
             x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
@@ -168,7 +172,7 @@ $body
 </svg>
 """
 
-    final_outpath = normalize_media_outpath(outpath)
+    final_outpath = _normalize_media_outpath(outpath)
     write(final_outpath, svg)
     return final_outpath
 end
@@ -193,14 +197,14 @@ function _draw_line!(
     end
 end
 
-function render_transformations_png_from_base_l_svg(
+function render_transformations_png(
     ifs;
     outpath::AbstractString="media/affine_maps.png",
     width::Int=1200,
     height::Int=1200,
-    show_base::Bool=true,
+    show_base::Bool=false,
 )
-    base_segments = base_l_image()
+    base_segments = _base_l_image()
     all_segments = Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}()
     transformed_by_map = Vector{Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}}(undef, length(ifs.maps))
 
@@ -226,8 +230,7 @@ function render_transformations_png_from_base_l_svg(
     end
 
     for (i, transformed) in enumerate(transformed_by_map)
-        c = RGB(HSV((i - 1) / max(1, length(transformed_by_map)), 0.85, 0.9))
-        color = RGB{Float32}(Float32(c.r), Float32(c.g), Float32(c.b))
+        color = _map_color_rgb(i, length(transformed_by_map))
         for (p1, p2) in transformed
             x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
             x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
@@ -235,39 +238,13 @@ function render_transformations_png_from_base_l_svg(
         end
     end
 
-    final_outpath = normalize_media_outpath(outpath)
+    final_outpath = _normalize_media_outpath(outpath)
     save(final_outpath, img)
     return final_outpath
 end
 
-function image_to_svg(
-    img::AbstractMatrix{<:Real};
-    outpath::AbstractString="media/image.svg"
-)
-    rows, cols = size(img)
-    maxv = maximum(img)
-    denom = maxv > 0 ? maxv : one(maxv)
+const _render_transformations_png_from_base_l_svg = render_transformations_png
 
-    rects = String[]
-    for y in 1:rows
-        for x in 1:cols
-            v = clamp(Float64(img[y, x] / denom), 0.0, 1.0)
-            g = round(Int, 255 * (1.0 - v))
-            color = @sprintf("#%02X%02X%02X", g, g, g)
-            push!(rects, """  <rect x="$(x-1)" y="$(y-1)" width="1" height="1" fill="$color" />""")
-        end
-    end
-
-    svg = """
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $cols $rows" shape-rendering="crispEdges">
-$(join(rects, "\n"))
-</svg>
-"""
-
-    final_outpath = normalize_media_outpath(outpath)
-    write(final_outpath, svg)
-    return final_outpath
-end
 
 # --------------------------------
 # Affine Map
@@ -339,7 +316,7 @@ end
 # Build maps from equation matrix
 # --------------------------------
 
-function build_maps_and_weights(eq::AbstractMatrix{<:Real})
+function _build_maps_and_weights(eq::AbstractMatrix{<:Real})
     n = size(eq, 1)
     maps = Vector{AffineMap{Float64}}(undef, n)
     probs = Vector{Float64}(undef, n)
@@ -365,7 +342,7 @@ end
 # Compute limits via sampling
 # --------------------------------
 
-function get_limits(maps, weights;
+function _get_limits(maps, weights;
                     warmup=DEFAULT_WARMUP,
                     n=10_000)
 
@@ -410,8 +387,8 @@ function IFS(eq::AbstractMatrix{<:Real};
              name::AbstractString="",
              docs::AbstractString="")
 
-    maps, weights = build_maps_and_weights(eq)
-    limits = get_limits(maps, weights)
+    maps, weights = _build_maps_and_weights(eq)
+    limits = _get_limits(maps, weights)
 
     points = [SVector{2,Float64}(0.0,0.0)
               for _ in 1:npoints]
@@ -424,7 +401,7 @@ function IFS(maps::Vector{AffineMap{Float64}},
              npoints::Integer=DEFAULT_SAMPLES,
              name::AbstractString="",
              docs::AbstractString="",
-             limits=get_limits(maps, weights))
+             limits=_get_limits(maps, weights))
     points = [SVector{2,Float64}(0.0,0.0)
               for _ in 1:npoints]
     return IFS(String(name), String(docs), points, maps, weights, limits)
@@ -728,7 +705,7 @@ end
 # Compose iterate map with pixel map
 # -------------------------------------------------
 
-function make_pixeliterate_map(
+function _make_pixeliterate_map(
     iterate_map::AffineMap{Float64},
     pixel_map::AffineMap{Float64}
 )
@@ -752,7 +729,7 @@ function iterate_image(ifs::IFS, img::AbstractMatrix{<:Real})
     invpmap = inv(pmap)  # compute once
 
     for nmap in ifs.maps
-        cmap = make_pixeliterate_map(nmap, pmap)  # use it!
+        cmap = _make_pixeliterate_map(nmap, pmap)  # use it!
 
         @threads for x in 1:cols
             tid = threadid()
@@ -786,13 +763,13 @@ function iterate_image(ifs::IFS, img::AbstractMatrix{<:Real})
     return Gray.(newimg)
 end
 
-function iterate_image_single_map(ifs::IFS, img::AbstractMatrix{<:Real}, map_index::Integer)
+function _iterate_image_single_map(ifs::IFS, img::AbstractMatrix{<:Real}, map_index::Integer)
     rows, cols = size(img)
     newimg = zeros(Float32, rows, cols)
 
     pmap = make_pixelate_map(ifs.limits; resolution=(rows, cols))
     nmap = ifs.maps[map_index]
-    cmap = make_pixeliterate_map(nmap, pmap)
+    cmap = _make_pixeliterate_map(nmap, pmap)
 
     @inbounds for x in 1:cols
         for y in 1:rows
@@ -850,7 +827,7 @@ function main(; eq=EISENSTEIN,
     println("Rasterizing...")
     img = make_image(ifs)
 
-    final_outpath = normalize_media_outpath(outpath)
+    final_outpath = _normalize_media_outpath(outpath)
     println("Saving to $final_outpath")
     save(final_outpath, img)
 

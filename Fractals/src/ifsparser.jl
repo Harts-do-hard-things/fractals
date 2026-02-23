@@ -99,7 +99,7 @@ function lex_ifs(input::AbstractString)
     return tokens
 end
 
-function parse_ifs_tokens(tokens::Vector{IFSToken}; npoints::Integer=DEFAULT_SAMPLES)
+function _parse_ifs_tokens(tokens::Vector{IFSToken}; npoints::Integer=DEFAULT_SAMPLES)
     defs = IFS[]
     i = 1
     n = length(tokens)
@@ -156,7 +156,7 @@ function parse_ifs_tokens(tokens::Vector{IFSToken}; npoints::Integer=DEFAULT_SAM
 end
 
 function parse_ifs_string(input::AbstractString; npoints::Integer=DEFAULT_SAMPLES)
-    return parse_ifs_tokens(lex_ifs(input); npoints=npoints)
+    return _parse_ifs_tokens(lex_ifs(input); npoints=npoints)
 end
 
 function parse_ifs_file(path::AbstractString; npoints::Integer=DEFAULT_SAMPLES)
@@ -204,7 +204,7 @@ function prompt_ifs_and_render(path::AbstractString;
         ifs = deterministic_iterate(ifs, 1)
     end
 
-    final_outpath = normalize_media_outpath(outpath)
+    final_outpath = _normalize_media_outpath(outpath)
     img = make_image(ifs; resolution=(height, width))
     save(final_outpath, img)
     println("Saved image to $(final_outpath)")
