@@ -16,6 +16,80 @@ From repository root:
 julia --project=Fractals -e "using Pkg; Pkg.instantiate()"
 ```
 
+## Common Workflows
+
+### High-level render API
+
+```julia
+using Fractals
+
+result = render(HEIGHWAY_DRAGON;
+                method=:chaos,
+                npoints=200_000,
+                resolution=(1024, 1024),
+                outpath="media/render.png")
+
+println(result.outpath)
+```
+
+Supported methods:
+- `:chaos` (auto-threaded)
+- `:parallel` (alias to `:chaos`)
+- `:deterministic`
+- `:inverse`
+
+Iteration control:
+- Use `iterations=...` for both `:deterministic` and `:inverse`.
+- Backward-compatible aliases still work:
+  - `deterministic_depth=...`
+  - `inverse_depth=...`
+- If `iterations` is provided, it takes precedence over depth aliases.
+- `iterations` must be `>= 0`.
+- `npoints` behavior:
+  - For matrix/string/file inputs, omitted `npoints` defaults to `DEFAULT_SAMPLES`.
+  - For `IFS` input, omitted `npoints` keeps the existing point count.
+
+Examples:
+
+```julia
+using Fractals
+
+# Deterministic: apply maps for 2 rounds
+out1 = render(EISENSTEIN; method=:deterministic, iterations=2, npoints=500)
+
+# Inverse: run inverse rasterization for 6 rounds
+out2 = render(EISENSTEIN; method=:inverse, iterations=6, resolution=(800, 800))
+```
+
+### Basic render
+
+```julia
+using Fractals, FileIO
+
+ifs = IFS(HEIGHWAY_DRAGON; npoints=200_000)
+iterate!(ifs)
+img = make_image(ifs; resolution=(1024, 1024))
+save("media/dragon.png", img)
+```
+
+### Deterministic preview
+
+```julia
+using Fractals, FileIO
+
+ifs = IFS(EISENSTEIN; npoints=200)
+expanded = deterministic_iterate(ifs, 2)
+img = make_image(expanded; resolution=(800, 800))
+save("media/expanded.png", img)
+```
+
+### Parse from file and render interactively
+
+```julia
+using Fractals
+prompt_ifs_and_render("my_fractals.ifs")
+```
+
 ## Core Types
 
 ### `AffineMap`
@@ -113,57 +187,6 @@ Rules:
 - `DEFAULT_SAMPLES`
 - `HEIGHWAY_DRAGON`
 - `EISENSTEIN`
-
-## Common Workflows
-
-### High-level render API
-
-```julia
-using Fractals
-
-result = render(HEIGHWAY_DRAGON;
-                method=:chaos,
-                npoints=200_000,
-                resolution=(1024, 1024),
-                outpath="media/render.png")
-
-println(result.outpath)
-```
-
-Supported methods:
-- `:chaos` (auto-threaded)
-- `:parallel` (alias to `:chaos`)
-- `:deterministic`
-- `:inverse`
-
-### Basic render
-
-```julia
-using Fractals, FileIO
-
-ifs = IFS(HEIGHWAY_DRAGON; npoints=200_000)
-iterate!(ifs)
-img = make_image(ifs; resolution=(1024, 1024))
-save("media/dragon.png", img)
-```
-
-### Deterministic preview
-
-```julia
-using Fractals, FileIO
-
-ifs = IFS(EISENSTEIN; npoints=200)
-expanded = deterministic_iterate(ifs, 2)
-img = make_image(expanded; resolution=(800, 800))
-save("media/expanded.png", img)
-```
-
-### Parse from file and render interactively
-
-```julia
-using Fractals
-prompt_ifs_and_render("my_fractals.ifs")
-```
 
 ## Testing
 

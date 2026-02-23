@@ -205,9 +205,10 @@ end
     @test size(out1.image) == (64, 64)
 
     ifs = IFS(SMALL_EQ; npoints=2000)
-    out2 = render(ifs; method=:deterministic, deterministic_depth=1, resolution=(48, 48), outpath=joinpath("media", "render_ifs_$suffix.png"))
+    out2 = render(ifs; method=:deterministic, iterations=1, resolution=(48, 48), outpath=joinpath("media", "render_ifs_$suffix.png"))
     @test isfile(out2.outpath)
     @test size(out2.image) == (48, 48)
+    @test length(out2.ifs.points) == length(ifs.points) * length(ifs.maps)
 
     text = """
     RenderTest {
@@ -223,7 +224,7 @@ end
     mktemp() do path, io
         write(io, text)
         close(io)
-        out4 = render(path; npoints=3000, method=:inverse, inverse_depth=2, resolution=(32, 32), outpath=joinpath("media", "render_file_$suffix.png"))
+        out4 = render(path; npoints=3000, method=:inverse, iterations=2, resolution=(32, 32), outpath=joinpath("media", "render_file_$suffix.png"))
         @test isfile(out4.outpath)
         @test size(out4.image) == (32, 32)
     end

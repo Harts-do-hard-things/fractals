@@ -48,6 +48,8 @@ result = render(EISENSTEIN;
 @show result.outpath
 ```
 
+For `method=:deterministic` and `method=:inverse`, use `iterations=...` to control iteration depth.
+
 ## IFS Parser Example
 
 ```julia

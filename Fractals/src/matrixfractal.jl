@@ -803,7 +803,7 @@ end
 
 function _validate_render_options(
     method::Symbol,
-    npoints::Integer,
+    npoints::Union{Nothing,Integer},
     warmup::Integer,
     resolution::Tuple{Int,Int},
     ifs_index::Integer,
@@ -812,7 +812,7 @@ function _validate_render_options(
 )
     supported = (:chaos, :parallel, :deterministic, :inverse)
     method in supported || throw(ArgumentError("Invalid method '$method'. Supported methods: $(collect(supported))"))
-    npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
+    isnothing(npoints) || npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
     warmup >= 0 || throw(ArgumentError("warmup must be >= 0, got $warmup"))
     resolution[1] > 0 && resolution[2] > 0 || throw(ArgumentError("resolution must be positive, got $resolution"))
     ifs_index > 0 || throw(ArgumentError("ifs_index must be >= 1, got $ifs_index"))
@@ -823,14 +823,14 @@ end
 
 function _resolve_render_input(
     input::IFS;
-    npoints::Integer,
+    npoints::Union{Nothing,Integer},
     ifs_index::Integer
 )
     if ifs_index != 1
         throw(ArgumentError("ifs_index is only valid for parsed string/file inputs"))
     end
 
-    if length(input.points) == npoints
+    if isnothing(npoints) || length(input.points) == npoints
         return input
     end
 
@@ -843,22 +843,24 @@ end
 
 function _resolve_render_input(
     input::AbstractMatrix{<:Real};
-    npoints::Integer,
+    npoints::Union{Nothing,Integer},
     ifs_index::Integer
 )
     if ifs_index != 1
         throw(ArgumentError("ifs_index is only valid for parsed string/file inputs"))
     end
-    return IFS(input; npoints=npoints)
+    resolved_npoints = isnothing(npoints) ? DEFAULT_SAMPLES : npoints
+    return IFS(input; npoints=resolved_npoints)
 end
 
 function _resolve_render_input(
     input::AbstractString;
-    npoints::Integer,
+    npoints::Union{Nothing,Integer},
     ifs_index::Integer
 )
-    defs = isfile(input) ? parse_ifs_file(input; npoints=npoints) :
-                           parse_ifs_string(input; npoints=npoints)
+    resolved_npoints = isnothing(npoints) ? DEFAULT_SAMPLES : npoints
+    defs = isfile(input) ? parse_ifs_file(input; npoints=resolved_npoints) :
+                           parse_ifs_string(input; npoints=resolved_npoints)
 
     isempty(defs) && throw(ArgumentError("No IFS definitions found in input"))
     ifs_index <= length(defs) || throw(ArgumentError("ifs_index=$ifs_index is out of range (1-$(length(defs)))"))
@@ -868,11 +870,12 @@ end
 function render(
     input;
     method::Symbol=:chaos,
-    npoints::Integer=DEFAULT_SAMPLES,
+    npoints::Union{Nothing,Integer}=nothing,
     warmup::Integer=DEFAULT_WARMUP,
     resolution::Tuple{Int,Int}=RESOLUTION,
     outpath::AbstractString="media/render.png",
     ifs_index::Integer=1,
+    iterations::Union{Nothing,Integer}=nothing,
     deterministic_depth::Integer=1,
     inverse_depth::Integer=8,
 )
@@ -882,15 +885,20 @@ function render(
 
     render_method = method == :parallel ? :chaos : method
     rendered_ifs = ifs
+    deterministic_iters = isnothing(iterations) ? deterministic_depth : iterations
+    inverse_iters = isnothing(iterations) ? inverse_depth : iterations
+
+    deterministic_iters >= 0 || throw(ArgumentError("iterations must be >= 0, got $deterministic_iters"))
+    inverse_iters >= 0 || throw(ArgumentError("iterations must be >= 0, got $inverse_iters"))
 
     if render_method == :chaos
         iterate!(rendered_ifs; warmup=warmup)
         img = make_image(rendered_ifs; resolution=resolution)
     elseif render_method == :deterministic
-        rendered_ifs = deterministic_iterate(rendered_ifs, deterministic_depth)
+        rendered_ifs = deterministic_iterate(rendered_ifs, deterministic_iters)
         img = make_image(rendered_ifs; resolution=resolution)
     else
-        img = rasterize_image_inversely(rendered_ifs, inverse_depth, rendered_ifs.limits; resolution=resolution)
+        img = rasterize_image_inversely(rendered_ifs, inverse_iters, rendered_ifs.limits; resolution=resolution)
     end
 
     final_outpath = _normalize_media_outpath(outpath)
