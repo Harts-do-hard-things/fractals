@@ -2,6 +2,7 @@ using Test
 using LinearAlgebra
 using StaticArrays
 using Fractals
+using Random
 
 const SMALL_EQ = [
     0.5  0.0  0.0  0.5  0.0  0.0  0.6;
@@ -142,4 +143,24 @@ end
     @test p3 == joinpath("media", "image.png")
 
     @test isdir("media")
+end
+
+@testset "Affine Map SVG Rendering" begin
+    ifs = IFS(SMALL_EQ; npoints=50)
+
+    suffix = randstring(8)
+    svg_path = render_transformations_svg(ifs; outpath=joinpath("media", "maps_$suffix.svg"), width=300, height=300)
+    @test isfile(svg_path)
+
+    svg_text = read(svg_path, String)
+    @test occursin("<svg", svg_text)
+    @test occursin("<line", svg_text)
+    @test occursin("stroke=\"#", svg_text)
+
+    png_path = render_transformations_png_from_base_l_svg(ifs; outpath=joinpath("media", "maps_$suffix.png"), width=256, height=256)
+    @test isfile(png_path)
+    @test filesize(png_path) > 0
+
+    rm(svg_path; force=true)
+    rm(png_path; force=true)
 end

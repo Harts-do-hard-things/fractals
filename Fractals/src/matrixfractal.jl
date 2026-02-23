@@ -20,6 +20,7 @@ const RESOLUTION = (1504, 2256)
 const DEFAULT_WARMUP = 50
 const DEFAULT_SAMPLES = 1_000_000
 const DEFAULT_MEDIA_DIR = "media"
+const DEFAULT_BASE_LIMITS = ((0.0, 1.0), (0.0, 1.0))
 
 function normalize_media_outpath(outpath::AbstractString)
     raw = String(outpath)
@@ -34,6 +35,238 @@ function normalize_media_outpath(outpath::AbstractString)
     final = joinpath(DEFAULT_MEDIA_DIR, basename(normalized))
     mkpath(dirname(final))
     return final
+end
+
+base_limits_image() = DEFAULT_BASE_LIMITS
+
+function base_l_image()
+    # Normalized to viewBox [0, 1] x [0, 1]
+    return [
+        (SVector{2,Float64}(0.0, 0.0), SVector{2,Float64}(1.0, 0.0)),
+        (SVector{2,Float64}(1.0, 0.0), SVector{2,Float64}(1.0, 1.0)),
+        (SVector{2,Float64}(1.0, 1.0), SVector{2,Float64}(0.0, 1.0)),
+        (SVector{2,Float64}(0.0, 1.0), SVector{2,Float64}(0.0, 0.0)),
+        (SVector{2,Float64}(1/6, 1/6), SVector{2,Float64}(1/6, 5/6)),
+        (SVector{2,Float64}(1/6, 5/6), SVector{2,Float64}(5/9, 5/6)),
+    ]
+end
+
+function base_l_image_svg(; stroke::AbstractString="black", stroke_width::Real=1.5)
+    return """
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1">
+  <line x1="0" y1="0" x2="1" y2="0" stroke="$stroke" stroke-width="$stroke_width" />
+  <line x1="1" y1="0" x2="1" y2="1" stroke="$stroke" stroke-width="$stroke_width" />
+  <line x1="1" y1="1" x2="0" y2="1" stroke="$stroke" stroke-width="$stroke_width" />
+  <line x1="0" y1="1" x2="0" y2="0" stroke="$stroke" stroke-width="$stroke_width" />
+  <line x1="0.1666666667" y1="0.1666666667" x2="0.1666666667" y2="0.8333333333" stroke="$stroke" stroke-width="$stroke_width" />
+  <line x1="0.1666666667" y1="0.8333333333" x2="0.5555555556" y2="0.8333333333" stroke="$stroke" stroke-width="$stroke_width" />
+</svg>
+"""
+end
+
+@inline function _color_hex(i::Integer, n::Integer)
+    hue = n <= 1 ? 0.0 : (i - 1) / n
+    c = RGB(HSV(hue, 0.85, 0.9))
+    r = round(Int, clamp(c.r, 0.0, 1.0) * 255)
+    g = round(Int, clamp(c.g, 0.0, 1.0) * 255)
+    b = round(Int, clamp(c.b, 0.0, 1.0) * 255)
+    return @sprintf("#%02X%02X%02X", r, g, b)
+end
+
+function _fit_bounds(segments, width::Int, height::Int; margin=0.06)
+    xmin = Inf
+    xmax = -Inf
+    ymin = Inf
+    ymax = -Inf
+
+    for (p1, p2) in segments
+        x1, y1 = p1
+        x2, y2 = p2
+        xmin = min(xmin, x1, x2)
+        xmax = max(xmax, x1, x2)
+        ymin = min(ymin, y1, y2)
+        ymax = max(ymax, y1, y2)
+    end
+
+    if !isfinite(xmin) || !isfinite(xmax) || !isfinite(ymin) || !isfinite(ymax)
+        xmin, xmax, ymin, ymax = 0.0, 1.0, 0.0, 1.0
+    end
+
+    dx = xmax - xmin
+    dy = ymax - ymin
+    dx = dx == 0 ? 1.0 : dx
+    dy = dy == 0 ? 1.0 : dy
+
+    draw_w = (1 - 2margin) * width
+    draw_h = (1 - 2margin) * height
+    s = min(draw_w / dx, draw_h / dy)
+    sx = sy = s
+
+    offset_x = (width - sx * dx) / 2 - sx * xmin
+    # SVG y-axis grows down, so invert y when mapping
+    offset_y = (height - sy * dy) / 2 + sy * ymax
+
+    return sx, sy, offset_x, offset_y
+end
+
+@inline function _to_svg_xy(p::SVector{2,Float64}, sx, sy, ox, oy)
+    x = ox + sx * p[1]
+    y = oy - sy * p[2]
+    return x, y
+end
+
+function render_transformations_svg(
+    ifs;
+    outpath::AbstractString="media/affine_maps.svg",
+    width::Int=1200,
+    height::Int=1200,
+    show_base::Bool=true,
+    stroke_width::Real=2.0
+)
+    base_segments = base_l_image()
+    all_segments = Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}()
+    transformed_by_map = Vector{Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}}(undef, length(ifs.maps))
+
+    if show_base
+        append!(all_segments, base_segments)
+    end
+
+    for (i, m) in enumerate(ifs.maps)
+        transformed = [(m(p1), m(p2)) for (p1, p2) in base_segments]
+        transformed_by_map[i] = transformed
+        append!(all_segments, transformed)
+    end
+
+    sx, sy, ox, oy = _fit_bounds(all_segments, width, height)
+    lines = String[]
+
+    if show_base
+        for (p1, p2) in base_segments
+            x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
+            x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
+            push!(lines,
+                  @sprintf("""  <line x1="%.3f" y1="%.3f" x2="%.3f" y2="%.3f" stroke="#222222" stroke-width="%.2f" opacity="0.65" />""",
+                           x1, y1, x2, y2, stroke_width))
+        end
+    end
+
+    for (i, transformed) in enumerate(transformed_by_map)
+        color = _color_hex(i, length(transformed_by_map))
+        for (p1, p2) in transformed
+            x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
+            x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
+            push!(lines,
+                  @sprintf("""  <line x1="%.3f" y1="%.3f" x2="%.3f" y2="%.3f" stroke="%s" stroke-width="%.2f" />""",
+                           x1, y1, x2, y2, color, stroke_width))
+        end
+    end
+
+    body = join(lines, "\n")
+    svg = """
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $width $height">
+$body
+</svg>
+"""
+
+    final_outpath = normalize_media_outpath(outpath)
+    write(final_outpath, svg)
+    return final_outpath
+end
+
+function _draw_line!(
+    img::Array{RGB{Float32},2},
+    x1::Real, y1::Real, x2::Real, y2::Real,
+    color::RGB{Float32}
+)
+    height, width = size(img)
+    dx = x2 - x1
+    dy = y2 - y1
+    steps = max(abs(dx), abs(dy))
+    n = max(1, ceil(Int, steps))
+    for k in 0:n
+        t = k / n
+        x = round(Int, x1 + t * dx)
+        y = round(Int, y1 + t * dy)
+        if 1 <= x <= width && 1 <= y <= height
+            @inbounds img[y, x] = color
+        end
+    end
+end
+
+function render_transformations_png_from_base_l_svg(
+    ifs;
+    outpath::AbstractString="media/affine_maps.png",
+    width::Int=1200,
+    height::Int=1200,
+    show_base::Bool=true,
+)
+    base_segments = base_l_image()
+    all_segments = Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}()
+    transformed_by_map = Vector{Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}}(undef, length(ifs.maps))
+
+    if show_base
+        append!(all_segments, base_segments)
+    end
+
+    for (i, m) in enumerate(ifs.maps)
+        transformed = [(m(p1), m(p2)) for (p1, p2) in base_segments]
+        transformed_by_map[i] = transformed
+        append!(all_segments, transformed)
+    end
+
+    sx, sy, ox, oy = _fit_bounds(all_segments, width, height)
+    img = fill(RGB{Float32}(1.0f0, 1.0f0, 1.0f0), height, width)
+
+    if show_base
+        for (p1, p2) in base_segments
+            x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
+            x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
+            _draw_line!(img, x1, y1, x2, y2, RGB{Float32}(0.2f0, 0.2f0, 0.2f0))
+        end
+    end
+
+    for (i, transformed) in enumerate(transformed_by_map)
+        c = RGB(HSV((i - 1) / max(1, length(transformed_by_map)), 0.85, 0.9))
+        color = RGB{Float32}(Float32(c.r), Float32(c.g), Float32(c.b))
+        for (p1, p2) in transformed
+            x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
+            x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
+            _draw_line!(img, x1, y1, x2, y2, color)
+        end
+    end
+
+    final_outpath = normalize_media_outpath(outpath)
+    save(final_outpath, img)
+    return final_outpath
+end
+
+function image_to_svg(
+    img::AbstractMatrix{<:Real};
+    outpath::AbstractString="media/image.svg"
+)
+    rows, cols = size(img)
+    maxv = maximum(img)
+    denom = maxv > 0 ? maxv : one(maxv)
+
+    rects = String[]
+    for y in 1:rows
+        for x in 1:cols
+            v = clamp(Float64(img[y, x] / denom), 0.0, 1.0)
+            g = round(Int, 255 * (1.0 - v))
+            color = @sprintf("#%02X%02X%02X", g, g, g)
+            push!(rects, """  <rect x="$(x-1)" y="$(y-1)" width="1" height="1" fill="$color" />""")
+        end
+    end
+
+    svg = """
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 $cols $rows" shape-rendering="crispEdges">
+$(join(rects, "\n"))
+</svg>
+"""
+
+    final_outpath = normalize_media_outpath(outpath)
+    write(final_outpath, svg)
+    return final_outpath
 end
 
 # --------------------------------
