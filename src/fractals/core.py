@@ -82,8 +82,6 @@ class Fractal:
 
     """
 
-    limits = False
-
     def __init__(self, S0: list[complex], func_list: list[Callable]):
         """
         Parameters
@@ -98,19 +96,87 @@ class Fractal:
         Fractal
 
         """
-        self._S0 = S0
-        self.S = S0
+        self._S0 = np.asarray(S0, dtype=np.complex128)
+        self.S = self._S0.copy()
         self.func_list = func_list
-        self._plot_list = [S0]
+        self._plot_list = [self._S0.copy()]
         self.plot_handle = []
-        # if not self.limits:
-        #     self.limits = self.calculate_limits()
+        self._rng = np.random.default_rng()
+        self._affine_coeffs = None
+        self._affine_offsets = None
+        self._prob_cdf = None
+        self._init_affine_cache()
+        self.limits = self.calculate_limits()
+
+    def _init_affine_cache(self):
+        coeffs = []
+        offsets = []
+        for func in self.func_list:
+            z0 = func(0)
+            z1 = func(1)
+            z2 = func(2)
+            a = z1 - z0
+            b = z0
+            # Validate affine form: f(z) == a*z + b
+            if not np.isclose(z2, 2 * a + b, atol=1e-10):
+                self._affine_coeffs = None
+                self._affine_offsets = None
+                self._prob_cdf = None
+                return
+            coeffs.append(a)
+            offsets.append(b)
+
+        self._affine_coeffs = np.asarray(coeffs, dtype=np.complex128)
+        self._affine_offsets = np.asarray(offsets, dtype=np.complex128)
+        weights = np.abs(self._affine_coeffs) ** 2
+        if np.all(weights == 0):
+            weights = np.ones_like(weights)
+        probs = weights / np.sum(weights)
+        self._prob_cdf = np.cumsum(probs)
+        self._prob_cdf[-1] = 1.0
 
     def calculate_limits(self):
-        self.iterate(10)
-        mins = np.min(self.S, axis=0)
-        maxs = np.max(self.S, axis=0)
-        expected_diff = max(maxs - mins) * 1.05
+        # Fast path: stochastic limit estimate for affine IFS.
+        if self._affine_coeffs is not None:
+            burn_in = 1_000
+            samples = 20_000
+            point = 0.0 + 0.0j
+            indices = np.searchsorted(
+                self._prob_cdf,
+                self._rng.random(burn_in + samples),
+                side="right",
+            )
+            coeffs = self._affine_coeffs
+            offsets = self._affine_offsets
+            for idx in indices[:burn_in]:
+                point = coeffs[idx] * point + offsets[idx]
+
+            points = np.empty((samples,), dtype=np.complex128)
+            for i, idx in enumerate(indices[burn_in:]):
+                point = coeffs[idx] * point + offsets[idx]
+                points[i] = point
+
+            mins = np.array((np.min(np.real(points)), np.min(np.imag(points))))
+            maxs = np.array((np.max(np.real(points)), np.max(np.imag(points))))
+            expected_diff = np.max(maxs - mins) * 1.05
+            diff = maxs - mins
+            maxmin = np.array(
+                (mins - (expected_diff - diff) / 2, maxs + (expected_diff - diff) / 2)
+            )
+            self.reset()
+            return maxmin.flatten("F")
+
+        # Fallback path: bounded deterministic expansion.
+        S = self._S0.copy()
+        for _ in range(8):
+            next_blocks = [np.fromiter((func(z) for z in S), dtype=np.complex128, count=len(S))
+                           for func in self.func_list]
+            S = np.concatenate(next_blocks)
+            if len(S) > 200_000:
+                S = S[:: len(S) // 200_000 + 1]
+        mins = np.array((np.min(np.real(S)), np.min(np.imag(S))))
+        maxs = np.array((np.max(np.real(S)), np.max(np.imag(S))))
+        expected_diff = np.max(maxs - mins) * 1.05
         diff = maxs - mins
 
         maxmin = np.array(
@@ -138,7 +204,7 @@ class Fractal:
 
         """
         self.S = self._S0.copy()
-        self._plot_list = [self._S0]
+        self._plot_list = [self._S0.copy()]
 
     def iterate(self, i: int = 1) -> None:
         """maps the functions to S, reassigning S
@@ -158,11 +224,27 @@ class Fractal:
 
         """
         self._plot_list.clear()
-        for _ in range(i):
-            S = []
-            for func in self.func_list:
-                S.extend(list(map(func, self.S)))
-            self.S = S
+        S = self.S
+        if self._affine_coeffs is not None:
+            coeffs = self._affine_coeffs
+            offsets = self._affine_offsets
+            k = len(coeffs)
+            for _ in range(i):
+                n = len(S)
+                next_S = np.empty((n * k,), dtype=np.complex128)
+                for j in range(k):
+                    start = j * n
+                    end = start + n
+                    next_S[start:end] = coeffs[j] * S + offsets[j]
+                S = next_S
+        else:
+            for _ in range(i):
+                blocks = [
+                    np.fromiter((func(z) for z in S), dtype=np.complex128, count=len(S))
+                    for func in self.func_list
+                ]
+                S = np.concatenate(blocks)
+        self.S = S
         self._plot_list.append(S)
 
     def divided_iterate(self, i: int = 1):
@@ -184,11 +266,21 @@ class Fractal:
         """
         self._plot_list.clear()
         if i == 1:
-            S = []
-            for func in self.func_list:
-                S.extend(list(map(func, self.S)))
-                self._plot_list.append(list(map(func, self.S)))
-            self.S = S
+            if self._affine_coeffs is not None:
+                n = len(self.S)
+                blocks = []
+                for coeff, offset in zip(self._affine_coeffs, self._affine_offsets):
+                    block = coeff * self.S + offset
+                    blocks.append(block)
+                    self._plot_list.append(block)
+                self.S = np.concatenate(blocks)
+            else:
+                blocks = [
+                    np.fromiter((func(z) for z in self.S), dtype=np.complex128, count=len(self.S))
+                    for func in self.func_list
+                ]
+                self._plot_list.extend(blocks)
+                self.S = np.concatenate(blocks)
         else:
             self.iterate(i - 1)
             self.divided_iterate(1)
@@ -208,8 +300,7 @@ class Fractal:
         None
 
         """
-        s_trans = [i * cmath.exp(angle * 1j) + offset
-                   for i in self._plot_list[0]]
+        s_trans = self._plot_list[0] * cmath.exp(angle * 1j) + offset
         self._plot_list.append(s_trans)
 
     def tile(self):
@@ -232,13 +323,13 @@ class Fractal:
             DESCRIPTION.
 
         """
-        self._plot_list = [[i * cmath.exp(angle * 1j) + offset
-                             for i in j] for j in self._plot_list]
+        rot = cmath.exp(angle * 1j)
+        self._plot_list = [series * rot + offset for series in self._plot_list]
 
     def scale(self, scale: float) -> None:
-        self._plot_list = [[i * scale for i in j] for j in self._plot_list]
+        self._plot_list = [series * scale for series in self._plot_list]
 
-    def plot(self, autoscale=True):
+    def plot(self):
         """Plots the fractal for human viewing"""
         self.tile()
         fig = plt.figure()
@@ -250,9 +341,8 @@ class Fractal:
             # for s in self._plot_list
             ax.plot(np.real(s), np.imag(s)) for s in self._plot_list
         ]
-        if self.limits and not autoscale:
-            ax.set_xlim(self.limits[:2])
-            ax.set_ylim(self.limits[2:])
+        ax.set_xlim(self.limits[:2])
+        ax.set_ylim(self.limits[2:])
         ax.set_aspect("equal")
         ax.axis("off")
         plt.show()
@@ -271,11 +361,9 @@ class Fractal:
         def _gif_plot(self) -> None:
             fig = plt.figure()
             ax = fig.add_subplot(111)
-            if self.limits:
-                ax.set_xlim(self.limits[:2])
-                ax.set_ylim(self.limits[2:])
-            else:
-                ax.set_aspect("equal")
+            ax.set_xlim(self.limits[:2])
+            ax.set_ylim(self.limits[2:])
+            ax.set_aspect("equal")
             ax.axis("off")
             for s in self._plot_list:
                 ax.plot(np.real(s), np.imag(s), color="tab:blue")
@@ -320,20 +408,25 @@ class DragonFractal(Fractal):
     """
 
     def segment(self, points: list[complex]) -> list:
-        len_ = len(self._S0)
-        lines = []
-        for i in range(len(points) - len_ + 1):
-            if i % len_ == 0:
-                lines.extend(points[i:i + len_])
-                lines.append(np.nan)
-        return lines
+        points = np.asarray(points, dtype=np.complex128)
+        seg_len = len(self._S0)
+        if seg_len <= 0:
+            return points
+        rows = len(points) // seg_len
+        if rows == 0:
+            return points
+        trimmed = points[: rows * seg_len].reshape(rows, seg_len)
+        out = np.full((rows, seg_len + 1), np.nan + 0j, dtype=np.complex128)
+        out[:, :seg_len] = trimmed
+        return out.reshape(-1)
 
-    def plot(self, autoscale=True):
+    def plot(self):
         self._plot_list = [self.segment(s) for s in self._plot_list]
-        super().plot(autoscale)
+        super().plot()
 
     if gif:
         def save_gif(self, iterations: int, duration=1000):
+            self._plot_list = [self.segment(s) for s in self._plot_list]
             self.tile()
             frames = [self._gif_plot()]
             for _ in range(iterations - 1):
@@ -360,6 +453,7 @@ class BinaryTree(DragonFractal):
     and attached resource for creation Details
     """
     def __init__(self, B_r: float, theta: float):
+        self.iterations = 0
         super().__init__(
             S0=[0, 1j],
             func_list=[
@@ -367,22 +461,26 @@ class BinaryTree(DragonFractal):
                 lambda z: B_r * z * cmath.rect(1, -theta) + 1j,
             ],
         )
-        self.iterations = 0
 
     def iterate(self, i: int):
         for _ in range(i):
-            S = []
-            for func in self.func_list:
-                S.extend(list(map(func, self.S)))
-                self._plot_list.append(S)
+            self._plot_list.clear()
+            S_blocks = []
+            for coeff, offset in zip(self._affine_coeffs, self._affine_offsets):
+                block = coeff * self.S + offset
+                S_blocks.append(block)
+                cumulative = np.concatenate(S_blocks)
+                self._plot_list.append(cumulative)
                 self.iterations += 1
-            self.S = S
+            self.S = np.concatenate(S_blocks)
+
+    def reset(self):
+        super().reset()
+        self.iterations = 0
 
     def translate(self, offset: complex, angle: float):
         for j in range(self.iterations + 1):
-            # print(j)
-            s_trans = [i * cmath.exp(angle * 1j) + offset
-                       for i in self._plot_list[j]]
+            s_trans = self._plot_list[j] * cmath.exp(angle * 1j) + offset
             self._plot_list.append(s_trans)
 
 
@@ -421,8 +519,8 @@ class _AnimateOverIter(DragonFractal):
     """
     # limits = -0.6, 1.6, -1.06, 0.308
     def reset(self):
-        self.S = self._S0
-        self._plot_list = [self._S0]
+        self.S = self._S0.copy()
+        self._plot_list = [self._S0.copy()]
 
     def iterate(self, i: int, t: float) -> None:
         self._plot_list.clear()

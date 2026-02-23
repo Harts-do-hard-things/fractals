@@ -17,7 +17,6 @@ from .core import (
 
 class HeighwayDragon(DragonFractal):
     """[Heighway Dragon](https://larryriddle.agnesscott.org/ifs/heighway/heighway.htm)"""
-    limits = (-0.407, 1.24, -0.382, 0.714)
 
     def __init__(self):
         super().__init__(S0i, func_list=IFS_function["dragon"])
@@ -26,16 +25,12 @@ class HeighwayDragon(DragonFractal):
 class TwinDragon(DragonFractal):
     """[Twin Dragon](https://larryriddle.agnesscott.org/ifs/heighway/twindragon.htm)"""
 
-    limits = (-0.4, 1.4, -0.75, 0.75)
-
     def __init__(self):
         super().__init__(S0_TWIN, IFS_function["twin_dragon"])
 
 
 class GoldenDragon(DragonFractal):
     """[Golden Dragon](https://larryriddle.agnesscott.org/ifs/heighway/goldenDragon.htm)"""
-
-    limits = (-0.317, 1.16, -0.243, 0.616)
 
     def __init__(self):
         super().__init__(S0i, IFS_function["golden_dragon"])
@@ -44,16 +39,12 @@ class GoldenDragon(DragonFractal):
 class Terdragon(Fractal):
     """[Terdragon](https://larryriddle.agnesscott.org/ifs/heighway/terdragon.htm)"""
 
-    limits = (-0.12, 1.12, -0.357, 0.357)
-
     def __init__(self):
         super().__init__(S0i, func_list=IFS_function["terdragon"])
 
 
 class FudgeFlake(Terdragon):
     """[Fudgeflake](https://larryriddle.agnesscott.org/ifs/heighway/fudgeflake.htm)"""
-
-    limits = -0.55, 1.6, -0.4, 1.04
 
     def tile(self):
         self.translate(0, math.pi / 3)
@@ -63,8 +54,6 @@ class FudgeFlake(Terdragon):
 class LevyC(Fractal):
     """[Levy C Curve](https://larryriddle.agnesscott.org/ifs/levy/levy.htm)"""
 
-    limits = -0.6, 1.6, -1.06, 0.308
-
     def __init__(self):
         super().__init__(S0=[0, 1], func_list=IFS_function["levy_c"])
 
@@ -72,16 +61,12 @@ class LevyC(Fractal):
 class LevyTapestryOutside(LevyC):
     """[Levy Tapestry](https://larryriddle.agnesscott.org/ifs/levy/tapestryOutside.htm)"""
 
-    limits = -1.1, 2.1, -1.08, 1.08
-
     def tile(self):
         self.translate(1, math.pi)
 
 
 class LevyTapestryInside(LevyC):
     """[Levy Tapestry](https://larryriddle.agnesscott.org/ifs/levy/tapestryInside.htm)"""
-
-    limits = -1.2, 2.2, -1.6, 0.6
 
     def tile(self):
         translations = [(-1j, math.pi * 0.5), (1, -math.pi * 0.5), (1 - 1j, math.pi)]
@@ -95,8 +80,6 @@ class KochFlake(Fractal):
 
     Note: this is constructed as a koch curve, then tiled.
     """
-
-    limits = -0.5, 1.5, -0.924, 0.346
 
     def __init__(self):
         super().__init__(S0i, func_list=IFS_function["koch_flake"])
@@ -113,8 +96,6 @@ class KochFlake(Fractal):
 class Kochawave(Fractal):
     """Kochawave Curve"""
 
-    limits = -0.05, 1.05, -0.04, 0.91
-
     def __init__(self):
         super().__init__(S0i, func_list=IFS_function["kochawave"])
 
@@ -130,8 +111,6 @@ class Kochawave(Fractal):
 class Pentadendrite(Fractal):
     """[Pentadendrite](https://larryriddle.agnesscott.org/ifs/pentaden/penta.htm)"""
 
-    limits = 0.85, 1.85, -0.152, 1.622
-
     def __init__(self):
         super().__init__(S0=[0, 1], func_list=IFS_function["pentadendrite"])
 
@@ -143,7 +122,6 @@ class Pentadendrite(Fractal):
 
 class Pentigree(Fractal):
     """[Pentigree](https://larryriddle.agnesscott.org/ifs/pentaden/pentigree.htm)"""
-    limits = -0.44, 1.5, -0.35, 1.7
 
     def __init__(self):
         super().__init__(S0i, IFS_function["pentigree"])
@@ -177,7 +155,6 @@ class Z2Levy(DragonFractal):
 
 class Flowsnake(DragonFractal):
     """[Flowsnake](https://larryriddle.agnesscott.org/ifs/ksnow/flowsnake.htm) inheriting from :class:`~fractal.DragonFractal`"""
-    limits = [-1, 2, -0.4, 1]
 
     def __init__(self):
         super().__init__(S0i, IFS_function["flowsnake"])
@@ -185,7 +162,6 @@ class Flowsnake(DragonFractal):
 
 class GoldenFlake(BinaryTree):
     """[GoldenFlake](https://larryriddle.agnesscott.org/ifs/pentagon/Durer.htm)"""
-    limits = -1.64, 1.64, -1.09, 1.09
 
     def __init__(self):
         super().__init__(1 / PHI, 0.8 * math.pi)

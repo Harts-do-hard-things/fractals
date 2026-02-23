@@ -1,24 +1,31 @@
 # -*- coding: utf-8 -*-
+"""Array-based fractal generation and image rendering.
+
+This module provides a fast NumPy/Pillow path for both deterministic and
+random IFS fractals without matplotlib.
 """
-Created on Sun Jan  5 15:15:59 2025
 
-@author: emmet
-"""
+from __future__ import annotations
 
-
-import numpy as np
-from PIL import Image
-from matplotlib import colors
-import matplotlib.pyplot as plt
-import cmath
+import math
+from pathlib import Path
 from typing import Callable
 
-I = np.array([[1, 0, 0],
-              [0, 1, 0]])
-COLORS = [(np.array(
-    colors.to_rgb(colors.TABLEAU_COLORS[i])) * 255 // 1).astype("uint8")
-    for i in ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple']
-    ]
+import numpy as np
+from PIL import Image, ImageDraw
+
+I = np.array([[1, 0, 0], [0, 1, 0]], dtype=np.float64)
+DEFAULT_INITIAL_POLYGON = np.array([[0.0, 0.0], [1.0, 0.0]], dtype=np.float64)
+COLORS = np.array(
+    [
+        [31, 119, 180],   # tab:blue
+        [255, 127, 14],   # tab:orange
+        [44, 160, 44],    # tab:green
+        [214, 39, 40],    # tab:red
+        [148, 103, 189],  # tab:purple
+    ],
+    dtype=np.uint8,
+)
 
 
 
@@ -41,33 +48,40 @@ class ArrayFractal:
         Default S0 = (0 + 0j) to (1 + 0j)
         the current points of the fractal
 
-    func_list : list[functions]
+    trans_list : list[np.ndarray]
 
-        the functions to be applied every iteration
+        affine transforms applied every iteration
 
 
     Methods
     -------
     iterate(i: int)
-        Applies func_list to the current points, S, and updates S to match
+        Applies all transforms to the current points, S, and updates S.
 
     plot()
-        Plots the points S using matplotlib
+        Builds and returns a PIL image of the current state.
 
     save_gif(iterations: int, duration: int = 1000)
-    saves a gif at '__name__ _iterations.gif' with a frame duration of duration
-    milliseconds
+        Saves a gif at '__name___iterations.gif' with frame duration in ms.
 
     """
 
-    def __init__(self, S0: np.array, eq: np.array):
+    def __init__(
+        self,
+        S0: np.ndarray,
+        eq: np.ndarray,
+        *,
+        segment_plot: bool = False,
+        initial_polygon: np.ndarray | None = None,
+        requires_initial_polygon: bool | None = None,
+    ):
         """
         Parameters
         ----------
         S0 : list[complex]
             The initial points to iterate
-        func_list : list[Callable]
-            A list of funtions that determines the function system
+        eq : np.ndarray
+            Row-wise affine transform coefficients for the function system.
 
         Returns
         -------
@@ -75,14 +89,29 @@ class ArrayFractal:
 
         """
         self._S0 = np.asarray(S0, dtype=np.float64)
-        self.S = self._S0.copy()
+        self.initial_polygon = self._normalize_points(
+            DEFAULT_INITIAL_POLYGON if initial_polygon is None else initial_polygon,
+            min_points=2,
+            name="initial_polygon",
+        )
+        self.requires_initial_polygon = self._infer_requires_initial_polygon(
+            self._S0, requires_initial_polygon
+        )
+        self._segment_size = len(self.initial_polygon) if self.requires_initial_polygon else len(self._S0)
+        self._deterministic_iterations = 0
+        self.S = self._current_seed().copy()
         self.trans_list, self.prob_list = self.create_functions(eq)
         self._prob_cdf = np.cumsum(self.prob_list)
         if len(self._prob_cdf) > 0:
             self._prob_cdf[-1] = 1.0
         self.trans_used = []
         self._rng = np.random.default_rng()
-        self._plot_list = [self._S0]
+        self._plot_list = [self.S.copy()]
+        self.segment_plot = segment_plot
+        self.plot_handle = []
+        self._fig = None
+        self._ax = None
+        self._last_iteration_mode = "init"
         self.limits = self.calculate_limits()
 
     @staticmethod
@@ -116,8 +145,47 @@ class ArrayFractal:
                                [np.imag(rotation), np.real(rotation)]])
             e = np.append(matrix, trans)
             eq[i] = e.astype(np.float64, copy=False)
-            # print(S, e)
-        return ArrayFractal(S, eq)
+        return ArrayFractal(
+            S,
+            eq,
+            segment_plot=True,
+            initial_polygon=S,
+            requires_initial_polygon=False,
+        )
+
+    @staticmethod
+    def _normalize_points(points: np.ndarray, *, min_points: int, name: str) -> np.ndarray:
+        arr = np.asarray(points, dtype=np.float64)
+        if arr.ndim != 2 or arr.shape[1] != 2:
+            raise ValueError(f"{name} must have shape (n, 2)")
+        if arr.shape[0] < min_points:
+            raise ValueError(f"{name} must contain at least {min_points} points")
+        return arr
+
+    @staticmethod
+    def _infer_requires_initial_polygon(
+        S0: np.ndarray, requires_initial_polygon: bool | None
+    ) -> bool:
+        if requires_initial_polygon is not None:
+            return bool(requires_initial_polygon)
+        # If the seed is not already a polygon/polyline, deterministic mode
+        # falls back to the initial polygon template.
+        return np.asarray(S0).shape[0] < 2
+
+    def set_initial_polygon(self, points: np.ndarray) -> None:
+        self.initial_polygon = self._normalize_points(
+            points,
+            min_points=2,
+            name="initial_polygon",
+        )
+        if self.requires_initial_polygon:
+            self._segment_size = len(self.initial_polygon)
+            self.reset()
+
+    def _current_seed(self) -> np.ndarray:
+        if self.requires_initial_polygon:
+            return self.initial_polygon
+        return self._S0
 
     def create_functions(self, eq, run_prob=False):
         eq = np.asarray(eq, dtype=self._S0.dtype)
@@ -155,6 +223,7 @@ class ArrayFractal:
         return normalize
 
     def calculate_limits(self):
+        # Random sampling is fast and gives stable bounds for point-cloud output.
         self.random_iterate(10_000)
         mins = np.min(self.S, axis=0)
         maxs = np.max(self.S, axis=0)
@@ -185,21 +254,32 @@ class ArrayFractal:
         None.
 
         """
-        self.S = self._S0.copy()
-        self._plot_list = [self._S0]
+        self.S = self._current_seed().copy()
+        self._plot_list = [self.S.copy()]
+        self._deterministic_iterations = 0
+        self._last_iteration_mode = "reset"
 
-    def segment(self, points: np.array) -> np.array:
-        len_ = len(self._S0)
-        lines = np.full((len(points) // len_, len_ * 2 + 2), np.nan)
-        lines[:,:len_*2] = points.reshape((-1, 4))
-        return lines.reshape((-1, 2))
+    def segment(self, points: np.ndarray) -> np.ndarray:
+        len_ = self._segment_size
+        if len_ <= 0:
+            return points
+        rows = len(points) // len_
+        if rows == 0:
+            return points
+        trimmed = points[: rows * len_].reshape(rows, len_, 2)
+        out = np.full((rows, len_ + 1, 2), np.nan, dtype=points.dtype)
+        out[:, :len_, :] = trimmed
+        return out.reshape(-1, 2)
 
-    def deterministic_iterate(self, i: int=1) -> None:
-        """maps the functions to S, reassigning S
+    def _segment_for_plot(self, points: np.ndarray) -> np.ndarray:
+        if np.isnan(points).any():
+            return points
+        if self.segment_plot:
+            return self.segment(points)
+        return points
 
-        if used with the gif package
-        clears the plot list (ensures proper gif plotting)
-        appends S back to plot list
+    def deterministic_iterate(self, i: int = 1) -> None:
+        """Map transforms to S and reassign S.
 
         Parameters
         ----------
@@ -223,7 +303,16 @@ class ArrayFractal:
                 self.apply(S, trans, out=next_S[start:end])
             S = next_S
         self.S = S
-        self._plot_list.append(self.segment(S))
+        if self._segment_size > 1:
+            self._plot_list.append(self.segment(S))
+        else:
+            self._plot_list.append(S)
+        self._deterministic_iterations += max(0, int(i))
+        self._last_iteration_mode = "deterministic"
+
+    def iterate(self, i: int = 1) -> None:
+        """Core-compatible deterministic iterate alias."""
+        self.deterministic_iterate(i)
 
     def random_apply(self, point):
         r = self._rng.random()
@@ -250,15 +339,12 @@ class ArrayFractal:
             point = self.apply(point, trans_list[int(idx)])
             self.S[i] = point
             self.trans_used[i] = idx
+        self._plot_list = [self.S]
+        self._deterministic_iterations = 0
+        self._last_iteration_mode = "random"
 
-    def divided_iterate(self, i:int=1):
-        """maps the functions to S, reassigning S,
-        but dividing the resulting plot list by the # of functions
-        to plot each one with a different color
-
-        if used with the gif package
-        clears the plot list (ensures proper gif plotting)
-        appends the result of each transformation to plot list
+    def divided_iterate(self, i: int = 1):
+        """Map transforms to S and keep each transform block separated.
 
         Parameters
         ----------
@@ -272,17 +358,41 @@ class ArrayFractal:
         """
         self._plot_list.clear()
         if i == 1:
-            len_ = len(self.S)
-            S = np.zeros((len_ * len(self.trans_list), 2))
-            for i, trans in enumerate(self.trans_list):
-                S[i * len_:(i + 1) * len_] = self.apply(self.S, trans)
-                self._plot_list.append(S[i * len_:(i + 1) * len_])
+            base = self.S
+            len_ = len(base)
+            S = np.zeros((len_ * len(self.trans_list), 2), dtype=base.dtype)
+            for idx, trans in enumerate(self.trans_list):
+                block = S[idx * len_:(idx + 1) * len_]
+                self.apply(base, trans, out=block)
+                if self._segment_size > 1:
+                    self._plot_list.append(self.segment(block))
+                else:
+                    self._plot_list.append(block.copy())
             self.S = S.copy()
+            self._deterministic_iterations += 1
+            self._last_iteration_mode = "divided"
         else:
             self.deterministic_iterate(i - 1)
             self.divided_iterate(1)
-            
-    def translate(self, rotate: np.array, offset: np.array) -> None:
+
+    @staticmethod
+    def _rotation_matrix(angle: float) -> np.ndarray:
+        c = math.cos(angle)
+        s = math.sin(angle)
+        return np.array([[c, -s], [s, c]], dtype=np.float64)
+
+    @staticmethod
+    def _offset_vector(offset: complex | np.ndarray) -> np.ndarray:
+        if isinstance(offset, complex):
+            return np.array([[offset.real], [offset.imag]], dtype=np.float64)
+        arr = np.asarray(offset, dtype=np.float64)
+        if arr.shape == (2,):
+            return arr.reshape(2, 1)
+        if arr.shape == (2, 1):
+            return arr
+        raise ValueError("offset must be complex, shape (2,), or shape (2,1)")
+
+    def translate(self, offset: complex | np.ndarray, angle: float = 0.0) -> None:
         """Translate and rotate the fractal using a matrix adding the
         translated version to the plot list
 
@@ -298,14 +408,15 @@ class ArrayFractal:
         None
 
         """
-        s_trans = self.apply(
-            self._plot_list[0], np.append(rotate, offset, axis=1))
+        rotate = self._rotation_matrix(angle)
+        shift = self._offset_vector(offset)
+        s_trans = self.apply(self._plot_list[0], np.append(rotate, shift, axis=1))
         self._plot_list.append(s_trans)
 
     def tile(self):
         pass
 
-    def translate_in_place(self, rotate: np.array, offset: np.array) -> None:
+    def translate_in_place(self, offset: complex | np.ndarray, angle: float = 0.0) -> None:
         """
         Translates every element in _plot_list
 
@@ -322,59 +433,315 @@ class ArrayFractal:
             DESCRIPTION.
 
         """
-        self._plot_list = [ self.apply(
-            i, np.append(rotate, offset, axis=1)) for i in self._plot_list]
+        rotate = self._rotation_matrix(angle)
+        shift = self._offset_vector(offset)
+        transform = np.append(rotate, shift, axis=1)
+        self._plot_list = [self.apply(points, transform) for points in self._plot_list]
 
     def scale(self, scale: float) -> None:
-        self._plot_list = [self.apply(i, scale*I) for i in self._plot_list]
+        self._plot_list = [self.apply(points, scale * I) for points in self._plot_list]
 
-    def make_image(self, resolution=(1080, 1080)):
+    def _collect_plot_points(self) -> np.ndarray:
+        if self._plot_list:
+            series = [self._segment_for_plot(np.asarray(points, dtype=np.float64)) for points in self._plot_list]
+            return np.vstack(series)
+        return self._segment_for_plot(np.asarray(self.S, dtype=np.float64))
+
+    def make_image(self, resolution=(1080, 1080), *, background=(0, 0, 0, 0)):
         width, height = resolution
         pixels = np.zeros((height, width, 4), dtype=np.uint8)
-        if len(self.S) == 0:
+        pixels[:, :] = np.asarray(background, dtype=np.uint8)
+
+        points = self._collect_plot_points()
+        use_transitions = (
+            hasattr(self, "trans_used")
+            and len(self._plot_list) == 1
+            and len(self.trans_used) == len(self.S)
+            and not self.segment_plot
+        )
+        if len(points) == 0:
             return Image.fromarray(pixels, "RGBA")
 
-        x = self.S[:, 0]
-        y = self.S[:, 1]
-        res = min(resolution)
+        finite = np.isfinite(points[:, 0]) & np.isfinite(points[:, 1])
+        points = points[finite]
+        if len(points) == 0:
+            return Image.fromarray(pixels, "RGBA")
+
+        x = points[:, 0]
+        y = points[:, 1]
         denom_x = (self.xlim[1] - self.xlim[0])
         denom_y = (self.ylim[1] - self.ylim[0])
         if denom_x == 0 or denom_y == 0:
             return Image.fromarray(pixels, "RGBA")
 
-        pixelx = ((x - self.xlim[0]) / denom_x * res).astype(np.int32)
-        pixely = ((self.ylim[1] - y) / denom_y * res).astype(np.int32)
+        pixelx = ((x - self.xlim[0]) / denom_x * (width - 1)).astype(np.int32)
+        pixely = ((self.ylim[1] - y) / denom_y * (height - 1)).astype(np.int32)
         mask = (
             (pixelx >= 0) & (pixelx < width) &
             (pixely >= 0) & (pixely < height)
         )
-        if hasattr(self, "trans_used") and len(self.trans_used) == len(self.S):
-            color_idx = (self.trans_used % len(COLORS)).astype(np.intp)
-            colors = np.empty((len(self.S), 4), dtype=np.uint8)
-            colors[:, :3] = np.take(COLORS, color_idx, axis=0)
-            colors[:, 3] = 255
-            pixels[pixely[mask], pixelx[mask]] = colors[mask]
+        x_idx = pixelx[mask]
+        y_idx = pixely[mask]
+        if len(x_idx) == 0:
+            return Image.fromarray(pixels, "RGBA")
+
+        # Map each point to one pixel index for fast accumulation.
+        linear = y_idx * width + x_idx
+        if use_transitions and len(points) == len(self.trans_used):
+            color_idx = (self.trans_used % len(COLORS)).astype(np.intp)[mask]
+            rgb = np.take(COLORS, color_idx, axis=0)
         else:
-            pixels[pixely[mask], pixelx[mask]] = np.append(COLORS[0], 255)
+            rgb = np.repeat(COLORS[[0]], len(linear), axis=0)
+
+        count = np.bincount(linear, minlength=width * height)
+        active = np.nonzero(count)[0]
+        alpha = np.clip(count[active] * 24, 24, 255).astype(np.uint8)
+
+        # Average color for points landing in the same pixel.
+        r_sum = np.bincount(linear, weights=rgb[:, 0], minlength=width * height)
+        g_sum = np.bincount(linear, weights=rgb[:, 1], minlength=width * height)
+        b_sum = np.bincount(linear, weights=rgb[:, 2], minlength=width * height)
+        cnt = count[active]
+        r = np.clip(r_sum[active] / cnt, 0, 255).astype(np.uint8)
+        g = np.clip(g_sum[active] / cnt, 0, 255).astype(np.uint8)
+        b = np.clip(b_sum[active] / cnt, 0, 255).astype(np.uint8)
+
+        py = active // width
+        px = active % width
+        pixels[py, px, 0] = r
+        pixels[py, px, 1] = g
+        pixels[py, px, 2] = b
+        pixels[py, px, 3] = alpha
         return Image.fromarray(pixels, "RGBA")
-    
-    def plot(self, autoscale=False):
-        """Plots the fractal for human viewing"""
-        self.tile()
-        fig = plt.figure()
-        self._fig = fig
-        ax = fig.add_subplot(111)
-        self._ax = ax
-        self.plot_handle = [
-            # ax.plot(np.real(s), np.imag(s), color="tab:blue") for s in self._plot_list
-            ax.plot(s[:,0], s[:,1]) for s in self._plot_list
+
+    def _svg_stroke_width(self, resolution: tuple[int, int]) -> float:
+        # Thicker at early iterations, thinning as detail increases.
+        base = min(resolution) / 900.0
+        if self._deterministic_iterations <= 0:
+            return max(0.45, 1.6 * base)
+        return max(0.22, 2.2 * base / (1.0 + 0.32 * self._deterministic_iterations))
+
+    def _build_svg_text(
+        self,
+        *,
+        resolution=(1080, 1080),
+        autoscale=False,
+        stroke=(31, 119, 180),
+        background=(255, 255, 255),
+    ) -> str:
+        if autoscale:
+            points = self._collect_plot_points()
+            finite = np.isfinite(points[:, 0]) & np.isfinite(points[:, 1])
+            points = points[finite]
+            if len(points):
+                mins = np.min(points, axis=0)
+                maxs = np.max(points, axis=0)
+                expected_diff = max(maxs - mins) * 1.05
+                diff = maxs - mins
+                self.limits = np.array(
+                    (mins - (expected_diff - diff) / 2, maxs + (expected_diff - diff) / 2)
+                ).flatten("F")
+
+        plot_points = self._collect_plot_points()
+        if len(plot_points) == 0:
+            return ""
+
+        width, height = resolution
+        denom_x = self.xlim[1] - self.xlim[0]
+        denom_y = self.ylim[1] - self.ylim[0]
+        if denom_x == 0 or denom_y == 0:
+            return ""
+
+        x = (plot_points[:, 0] - self.xlim[0]) / denom_x * (width - 1)
+        y = (self.ylim[1] - plot_points[:, 1]) / denom_y * (height - 1)
+
+        valid_mask = (~(np.isnan(x) | np.isnan(y))) & (x >= 0) & (x < width) & (y >= 0) & (y < height)
+        x = np.where(valid_mask, x, np.nan)
+        y = np.where(valid_mask, y, np.nan)
+
+        stroke_width = self._svg_stroke_width(resolution)
+        stroke_css = f"rgb({int(stroke[0])},{int(stroke[1])},{int(stroke[2])})"
+        bg_css = f"rgb({int(background[0])},{int(background[1])},{int(background[2])})"
+
+        segments = []
+        start = 0
+        for idx, is_nan in enumerate(np.isnan(x) | np.isnan(y)):
+            if is_nan:
+                if idx - start >= 2:
+                    segments.append((x[start:idx], y[start:idx]))
+                start = idx + 1
+        if len(x) - start >= 2:
+            segments.append((x[start:], y[start:]))
+
+        lines = [
+            f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+            f'<rect x="0" y="0" width="{width}" height="{height}" fill="{bg_css}"/>',
         ]
-        if not autoscale:
-            ax.set_xlim(self.limits[:2])
-            ax.set_ylim(self.limits[2:])
-        ax.set_aspect("equal")
-        ax.axis("off")
-        plt.show()
+        for sx, sy in segments:
+            pts = " ".join(f"{px:.3f},{py:.3f}" for px, py in zip(sx, sy))
+            lines.append(
+                f'<polyline points="{pts}" fill="none" stroke="{stroke_css}" '
+                f'stroke-width="{stroke_width:.3f}" stroke-linecap="round" stroke-linejoin="round"/>'
+            )
+        lines.append("</svg>")
+        return "\n".join(lines)
+
+    def save_svg(
+        self,
+        filename: str,
+        *,
+        resolution=(1080, 1080),
+        autoscale=False,
+        stroke=(31, 119, 180),
+        background=(255, 255, 255),
+    ) -> None:
+        svg_text = self._build_svg_text(
+            resolution=resolution,
+            autoscale=autoscale,
+            stroke=stroke,
+            background=background,
+        )
+        if not svg_text:
+            return
+        Path(filename).write_text(svg_text, encoding="utf-8")
+
+    def _svg_to_png(self, svg_text: str, png_path: Path, resolution: tuple[int, int]) -> None:
+        width, height = resolution
+        try:
+            import cairosvg
+
+            cairosvg.svg2png(
+                bytestring=svg_text.encode("utf-8"),
+                write_to=str(png_path),
+                output_width=width,
+                output_height=height,
+            )
+            return
+        except Exception:
+            # Fallback for environments without SVG renderers.
+            pass
+
+        points = self._collect_plot_points()
+        img = Image.new("RGBA", (width, height), (255, 255, 255, 255))
+        draw = ImageDraw.Draw(img)
+        if len(points) == 0:
+            img.save(png_path)
+            return
+
+        denom_x = self.xlim[1] - self.xlim[0]
+        denom_y = self.ylim[1] - self.ylim[0]
+        if denom_x == 0 or denom_y == 0:
+            img.save(png_path)
+            return
+
+        x = (points[:, 0] - self.xlim[0]) / denom_x * (width - 1)
+        y = (self.ylim[1] - points[:, 1]) / denom_y * (height - 1)
+        x = np.where(np.isfinite(x), x, np.nan)
+        y = np.where(np.isfinite(y), y, np.nan)
+        stroke_px = max(1, int(round(self._svg_stroke_width((width, height)))))
+
+        start = 0
+        mask_nan = np.isnan(x) | np.isnan(y)
+        for idx, is_nan in enumerate(mask_nan):
+            if is_nan:
+                if idx - start >= 2:
+                    pts = list(zip(x[start:idx], y[start:idx]))
+                    draw.line(pts, fill=(31, 119, 180, 255), width=stroke_px)
+                start = idx + 1
+        if len(x) - start >= 2:
+            pts = list(zip(x[start:], y[start:]))
+            draw.line(pts, fill=(31, 119, 180, 255), width=stroke_px)
+        img.save(png_path)
+
+    def _build_deterministic_png_frame(self, svg_text: str, png_path: Path, png_resolution: tuple[int, int]) -> Image.Image:
+        self._svg_to_png(svg_text, png_path, resolution=png_resolution)
+        with Image.open(png_path) as im:
+            return im.convert("RGBA")
+
+    def plot(self, autoscale=False, resolution=(1080, 1080)):
+        """Core-compatible plotting API that returns a PIL image."""
+        self.tile()
+        if autoscale:
+            points = self._collect_plot_points()
+            finite = np.isfinite(points[:, 0]) & np.isfinite(points[:, 1])
+            points = points[finite]
+            if len(points):
+                mins = np.min(points, axis=0)
+                maxs = np.max(points, axis=0)
+                expected_diff = max(maxs - mins) * 1.05
+                diff = maxs - mins
+                self.limits = np.array(
+                    (mins - (expected_diff - diff) / 2, maxs + (expected_diff - diff) / 2)
+                ).flatten("F")
+        return self.make_image(resolution=resolution)
+
+    def save_image(
+        self,
+        filename: str,
+        resolution=(1080, 1080),
+        *,
+        autoscale=False,
+        also_svg: bool | None = None,
+    ) -> None:
+        if self._last_iteration_mode != "random":
+            raise RuntimeError(
+                "save_image requires chaos-game data; call random_iterate(...) before save_image()."
+            )
+        image = self.plot(autoscale=autoscale, resolution=resolution)
+        image.save(filename)
+        if also_svg is None:
+            also_svg = bool(self.segment_plot and self._segment_size > 1)
+        if also_svg:
+            svg_path = str(Path(filename).with_suffix(".svg"))
+            self.save_svg(svg_path, resolution=resolution, autoscale=autoscale)
+
+    def save_gif(
+        self,
+        iterations: int,
+        duration: int = 1000,
+        resolution=(1080, 1080),
+        deterministic_png_resolution=(3840, 2160),
+    ) -> None:
+        """Create a GIF directly from generated images (no matplotlib)."""
+        if self.segment_plot and self._segment_size > 1:
+            temp_pngs: list[Path] = []
+            frames = []
+            try:
+                self.tile()
+                svg0 = self._build_svg_text(resolution=resolution, autoscale=False)
+                png0 = Path(f".deterministic_frame_0000_{id(self)}.png")
+                temp_pngs.append(png0)
+                frames.append(self._build_deterministic_png_frame(svg0, png0, deterministic_png_resolution))
+                for frame_idx in range(1, iterations):
+                    self.iterate(1)
+                    self.tile()
+                    svg_text = self._build_svg_text(resolution=resolution, autoscale=False)
+                    png_path = Path(f".deterministic_frame_{frame_idx:04d}_{id(self)}.png")
+                    temp_pngs.append(png_path)
+                    frames.append(self._build_deterministic_png_frame(svg_text, png_path, deterministic_png_resolution))
+            finally:
+                for path in temp_pngs:
+                    path.unlink(missing_ok=True)
+        else:
+            self.tile()
+            frames = [self.make_image(resolution=resolution)]
+            for _ in range(iterations - 1):
+                if not self.segment_plot and len(self.trans_used):
+                    self.random_iterate(len(self.S))
+                else:
+                    self.iterate(1)
+                self.tile()
+                frames.append(self.make_image(resolution=resolution))
+        frame_ms = max(1, int(duration))
+        frames[0].save(
+            f"{type(self).__name__}_{iterations}.gif",
+            save_all=True,
+            append_images=frames[1:],
+            duration=frame_ms,
+            loop=0,
+            disposal=2,
+            optimize=False,
+        )
 
     def get_plot_fig(self):
         return self._fig
