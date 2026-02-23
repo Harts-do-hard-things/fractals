@@ -1,8 +1,18 @@
 # -*- coding: utf-8 -*-
 """Array-based fractal generation and image rendering.
 
-This module provides a fast NumPy/Pillow path for both deterministic and
-random IFS fractals without matplotlib.
+This module provides a NumPy/Pillow implementation for two distinct output
+workflows:
+
+- deterministic line/polygon iteration (`iterate`, `divided_iterate`)
+- chaos-game point-cloud iteration (`random_iterate`)
+
+Output APIs are intentionally mode-gated:
+
+- `save_svg(...)` requires deterministic/divided state.
+- `save_image(...)` requires chaos-game (`random_iterate`) state.
+- `save_gif(...)` supports both and selects a deterministic SVG-frame path
+  when segmented line output is active.
 """
 
 from __future__ import annotations
@@ -16,6 +26,7 @@ from PIL import Image, ImageDraw
 
 I = np.array([[1, 0, 0], [0, 1, 0]], dtype=np.float64)
 DEFAULT_INITIAL_POLYGON = np.array([[0.0, 0.0], [1.0, 0.0]], dtype=np.float64)
+DEFAULT_BINARY_TREE_INITIAL_POLYGON = np.array([[0.0, 0.0], [0.0, 1.0]], dtype=np.float64)
 COLORS = np.array(
     [
         [31, 119, 180],   # tab:blue
@@ -53,6 +64,14 @@ class ArrayFractal:
         affine transforms applied every iteration
 
 
+    Notes
+    -----
+    Iteration mode is tracked internally (`_last_iteration_mode`) and used to
+    enforce output API correctness:
+
+    - deterministic/divided -> vector-first output (`save_svg`)
+    - random/chaos -> point-cloud image output (`save_image`)
+
     Methods
     -------
     iterate(i: int)
@@ -89,18 +108,26 @@ class ArrayFractal:
 
         """
         self._S0 = np.asarray(S0, dtype=np.float64)
-        self.initial_polygon = self._normalize_points(
-            DEFAULT_INITIAL_POLYGON if initial_polygon is None else initial_polygon,
-            min_points=2,
-            name="initial_polygon",
-        )
+        self._initial_polygon_provided = initial_polygon is not None
         self.requires_initial_polygon = self._infer_requires_initial_polygon(
             self._S0, requires_initial_polygon
         )
+        self.trans_list, self.prob_list = self.create_functions(eq)
+        self._binary_tree_mode = self._looks_like_binary_tree()
+        if initial_polygon is None:
+            if self.requires_initial_polygon and self._binary_tree_mode:
+                initial_polygon = DEFAULT_BINARY_TREE_INITIAL_POLYGON
+            else:
+                initial_polygon = DEFAULT_INITIAL_POLYGON
+        self.initial_polygon = self._normalize_points(
+            initial_polygon,
+            min_points=2,
+            name="initial_polygon",
+        )
         self._segment_size = len(self.initial_polygon) if self.requires_initial_polygon else len(self._S0)
+        self._accumulate_svg_history = bool(self._binary_tree_mode and self.requires_initial_polygon)
         self._deterministic_iterations = 0
         self.S = self._current_seed().copy()
-        self.trans_list, self.prob_list = self.create_functions(eq)
         self._prob_cdf = np.cumsum(self.prob_list)
         if len(self._prob_cdf) > 0:
             self._prob_cdf[-1] = 1.0
@@ -136,6 +163,20 @@ class ArrayFractal:
 
     @staticmethod
     def from_imaginary(S0: list[complex], func_list: list[Callable]):
+        """Build an ArrayFractal from complex affine callables.
+
+        Parameters
+        ----------
+        S0 : list[complex]
+            Initial complex seed points.
+        func_list : list[Callable]
+            Affine complex functions `f(z) = a*z + b`.
+
+        Returns
+        -------
+        ArrayFractal
+            Configured in deterministic segmented mode.
+        """
         S = np.stack((np.real(S0), np.imag(S0)), axis=1).astype(np.float64, copy=False)
         eq = np.zeros((len(func_list), 6), dtype=np.float64)
         for i, func in enumerate(func_list):
@@ -182,6 +223,21 @@ class ArrayFractal:
             self._segment_size = len(self.initial_polygon)
             self.reset()
 
+    def _looks_like_binary_tree(self) -> bool:
+        if len(self.trans_list) != 2:
+            return False
+        t1 = self.trans_list[0]
+        t2 = self.trans_list[1]
+        m1 = t1[:2, :2]
+        m2 = t2[:2, :2]
+        off1 = t1[:, 2]
+        off2 = t2[:, 2]
+        # Binary-tree IFS in this project typically uses mirrored rotations with
+        # identical offsets (e.g. +theta/-theta branches from the same trunk tip).
+        mirrored = np.allclose(m2, np.array([[m1[0, 0], -m1[0, 1]], [-m1[1, 0], m1[1, 1]]]), atol=1e-9)
+        same_offset = np.allclose(off1, off2, atol=1e-9)
+        return bool(mirrored and same_offset)
+
     def _current_seed(self) -> np.ndarray:
         if self.requires_initial_polygon:
             return self.initial_polygon
@@ -223,7 +279,11 @@ class ArrayFractal:
         return normalize
 
     def calculate_limits(self):
-        # Random sampling is fast and gives stable bounds for point-cloud output.
+        """Estimate viewport bounds from random sampling.
+
+        Uses chaos-game sampling for speed/stability and resets state after
+        estimation.
+        """
         self.random_iterate(10_000)
         mins = np.min(self.S, axis=0)
         maxs = np.max(self.S, axis=0)
@@ -279,7 +339,7 @@ class ArrayFractal:
         return points
 
     def deterministic_iterate(self, i: int = 1) -> None:
-        """Map transforms to S and reassign S.
+        """Map transforms deterministically and reassign `S`.
 
         Parameters
         ----------
@@ -291,9 +351,15 @@ class ArrayFractal:
         None
 
         """
-        self._plot_list.clear()
         S = self.S
         k = len(self.trans_list)
+        if self._accumulate_svg_history:
+            # Keep prior generations for tree-like deterministic SVG output.
+            if not self._plot_list:
+                self._plot_list = [self.segment(S) if self._segment_size > 1 else S.copy()]
+        else:
+            self._plot_list.clear()
+
         for _ in range(i):
             len_ = len(S)
             next_S = np.empty((len_ * k, 2), dtype=S.dtype)
@@ -302,11 +368,17 @@ class ArrayFractal:
                 end = start + len_
                 self.apply(S, trans, out=next_S[start:end])
             S = next_S
+            if self._accumulate_svg_history:
+                if self._segment_size > 1:
+                    self._plot_list.append(self.segment(S))
+                else:
+                    self._plot_list.append(S.copy())
         self.S = S
-        if self._segment_size > 1:
-            self._plot_list.append(self.segment(S))
-        else:
-            self._plot_list.append(S)
+        if not self._accumulate_svg_history:
+            if self._segment_size > 1:
+                self._plot_list.append(self.segment(S))
+            else:
+                self._plot_list.append(S)
         self._deterministic_iterations += max(0, int(i))
         self._last_iteration_mode = "deterministic"
 
@@ -321,6 +393,10 @@ class ArrayFractal:
         return final_point, index
 
     def random_iterate(self, n):
+        """Run chaos-game iteration for `n` points.
+
+        Stores transform indices in `trans_used` for optional color mapping.
+        """
         burn_in = 1_000
         point = np.array([0, 0], dtype=self._S0.dtype)
         total = burn_in + n
@@ -448,6 +524,7 @@ class ArrayFractal:
         return self._segment_for_plot(np.asarray(self.S, dtype=np.float64))
 
     def make_image(self, resolution=(1080, 1080), *, background=(0, 0, 0, 0)):
+        """Rasterize current plot state to an RGBA PIL image."""
         width, height = resolution
         pixels = np.zeros((height, width, 4), dtype=np.uint8)
         pixels[:, :] = np.asarray(background, dtype=np.uint8)
@@ -521,6 +598,9 @@ class ArrayFractal:
             return max(0.45, 1.6 * base)
         return max(0.22, 2.2 * base / (1.0 + 0.32 * self._deterministic_iterations))
 
+    def _is_deterministic_mode(self) -> bool:
+        return self._last_iteration_mode in {"deterministic", "divided"}
+
     def _build_svg_text(
         self,
         *,
@@ -552,37 +632,49 @@ class ArrayFractal:
         if denom_x == 0 or denom_y == 0:
             return ""
 
-        x = (plot_points[:, 0] - self.xlim[0]) / denom_x * (width - 1)
-        y = (self.ylim[1] - plot_points[:, 1]) / denom_y * (height - 1)
-
-        valid_mask = (~(np.isnan(x) | np.isnan(y))) & (x >= 0) & (x < width) & (y >= 0) & (y < height)
-        x = np.where(valid_mask, x, np.nan)
-        y = np.where(valid_mask, y, np.nan)
-
         stroke_width = self._svg_stroke_width(resolution)
-        stroke_css = f"rgb({int(stroke[0])},{int(stroke[1])},{int(stroke[2])})"
         bg_css = f"rgb({int(background[0])},{int(background[1])},{int(background[2])})"
-
-        segments = []
-        start = 0
-        for idx, is_nan in enumerate(np.isnan(x) | np.isnan(y)):
-            if is_nan:
-                if idx - start >= 2:
-                    segments.append((x[start:idx], y[start:idx]))
-                start = idx + 1
-        if len(x) - start >= 2:
-            segments.append((x[start:], y[start:]))
 
         lines = [
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
             f'<rect x="0" y="0" width="{width}" height="{height}" fill="{bg_css}"/>',
         ]
-        for sx, sy in segments:
-            pts = " ".join(f"{px:.3f},{py:.3f}" for px, py in zip(sx, sy))
-            lines.append(
-                f'<polyline points="{pts}" fill="none" stroke="{stroke_css}" '
-                f'stroke-width="{stroke_width:.3f}" stroke-linecap="round" stroke-linejoin="round"/>'
-            )
+
+        if self._plot_list:
+            series_list = [self._segment_for_plot(np.asarray(s, dtype=np.float64)) for s in self._plot_list]
+        else:
+            series_list = [self._segment_for_plot(np.asarray(self.S, dtype=np.float64))]
+
+        for s_idx, series in enumerate(series_list):
+            x = (series[:, 0] - self.xlim[0]) / denom_x * (width - 1)
+            y = (self.ylim[1] - series[:, 1]) / denom_y * (height - 1)
+            valid_mask = (~(np.isnan(x) | np.isnan(y))) & (x >= 0) & (x < width) & (y >= 0) & (y < height)
+            x = np.where(valid_mask, x, np.nan)
+            y = np.where(valid_mask, y, np.nan)
+
+            if self._last_iteration_mode == "divided":
+                c = COLORS[s_idx % len(COLORS)]
+                stroke_css = f"rgb({int(c[0])},{int(c[1])},{int(c[2])})"
+            else:
+                stroke_css = f"rgb({int(stroke[0])},{int(stroke[1])},{int(stroke[2])})"
+
+            start = 0
+            for idx, is_nan in enumerate(np.isnan(x) | np.isnan(y)):
+                if is_nan:
+                    if idx - start >= 2:
+                        pts = " ".join(f"{px:.3f},{py:.3f}" for px, py in zip(x[start:idx], y[start:idx]))
+                        lines.append(
+                            f'<polyline points="{pts}" fill="none" stroke="{stroke_css}" '
+                            f'stroke-width="{stroke_width:.3f}" stroke-linecap="round" stroke-linejoin="round"/>'
+                        )
+                    start = idx + 1
+            if len(x) - start >= 2:
+                pts = " ".join(f"{px:.3f},{py:.3f}" for px, py in zip(x[start:], y[start:]))
+                lines.append(
+                    f'<polyline points="{pts}" fill="none" stroke="{stroke_css}" '
+                    f'stroke-width="{stroke_width:.3f}" stroke-linecap="round" stroke-linejoin="round"/>'
+                )
+
         lines.append("</svg>")
         return "\n".join(lines)
 
@@ -595,6 +687,17 @@ class ArrayFractal:
         stroke=(31, 119, 180),
         background=(255, 255, 255),
     ) -> None:
+        """Write SVG output from deterministic/divided state.
+
+        Raises
+        ------
+        RuntimeError
+            If current state is not deterministic or divided.
+        """
+        if not self._is_deterministic_mode():
+            raise RuntimeError(
+                "save_svg requires deterministic data; call iterate(...) or divided_iterate(...) first."
+            )
         svg_text = self._build_svg_text(
             resolution=resolution,
             autoscale=autoscale,
@@ -658,6 +761,29 @@ class ArrayFractal:
         with Image.open(png_path) as im:
             return im.convert("RGBA")
 
+    @staticmethod
+    def _match_aspect_resolution(
+        svg_resolution: tuple[int, int], requested: tuple[int, int] | None
+    ) -> tuple[int, int]:
+        svg_w, svg_h = svg_resolution
+        if svg_w <= 0 or svg_h <= 0:
+            return (svg_w, svg_h)
+
+        if requested is None:
+            # Default deterministic output: scale long side to 4K while
+            # preserving the SVG frame aspect ratio.
+            long_side = 3840
+        else:
+            long_side = max(int(requested[0]), int(requested[1]))
+
+        if svg_w >= svg_h:
+            out_w = long_side
+            out_h = max(1, int(round(long_side * svg_h / svg_w)))
+        else:
+            out_h = long_side
+            out_w = max(1, int(round(long_side * svg_w / svg_h)))
+        return (out_w, out_h)
+
     def plot(self, autoscale=False, resolution=(1080, 1080)):
         """Core-compatible plotting API that returns a PIL image."""
         self.tile()
@@ -683,6 +809,13 @@ class ArrayFractal:
         autoscale=False,
         also_svg: bool | None = None,
     ) -> None:
+        """Save a raster image from chaos-game state.
+
+        Raises
+        ------
+        RuntimeError
+            If current state is not produced by `random_iterate(...)`.
+        """
         if self._last_iteration_mode != "random":
             raise RuntimeError(
                 "save_image requires chaos-game data; call random_iterate(...) before save_image()."
@@ -690,7 +823,9 @@ class ArrayFractal:
         image = self.plot(autoscale=autoscale, resolution=resolution)
         image.save(filename)
         if also_svg is None:
-            also_svg = bool(self.segment_plot and self._segment_size > 1)
+            also_svg = bool(
+                self.segment_plot and self._segment_size > 1 and self._is_deterministic_mode()
+            )
         if also_svg:
             svg_path = str(Path(filename).with_suffix(".svg"))
             self.save_svg(svg_path, resolution=resolution, autoscale=autoscale)
@@ -700,25 +835,37 @@ class ArrayFractal:
         iterations: int,
         duration: int = 1000,
         resolution=(1080, 1080),
-        deterministic_png_resolution=(3840, 2160),
+        deterministic_png_resolution: tuple[int, int] | None = None,
     ) -> None:
-        """Create a GIF directly from generated images (no matplotlib)."""
+        """Create a GIF from current state.
+
+        Deterministic segmented mode:
+            SVG text is generated per frame, converted to PNG (default 4K), then
+            encoded as GIF.
+
+        Non-segment/random mode:
+            Frames are rendered directly from `make_image(...)`.
+        """
         if self.segment_plot and self._segment_size > 1:
             temp_pngs: list[Path] = []
             frames = []
             try:
+                png_resolution = self._match_aspect_resolution(
+                    svg_resolution=resolution,
+                    requested=deterministic_png_resolution,
+                )
                 self.tile()
                 svg0 = self._build_svg_text(resolution=resolution, autoscale=False)
                 png0 = Path(f".deterministic_frame_0000_{id(self)}.png")
                 temp_pngs.append(png0)
-                frames.append(self._build_deterministic_png_frame(svg0, png0, deterministic_png_resolution))
+                frames.append(self._build_deterministic_png_frame(svg0, png0, png_resolution))
                 for frame_idx in range(1, iterations):
                     self.iterate(1)
                     self.tile()
                     svg_text = self._build_svg_text(resolution=resolution, autoscale=False)
                     png_path = Path(f".deterministic_frame_{frame_idx:04d}_{id(self)}.png")
                     temp_pngs.append(png_path)
-                    frames.append(self._build_deterministic_png_frame(svg_text, png_path, deterministic_png_resolution))
+                    frames.append(self._build_deterministic_png_frame(svg_text, png_path, png_resolution))
             finally:
                 for path in temp_pngs:
                     path.unlink(missing_ok=True)

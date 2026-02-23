@@ -1,4 +1,12 @@
 from __future__ import annotations
+"""Generate output-path media for both core and array implementations.
+
+This script creates comparable artifacts across:
+- `src/fractals/core.py` (matplotlib/gif-backed complex path)
+- `src/fractals/array.py` (NumPy/Pillow/SVG-backed array path)
+
+Outputs are written to `media/` with `_core_py` / `_array_py` suffixes.
+"""
 
 import os
 from pathlib import Path

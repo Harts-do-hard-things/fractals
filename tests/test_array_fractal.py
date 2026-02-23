@@ -1,11 +1,12 @@
 from pathlib import Path
 import uuid
+import re
 
 import numpy as np
 import pytest
 from PIL import Image, ImageSequence
 
-from fractals.array import ArrayFractal, DEFAULT_INITIAL_POLYGON
+from fractals.array import ArrayFractal, DEFAULT_BINARY_TREE_INITIAL_POLYGON, DEFAULT_INITIAL_POLYGON
 
 
 @pytest.fixture
@@ -54,6 +55,22 @@ def test_infer_requires_initial_polygon_and_default_line(fast_limits, eq_even):
     assert fractal.requires_initial_polygon is True
     np.testing.assert_allclose(fractal.initial_polygon, DEFAULT_INITIAL_POLYGON)
     np.testing.assert_allclose(fractal.S, DEFAULT_INITIAL_POLYGON)
+
+
+def test_binary_tree_defaults_to_vertical_initial_polygon(fast_limits):
+    br = 0.5
+    theta = 0.2
+    eq_tree = np.array(
+        [
+            [br * np.cos(theta), -br * np.sin(theta), br * np.sin(theta), br * np.cos(theta), 0.0, 1.0],
+            [br * np.cos(theta), br * np.sin(theta), -br * np.sin(theta), br * np.cos(theta), 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+    fractal = ArrayFractal(np.array([[0.0, 0.0]]), eq_tree, segment_plot=True)
+    assert fractal._binary_tree_mode is True
+    np.testing.assert_allclose(fractal.initial_polygon, DEFAULT_BINARY_TREE_INITIAL_POLYGON)
+    np.testing.assert_allclose(fractal.S, DEFAULT_BINARY_TREE_INITIAL_POLYGON)
 
 
 def test_set_initial_polygon_updates_segment_size_when_required(fast_limits, eq_even):
@@ -112,6 +129,22 @@ def test_deterministic_iterate_uses_initial_polygon_when_needed(fast_limits, eq_
     assert np.isnan(fractal._plot_list[0]).any()
 
 
+def test_binary_tree_deterministic_iterate_accumulates_history(fast_limits):
+    br = 0.5
+    theta = 0.2
+    eq_tree = np.array(
+        [
+            [br * np.cos(theta), -br * np.sin(theta), br * np.sin(theta), br * np.cos(theta), 0.0, 1.0],
+            [br * np.cos(theta), br * np.sin(theta), -br * np.sin(theta), br * np.cos(theta), 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
+    fractal = ArrayFractal(np.array([[0.0, 0.0]]), eq_tree, segment_plot=True)
+    fractal.iterate(3)
+    # seed + one entry per deterministic step
+    assert len(fractal._plot_list) == 4
+
+
 def test_deterministic_iterate_with_existing_polygon_seed(fast_limits, eq_even):
     s0 = np.array([[0.0, 0.0], [1.0, 0.0]], dtype=np.float64)
     fractal = ArrayFractal(s0, eq_even, requires_initial_polygon=False)
@@ -124,6 +157,21 @@ def test_divided_iterate_splits_plot_blocks(fast_limits, eq_even):
     fractal.divided_iterate(1)
     assert len(fractal._plot_list) == len(fractal.trans_list)
     assert all(block.shape[1] == 2 for block in fractal._plot_list)
+
+
+def test_divided_iterate_can_generate_svg(fast_limits, eq_even):
+    fractal = ArrayFractal(np.array([[0.0, 0.0]]), eq_even, segment_plot=True)
+    fractal.divided_iterate(3)
+    out = Path(f"array_test_{uuid.uuid4().hex}_divided.svg")
+    try:
+        fractal.save_svg(str(out), resolution=(320, 320))
+        assert out.exists()
+        data = out.read_text(encoding="utf-8")
+        assert "<polyline" in data
+        colors = set(re.findall(r'stroke="(rgb\(\d+,\d+,\d+\))"', data))
+        assert len(colors) >= min(2, len(fractal.trans_list))
+    finally:
+        out.unlink(missing_ok=True)
 
 
 def test_random_apply_and_random_iterate(fast_limits, eq_even):

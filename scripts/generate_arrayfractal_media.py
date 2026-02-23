@@ -1,4 +1,13 @@
 from __future__ import annotations
+"""Generate ArrayFractal reference media artifacts.
+
+This script exercises deterministic and chaos-game output paths in
+`src/fractals/array.py` and writes outputs to `media/`.
+
+Important mode constraints reflected here:
+- deterministic outputs use `save_svg(...)`, `plot(...).save(...)`, or `make_image(...)`
+- chaos-game outputs use `random_iterate(...)` before `save_image(...)`
+"""
 
 import os
 from pathlib import Path

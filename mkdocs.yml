@@ -4,7 +4,11 @@ theme:
   name: material
 
 plugins:
-  - mkdocstrings
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - src
 
 nav:
   - Fractal Docs: index.md

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""A module for viewing fractals
+"""Core complex-valued fractal module.
 
 Basic usage:
 
@@ -68,6 +68,12 @@ class Fractal:
         the functions to be applied every iteration
 
 
+    Notes
+    -----
+    This class now caches affine coefficients when possible and uses a fast
+    stochastic bound estimator in `calculate_limits()` to avoid expensive
+    deterministic explosion during initialization.
+
     Methods
     -------
     iterate(i: int)
@@ -109,6 +115,11 @@ class Fractal:
         self.limits = self.calculate_limits()
 
     def _init_affine_cache(self):
+        """Precompute affine coefficients/offsets and probability CDF.
+
+        If any provided function is non-affine, the cache is disabled and
+        iterate/limit logic transparently falls back to generic callable mode.
+        """
         coeffs = []
         offsets = []
         for func in self.func_list:
@@ -136,6 +147,11 @@ class Fractal:
         self._prob_cdf[-1] = 1.0
 
     def calculate_limits(self):
+        """Estimate plotting bounds.
+
+        Uses a fast affine stochastic sampler when available, with a bounded
+        deterministic fallback for non-affine callables.
+        """
         # Fast path: stochastic limit estimate for affine IFS.
         if self._affine_coeffs is not None:
             burn_in = 1_000
@@ -400,8 +416,7 @@ class Fractal:
 
 
 class DragonFractal(Fractal):
-    """A class used to draw and calculate Fractals
-    that require nans inbetween segments
+    """Fractal variant that inserts NaN separators between segments.
 
     Based loosely on research by
     [Larry Riddle](https://larryriddle.agnesscott.org/ifs/ifs.htm)
@@ -463,8 +478,8 @@ class BinaryTree(DragonFractal):
         )
 
     def iterate(self, i: int):
+        """Iterate while retaining historical cumulative branches in `_plot_list`."""
         for _ in range(i):
-            self._plot_list.clear()
             S_blocks = []
             for coeff, offset in zip(self._affine_coeffs, self._affine_offsets):
                 block = coeff * self.S + offset
