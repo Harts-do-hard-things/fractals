@@ -49,6 +49,7 @@ result = render(EISENSTEIN;
 ```
 
 For `method=:deterministic` and `method=:inverse`, use `iterations=...` to control iteration depth.
+For `.ifs` files with multiple definitions, select one with `ifs_index=...` or `ifs_name=...`.
 
 ## IFS Parser Example
 

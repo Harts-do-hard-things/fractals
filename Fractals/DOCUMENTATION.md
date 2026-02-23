@@ -49,6 +49,12 @@ Iteration control:
   - For matrix/string/file inputs, omitted `npoints` defaults to `DEFAULT_SAMPLES`.
   - For `IFS` input, omitted `npoints` keeps the existing point count.
 
+Selecting an IFS from `.ifs` files with multiple definitions:
+- Use `ifs_index=...` or `ifs_name=...` (provide only one).
+- If the provided index or name does not exist, `render(...)` throws `ArgumentError` and includes the available index/name list.
+- If no selector is provided and the input has multiple definitions, `render(...)` prints available definitions and asks for confirmation to render index `1`.
+- If confirmation is declined (or unavailable), `render(...)` throws `ArgumentError` with the available list.
+
 Examples:
 
 ```julia

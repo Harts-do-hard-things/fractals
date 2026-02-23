@@ -806,7 +806,8 @@ function _validate_render_options(
     npoints::Union{Nothing,Integer},
     warmup::Integer,
     resolution::Tuple{Int,Int},
-    ifs_index::Integer,
+    ifs_index::Union{Nothing,Integer},
+    ifs_name::Union{Nothing,AbstractString},
     deterministic_depth::Integer,
     inverse_depth::Integer
 )
@@ -815,7 +816,8 @@ function _validate_render_options(
     isnothing(npoints) || npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
     warmup >= 0 || throw(ArgumentError("warmup must be >= 0, got $warmup"))
     resolution[1] > 0 && resolution[2] > 0 || throw(ArgumentError("resolution must be positive, got $resolution"))
-    ifs_index > 0 || throw(ArgumentError("ifs_index must be >= 1, got $ifs_index"))
+    isnothing(ifs_index) || ifs_index > 0 || throw(ArgumentError("ifs_index must be >= 1, got $ifs_index"))
+    isnothing(ifs_name) || !isempty(strip(ifs_name)) || throw(ArgumentError("ifs_name must be non-empty when provided"))
     deterministic_depth >= 0 || throw(ArgumentError("deterministic_depth must be >= 0, got $deterministic_depth"))
     inverse_depth >= 0 || throw(ArgumentError("inverse_depth must be >= 0, got $inverse_depth"))
     return nothing
@@ -824,10 +826,11 @@ end
 function _resolve_render_input(
     input::IFS;
     npoints::Union{Nothing,Integer},
-    ifs_index::Integer
+    ifs_index::Union{Nothing,Integer},
+    ifs_name::Union{Nothing,AbstractString}
 )
-    if ifs_index != 1
-        throw(ArgumentError("ifs_index is only valid for parsed string/file inputs"))
+    if !isnothing(ifs_index) || !isnothing(ifs_name)
+        throw(ArgumentError("ifs_index/ifs_name are only valid for parsed string/file inputs"))
     end
 
     if isnothing(npoints) || length(input.points) == npoints
@@ -844,27 +847,82 @@ end
 function _resolve_render_input(
     input::AbstractMatrix{<:Real};
     npoints::Union{Nothing,Integer},
-    ifs_index::Integer
+    ifs_index::Union{Nothing,Integer},
+    ifs_name::Union{Nothing,AbstractString}
 )
-    if ifs_index != 1
-        throw(ArgumentError("ifs_index is only valid for parsed string/file inputs"))
+    if !isnothing(ifs_index) || !isnothing(ifs_name)
+        throw(ArgumentError("ifs_index/ifs_name are only valid for parsed string/file inputs"))
     end
     resolved_npoints = isnothing(npoints) ? DEFAULT_SAMPLES : npoints
     return IFS(input; npoints=resolved_npoints)
 end
 
+function _ifs_choices_text(defs::Vector{IFS})
+    lines = ["Available IFS definitions:"]
+    for (i, d) in enumerate(defs)
+        push!(lines, "  [$i] $(d.name)")
+    end
+    return join(lines, "\n")
+end
+
+function _select_ifs_definition(
+    defs::Vector{IFS};
+    ifs_index::Union{Nothing,Integer},
+    ifs_name::Union{Nothing,AbstractString}
+)
+    choices = _ifs_choices_text(defs)
+
+    if !isnothing(ifs_index) && !isnothing(ifs_name)
+        throw(ArgumentError("Provide only one of ifs_index or ifs_name.\n$choices"))
+    end
+
+    if !isnothing(ifs_name)
+        for d in defs
+            if d.name == ifs_name
+                return d
+            end
+        end
+        throw(ArgumentError("IFS name '$ifs_name' not found.\n$choices"))
+    end
+
+    if !isnothing(ifs_index)
+        if ifs_index <= length(defs)
+            return defs[ifs_index]
+        end
+        throw(ArgumentError("ifs_index=$ifs_index is out of range (1-$(length(defs))).\n$choices"))
+    end
+
+    if length(defs) == 1
+        return defs[1]
+    end
+
+    println(choices)
+    print("No ifs_index/ifs_name provided. Render [1] $(defs[1].name)? [y/N]: ")
+    answer = try
+        lowercase(strip(readline()))
+    catch
+        ""
+    end
+
+    if answer in ("y", "yes")
+        return defs[1]
+    end
+
+    throw(ArgumentError("No IFS selection confirmed.\n$choices"))
+end
+
 function _resolve_render_input(
     input::AbstractString;
     npoints::Union{Nothing,Integer},
-    ifs_index::Integer
+    ifs_index::Union{Nothing,Integer},
+    ifs_name::Union{Nothing,AbstractString}
 )
     resolved_npoints = isnothing(npoints) ? DEFAULT_SAMPLES : npoints
     defs = isfile(input) ? parse_ifs_file(input; npoints=resolved_npoints) :
                            parse_ifs_string(input; npoints=resolved_npoints)
 
     isempty(defs) && throw(ArgumentError("No IFS definitions found in input"))
-    ifs_index <= length(defs) || throw(ArgumentError("ifs_index=$ifs_index is out of range (1-$(length(defs)))"))
-    return defs[ifs_index]
+    return _select_ifs_definition(defs; ifs_index=ifs_index, ifs_name=ifs_name)
 end
 
 function render(
@@ -874,14 +932,15 @@ function render(
     warmup::Integer=DEFAULT_WARMUP,
     resolution::Tuple{Int,Int}=RESOLUTION,
     outpath::AbstractString="media/render.png",
-    ifs_index::Integer=1,
+    ifs_index::Union{Nothing,Integer}=nothing,
+    ifs_name::Union{Nothing,AbstractString}=nothing,
     iterations::Union{Nothing,Integer}=nothing,
     deterministic_depth::Integer=1,
     inverse_depth::Integer=8,
 )
-    _validate_render_options(method, npoints, warmup, resolution, ifs_index, deterministic_depth, inverse_depth)
+    _validate_render_options(method, npoints, warmup, resolution, ifs_index, ifs_name, deterministic_depth, inverse_depth)
 
-    ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index)
+    ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index, ifs_name=ifs_name)
 
     render_method = method == :parallel ? :chaos : method
     rendered_ifs = ifs

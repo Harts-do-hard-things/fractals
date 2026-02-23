@@ -224,7 +224,7 @@ end
     mktemp() do path, io
         write(io, text)
         close(io)
-        out4 = render(path; npoints=3000, method=:inverse, iterations=2, resolution=(32, 32), outpath=joinpath("media", "render_file_$suffix.png"))
+        out4 = render(path; npoints=3000, method=:inverse, ifs_index=1, iterations=2, resolution=(32, 32), outpath=joinpath("media", "render_file_$suffix.png"))
         @test isfile(out4.outpath)
         @test size(out4.image) == (32, 32)
     end
@@ -235,4 +235,38 @@ end
     rm(out2.outpath; force=true)
     rm(out3.outpath; force=true)
     rm(joinpath("media", "render_file_$suffix.png"); force=true)
+end
+
+@testset "Render IFS Selection By Index Or Name" begin
+    suffix = randstring(8)
+    text = """
+    FirstIFS {
+      0.5 0.0 0.0 0.5 0.0 0.0 0.5
+      0.5 0.0 0.0 0.5 0.5 0.0 0.5
+    }
+    SecondIFS {
+      0.5 -0.5 0.5 0.5 0.0 0.0
+     -0.5 -0.5 0.5 -0.5 1.0 0.0
+    }
+    """
+
+    mktemp() do path, io
+        write(io, text)
+        close(io)
+
+        out_idx = render(path; ifs_index=2, npoints=1500, method=:chaos, resolution=(24, 24), outpath=joinpath("media", "render_multi_idx_$suffix.png"))
+        @test out_idx.ifs.name == "SecondIFS"
+        @test isfile(out_idx.outpath)
+
+        out_name = render(path; ifs_name="FirstIFS", npoints=1500, method=:chaos, resolution=(24, 24), outpath=joinpath("media", "render_multi_name_$suffix.png"))
+        @test out_name.ifs.name == "FirstIFS"
+        @test isfile(out_name.outpath)
+
+        @test_throws ArgumentError render(path; ifs_index=99, npoints=100, method=:chaos, resolution=(16, 16), outpath=joinpath("media", "never_written_$suffix.png"))
+        @test_throws ArgumentError render(path; ifs_name="MissingIFS", npoints=100, method=:chaos, resolution=(16, 16), outpath=joinpath("media", "never_written2_$suffix.png"))
+        @test_throws ArgumentError render(path; ifs_name="FirstIFS", ifs_index=1, npoints=100, method=:chaos, resolution=(16, 16), outpath=joinpath("media", "never_written3_$suffix.png"))
+
+        rm(out_idx.outpath; force=true)
+        rm(out_name.outpath; force=true)
+    end
 end
