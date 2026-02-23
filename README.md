@@ -1,36 +1,69 @@
-![Heighway Dragon Gif](GIFs/HeighwayDragon_17.gif)
-# Fractals
+# Fractals (Julia)
 
-Constructs IFS fractals in python and plots them in the complex plane.
+`Fractals` is a Julia package for generating and rasterizing 2D iterated function system (IFS) fractals.
 
-## Installation
-1. Clone the repo
-2. Install dependancies with pip:
+The package includes:
+- Chaos-game iteration (`iterate!`, `iterate_parallel!`)
+- Deterministic expansion (`deterministic_iterate`)
+- Forward and inverse rasterization helpers
+- An IFS parser for text-based fractal definitions
 
+## Repository Layout
+
+- `Fractals/`: Julia package (`src/`, `test/`, `Project.toml`)
+- `site/`: generated static docs site artifacts
+
+## Quick Start
+
+### 1. Activate and install dependencies
+
+```powershell
+julia --project=Fractals -e "using Pkg; Pkg.instantiate()"
 ```
-python -m pip install -r requirements.txt
+
+### 2. Generate a fractal image
+
+```powershell
+julia --project=Fractals -e "using Fractals, FileIO; ifs = IFS(HEIGHWAY_DRAGON; npoints=200_000); iterate!(ifs); img = make_image(ifs; resolution=(1024, 1024)); save(\"media/heighway.png\", img)"
 ```
 
-Optionally install gif package for gif creation
+### 3. Run tests
 
-## Usage
-```python
-fractal = HeighwayDragon() # See full list of fractals in the documentation
-fractal.iterate(15)
-fractal.plot()
+```powershell
+julia --project=Fractals Fractals/test/runtests.jl
+```
+
+## Minimal Julia Example
+
+```julia
+using Fractals
+using FileIO
+
+ifs = IFS(EISENSTEIN; npoints=250_000, name="Eisenstein")
+iterate_parallel!(ifs)
+img = make_image(ifs; resolution=(1200, 1200))
+save("media/eisenstein.png", img)
+```
+
+## IFS Parser Example
+
+```julia
+using Fractals
+
+text = """
+Heighway Dragon {
+  0.5 -0.5  0.5  0.5  0.0 0.0
+ -0.5 -0.5  0.5 -0.5  1.0 0.0
+}
+"""
+
+defs = parse_ifs_string(text; npoints=100_000)
+ifs = defs[1]
+iterate!(ifs)
 ```
 
 ## Documentation
-Documentation can be found [here](https://harts-do-hard-things.github.io/fractals/)
 
-## Contrubuting
+Detailed package documentation is in `Fractals/DOCUMENTATION.md`.
 
-Feel Free to contribute
-
-## TODO
-- [ ] Finish Docstrings for last few Classes
-- [ ] Add pictures in the documentation
-- [ ] Finalize animated fractals
-- [ ] Debug matrix ifs funtions
-- [ ] Update and finalize documentation
-- [ ] Work on the collage problem
+Generated images should be saved under `media/`.

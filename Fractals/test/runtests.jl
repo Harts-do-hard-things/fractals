@@ -1,8 +1,7 @@
 using Test
 using LinearAlgebra
 using StaticArrays
-
-include("../src/matrixfractal.jl")
+using Fractals
 
 const SMALL_EQ = [
     0.5  0.0  0.0  0.5  0.0  0.0  0.6;
@@ -112,4 +111,35 @@ end
     @test defs[1].name == "Test IFS"
     @test occursin("Doc line 1", defs[1].docs)
     @test length(defs[1].points) == 10
+end
+
+@testset "IFS Parser File" begin
+    sample = """
+    File IFS {
+      0.5 0.0 0.0 0.5 0.0 0.0 0.5
+      0.5 0.0 0.0 0.5 0.5 0.0 0.5
+    }
+    """
+
+    mktemp() do path, io
+        write(io, sample)
+        close(io)
+        defs = parse_ifs_file(path; npoints=12)
+        @test length(defs) == 1
+        @test defs[1].name == "File IFS"
+        @test length(defs[1].points) == 12
+    end
+end
+
+@testset "Media Output Path" begin
+    p1 = normalize_media_outpath("output.png")
+    @test p1 == joinpath("media", "output.png")
+
+    p2 = normalize_media_outpath(joinpath("media", "nested", "x.png"))
+    @test p2 == joinpath("media", "nested", "x.png")
+
+    p3 = normalize_media_outpath(joinpath("other", "path", "image.png"))
+    @test p3 == joinpath("media", "image.png")
+
+    @test isdir("media")
 end

@@ -166,7 +166,7 @@ end
 function prompt_ifs_and_render(path::AbstractString;
                                npoints::Integer=DEFAULT_SAMPLES,
                                resolution::Tuple{Int,Int}=RESOLUTION,
-                               outpath::AbstractString="output.png")
+                               outpath::AbstractString="media/output.png")
     ifs_list = parse_ifs_file(path; npoints=npoints)
     if isempty(ifs_list)
         println("No IFS definitions found in: $path")
@@ -204,8 +204,9 @@ function prompt_ifs_and_render(path::AbstractString;
         ifs = deterministic_iterate(ifs, 1)
     end
 
+    final_outpath = normalize_media_outpath(outpath)
     img = make_image(ifs; resolution=(height, width))
-    save(outpath, img)
-    println("Saved image to $(outpath)")
+    save(final_outpath, img)
+    println("Saved image to $(final_outpath)")
     return ifs
 end

@@ -19,6 +19,22 @@ using Printf
 const RESOLUTION = (1504, 2256)
 const DEFAULT_WARMUP = 50
 const DEFAULT_SAMPLES = 1_000_000
+const DEFAULT_MEDIA_DIR = "media"
+
+function normalize_media_outpath(outpath::AbstractString)
+    raw = String(outpath)
+    media_prefix = string(DEFAULT_MEDIA_DIR, Base.Filesystem.path_separator)
+    normalized = normpath(raw)
+
+    if normalized == DEFAULT_MEDIA_DIR || startswith(normalized, media_prefix)
+        mkpath(dirname(normalized))
+        return normalized
+    end
+
+    final = joinpath(DEFAULT_MEDIA_DIR, basename(normalized))
+    mkpath(dirname(final))
+    return final
+end
 
 # --------------------------------
 # Affine Map
@@ -590,7 +606,7 @@ const EISENSTEIN = [
 
 function main(; eq=EISENSTEIN,
                npoints=1_000_000,
-               outpath="output.png")
+               outpath="media/output.png")
 
     println("Building IFS...")
     ifs = IFS(eq; npoints=npoints)
@@ -601,8 +617,9 @@ function main(; eq=EISENSTEIN,
     println("Rasterizing...")
     img = make_image(ifs)
 
-    println("Saving to $outpath")
-    save(outpath, img)
+    final_outpath = normalize_media_outpath(outpath)
+    println("Saving to $final_outpath")
+    save(final_outpath, img)
 
     println("Done.")
 end
