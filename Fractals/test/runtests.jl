@@ -196,3 +196,42 @@ end
 
     rm(svg_path; force=true)
 end
+
+@testset "Render Entrypoint" begin
+    suffix = randstring(8)
+
+    out1 = render(SMALL_EQ; npoints=5000, method=:chaos, resolution=(64, 64), outpath=joinpath("media", "render_matrix_$suffix.png"))
+    @test isfile(out1.outpath)
+    @test size(out1.image) == (64, 64)
+
+    ifs = IFS(SMALL_EQ; npoints=2000)
+    out2 = render(ifs; method=:deterministic, deterministic_depth=1, resolution=(48, 48), outpath=joinpath("media", "render_ifs_$suffix.png"))
+    @test isfile(out2.outpath)
+    @test size(out2.image) == (48, 48)
+
+    text = """
+    RenderTest {
+      0.5 0.0 0.0 0.5 0.0 0.0 0.6
+     -0.5 0.0 0.0 -0.5 1.0 0.0 0.4
+    }
+    """
+    out3 = render(text; npoints=4000, method=:parallel, resolution=(40, 40), outpath=joinpath("media", "render_text_$suffix.png"))
+    @test isfile(out3.outpath)
+    @test size(out3.image) == (40, 40)
+    @test out3.method == :chaos
+
+    mktemp() do path, io
+        write(io, text)
+        close(io)
+        out4 = render(path; npoints=3000, method=:inverse, inverse_depth=2, resolution=(32, 32), outpath=joinpath("media", "render_file_$suffix.png"))
+        @test isfile(out4.outpath)
+        @test size(out4.image) == (32, 32)
+    end
+
+    @test_throws ArgumentError render(SMALL_EQ; method=:badmethod)
+
+    rm(out1.outpath; force=true)
+    rm(out2.outpath; force=true)
+    rm(out3.outpath; force=true)
+    rm(joinpath("media", "render_file_$suffix.png"); force=true)
+end

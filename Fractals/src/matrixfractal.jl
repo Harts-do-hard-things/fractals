@@ -403,8 +403,7 @@ end
 # Chaos Game Iteration
 # --------------------------------
 
-function iterate!(ifs::IFS;
-                  warmup=DEFAULT_WARMUP)
+function _iterate_serial!(ifs::IFS; warmup=DEFAULT_WARMUP)
 
     maps = ifs.maps
     weights = ifs.weights
@@ -426,7 +425,7 @@ function iterate!(ifs::IFS;
     return ifs
 end
 
-function iterate_parallel!(ifs::IFS; warmup=DEFAULT_WARMUP)
+function _iterate_parallel!(ifs::IFS; warmup=DEFAULT_WARMUP)
     maps = ifs.maps
     alias = StatsBase.AliasTable(ifs.weights)  # fast discrete sampling
     npts = length(ifs.points)
@@ -453,6 +452,18 @@ function iterate_parallel!(ifs::IFS; warmup=DEFAULT_WARMUP)
     end
 
     return ifs
+end
+
+function iterate!(ifs::IFS; warmup=DEFAULT_WARMUP)
+    if nthreads() > 1
+        return _iterate_parallel!(ifs; warmup=warmup)
+    end
+    return _iterate_serial!(ifs; warmup=warmup)
+end
+
+# Backward-compatible entrypoint. Iteration is now automatically threaded via iterate!.
+function iterate_parallel!(ifs::IFS; warmup=DEFAULT_WARMUP)
+    return iterate!(ifs; warmup=warmup)
 end
 
 # --------------------------------
@@ -784,6 +795,108 @@ function _iterate_image_single_map(ifs::IFS, img::AbstractMatrix{<:Real}, map_in
     end
 
     return Gray.(newimg)
+end
+
+# --------------------------------
+# High-level render entrypoint
+# --------------------------------
+
+function _validate_render_options(
+    method::Symbol,
+    npoints::Integer,
+    warmup::Integer,
+    resolution::Tuple{Int,Int},
+    ifs_index::Integer,
+    deterministic_depth::Integer,
+    inverse_depth::Integer
+)
+    supported = (:chaos, :parallel, :deterministic, :inverse)
+    method in supported || throw(ArgumentError("Invalid method '$method'. Supported methods: $(collect(supported))"))
+    npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
+    warmup >= 0 || throw(ArgumentError("warmup must be >= 0, got $warmup"))
+    resolution[1] > 0 && resolution[2] > 0 || throw(ArgumentError("resolution must be positive, got $resolution"))
+    ifs_index > 0 || throw(ArgumentError("ifs_index must be >= 1, got $ifs_index"))
+    deterministic_depth >= 0 || throw(ArgumentError("deterministic_depth must be >= 0, got $deterministic_depth"))
+    inverse_depth >= 0 || throw(ArgumentError("inverse_depth must be >= 0, got $inverse_depth"))
+    return nothing
+end
+
+function _resolve_render_input(
+    input::IFS;
+    npoints::Integer,
+    ifs_index::Integer
+)
+    if ifs_index != 1
+        throw(ArgumentError("ifs_index is only valid for parsed string/file inputs"))
+    end
+
+    if length(input.points) == npoints
+        return input
+    end
+
+    return IFS(input.maps, input.weights;
+               npoints=npoints,
+               name=input.name,
+               docs=input.docs,
+               limits=input.limits)
+end
+
+function _resolve_render_input(
+    input::AbstractMatrix{<:Real};
+    npoints::Integer,
+    ifs_index::Integer
+)
+    if ifs_index != 1
+        throw(ArgumentError("ifs_index is only valid for parsed string/file inputs"))
+    end
+    return IFS(input; npoints=npoints)
+end
+
+function _resolve_render_input(
+    input::AbstractString;
+    npoints::Integer,
+    ifs_index::Integer
+)
+    defs = isfile(input) ? parse_ifs_file(input; npoints=npoints) :
+                           parse_ifs_string(input; npoints=npoints)
+
+    isempty(defs) && throw(ArgumentError("No IFS definitions found in input"))
+    ifs_index <= length(defs) || throw(ArgumentError("ifs_index=$ifs_index is out of range (1-$(length(defs)))"))
+    return defs[ifs_index]
+end
+
+function render(
+    input;
+    method::Symbol=:chaos,
+    npoints::Integer=DEFAULT_SAMPLES,
+    warmup::Integer=DEFAULT_WARMUP,
+    resolution::Tuple{Int,Int}=RESOLUTION,
+    outpath::AbstractString="media/render.png",
+    ifs_index::Integer=1,
+    deterministic_depth::Integer=1,
+    inverse_depth::Integer=8,
+)
+    _validate_render_options(method, npoints, warmup, resolution, ifs_index, deterministic_depth, inverse_depth)
+
+    ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index)
+
+    render_method = method == :parallel ? :chaos : method
+    rendered_ifs = ifs
+
+    if render_method == :chaos
+        iterate!(rendered_ifs; warmup=warmup)
+        img = make_image(rendered_ifs; resolution=resolution)
+    elseif render_method == :deterministic
+        rendered_ifs = deterministic_iterate(rendered_ifs, deterministic_depth)
+        img = make_image(rendered_ifs; resolution=resolution)
+    else
+        img = rasterize_image_inversely(rendered_ifs, inverse_depth, rendered_ifs.limits; resolution=resolution)
+    end
+
+    final_outpath = _normalize_media_outpath(outpath)
+    save(final_outpath, img)
+
+    return (ifs=rendered_ifs, image=img, outpath=final_outpath, method=render_method)
 end
 
 # --------------------------------

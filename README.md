@@ -39,10 +39,13 @@ julia --project=Fractals Fractals/test/runtests.jl
 using Fractals
 using FileIO
 
-ifs = IFS(EISENSTEIN; npoints=250_000, name="Eisenstein")
-iterate_parallel!(ifs)
-img = make_image(ifs; resolution=(1200, 1200))
-save("media/eisenstein.png", img)
+result = render(EISENSTEIN;
+                method=:chaos,
+                npoints=250_000,
+                resolution=(1200, 1200),
+                outpath="media/eisenstein.png")
+
+@show result.outpath
 ```
 
 ## IFS Parser Example

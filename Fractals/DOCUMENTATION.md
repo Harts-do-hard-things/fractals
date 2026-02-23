@@ -49,11 +49,11 @@ Constructors:
 
 ### `iterate!(ifs; warmup=DEFAULT_WARMUP)`
 
-Chaos-game iteration (single-threaded). Updates `ifs.points` in place.
+Chaos-game iteration. Automatically uses threads when available (`Threads.nthreads() > 1`), otherwise runs single-threaded. Updates `ifs.points` in place.
 
 ### `iterate_parallel!(ifs; warmup=DEFAULT_WARMUP)`
 
-Threaded chaos-game iteration. Updates `ifs.points` in place.
+Compatibility alias for `iterate!`. Kept for older call sites.
 
 ### `deterministic_iterate(ifs, n)`
 
@@ -115,6 +115,26 @@ Rules:
 - `EISENSTEIN`
 
 ## Common Workflows
+
+### High-level render API
+
+```julia
+using Fractals
+
+result = render(HEIGHWAY_DRAGON;
+                method=:chaos,
+                npoints=200_000,
+                resolution=(1024, 1024),
+                outpath="media/render.png")
+
+println(result.outpath)
+```
+
+Supported methods:
+- `:chaos` (auto-threaded)
+- `:parallel` (alias to `:chaos`)
+- `:deterministic`
+- `:inverse`
 
 ### Basic render
 
