@@ -802,9 +802,10 @@ class GoldenFlake(BinaryTree):
             self.S = S
 
 if __name__ == "__main__":
-    dragon = HeighwayDragon()
+    # dragon = HeighwayDragon()
     # levy = LevyC()
-    dragon.divided_iterate(15)
+    # dragon.divided_iterate(15)
     # levy.divided_iterate(1)
-    dragon.plot(autoscale=True)
+    # dragon.plot(autoscale=True)
     # levy.plot()
+    pass

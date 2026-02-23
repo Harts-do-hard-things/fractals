@@ -73,55 +73,83 @@ class ArrayFractal:
         Fractal
 
         """
-        self._S0 = S0
-        self.S = S0
+        self._S0 = np.asarray(S0, dtype=np.float64)
+        self.S = self._S0.copy()
         self.trans_list, self.prob_list = self.create_functions(eq)
+        self._prob_cdf = np.cumsum(self.prob_list)
+        if len(self._prob_cdf) > 0:
+            self._prob_cdf[-1] = 1.0
         self.trans_used = []
-        self._plot_list = [S0]
+        self._rng = np.random.default_rng()
+        self._plot_list = [self._S0]
         self.limits = self.calculate_limits()
 
     @staticmethod
-    def apply(data: np.ndarray, trans_matrix: np.ndarray):
-        ndata = np.add(data.dot(trans_matrix[:2, :2].T), trans_matrix[:, 2])
-        return ndata
+    def apply(data: np.ndarray, trans_matrix: np.ndarray, out: np.ndarray | None = None):
+        mat = trans_matrix[:2, :2]
+        offset = trans_matrix[:, 2]
+        if data.ndim == 1:
+            if out is None:
+                out = data @ mat.T
+                out += offset
+                return out
+            np.dot(data, mat.T, out=out)
+            out += offset
+            return out
+        if out is None:
+            out = data @ mat.T
+            out += offset
+            return out
+        np.dot(data, mat.T, out=out)
+        out += offset
+        return out
 
     @staticmethod
     def from_imaginary(S0: list[complex], func_list: list[callable]):
-        S = np.stack((np.real(S0), np.imag(S0)), axis=1) 
-        eq = np.zeros((len(func_list), 6))
+        S = np.stack((np.real(S0), np.imag(S0)), axis=1).astype(np.float64, copy=False)
+        eq = np.zeros((len(func_list), 6), dtype=np.float64)
         for i, func in enumerate(func_list):
             trans = np.array(([np.real(func(0))], [np.imag(func(0))]))
             rotation = func(1) - func(0)
             matrix = np.array([[np.real(rotation), -np.imag(rotation)],
                                [np.imag(rotation), np.real(rotation)]])
             e = np.append(matrix, trans)
-            eq[i] = e
+            eq[i] = e.astype(np.float64, copy=False)
             # print(S, e)
         return ArrayFractal(S, eq)
 
     def create_functions(self, eq, run_prob=False):
+        eq = np.asarray(eq, dtype=self._S0.dtype)
         if len(eq[0]) % 2 == 1:
             i = (len(eq[0]) - 1) // 3
-            trans_list = [np.append(e[: 2 * i].reshape((2, -1)), e[-1 - i: -1]
-                      .reshape(-1, 1), 1)
-            for e in np.array(eq)]
+            trans_list = [
+                np.append(
+                    e[: 2 * i].reshape((2, -1)),
+                    e[-1 - i: -1].reshape(-1, 1),
+                    1
+                )
+                for e in eq
+            ]
+            prob_list = eq[:, -1]
         else:
             i = len(eq[0]) // 3
-            run_prob = True
-        trans_list = [
-            np.append(e[: 2 * i].reshape((2, -1)), e[-i:]
-                      .reshape(-1, 1), 1)
-            for e in np.array(eq)
-        ]
-        prob_list = self.calculate_probabilities(trans_list) \
-                    if run_prob else eq[:, -1]
+            trans_list = [
+                np.append(
+                    e[: 2 * i].reshape((2, -1)),
+                    e[-i:].reshape(-1, 1),
+                    1
+                )
+                for e in eq
+            ]
+            prob_list = self.calculate_probabilities(trans_list)
         return trans_list, prob_list
 
     @staticmethod
     def calculate_probabilities(trans_list):
-        det_list = [abs(np.linalg.det(a[:2, :2]))
-                    if abs(np.linalg.det(a[:2, :2])) != 0 else .003
-                    for a in trans_list]
+        det_list = []
+        for a in trans_list:
+            det = abs(np.linalg.det(a[:2, :2]))
+            det_list.append(det if det != 0 else .003)
         normalize = [a / sum(det_list) for a in det_list]
         return normalize
 
@@ -183,30 +211,44 @@ class ArrayFractal:
 
         """
         self._plot_list.clear()
-        S = np.zeros((len(self.S)*len(self.trans_list)**i, 2))
+        S = self.S
+        k = len(self.trans_list)
         for _ in range(i):
+            len_ = len(S)
+            next_S = np.empty((len_ * k, 2), dtype=S.dtype)
             for j, trans in enumerate(self.trans_list):
-                len_ = len(self.S)
-                S[j * len_:(j + 1) * len_] = self.apply(self.S, trans)
-            self.S = S[:(j + 1) * len_].copy()
+                start = j * len_
+                end = start + len_
+                self.apply(S, trans, out=next_S[start:end])
+            S = next_S
+        self.S = S
         self._plot_list.append(self.segment(S))
 
     def random_apply(self, point):
-        index = np.random.choice(len(self.prob_list), p=self.prob_list)
+        r = self._rng.random()
+        index = int(np.searchsorted(self._prob_cdf, r, side="right"))
         final_point = self.apply(point, self.trans_list[index])
         return final_point, index
-    
+
     def random_iterate(self, n):
-        point = np.array([0, 0])
-        for _ in range(1_000):
-            point, _ = self.random_apply(point)
+        burn_in = 1_000
+        point = np.array([0, 0], dtype=self._S0.dtype)
+        total = burn_in + n
+        indices = np.searchsorted(
+            self._prob_cdf,
+            self._rng.random(total),
+            side="right"
+        )
+        trans_list = self.trans_list
+        for idx in indices[:burn_in]:
+            point = self.apply(point, trans_list[int(idx)])
 
-        self.S = np.empty((n, 2))
-
-        for i in range(n):
-            point, index = self.random_apply(point)
+        self.S = np.empty((n, 2), dtype=self._S0.dtype)
+        self.trans_used = np.empty((n,), dtype=np.intp)
+        for i, idx in enumerate(indices[burn_in:]):
+            point = self.apply(point, trans_list[int(idx)])
             self.S[i] = point
-            self.trans_used.append(index)        
+            self.trans_used[i] = idx
 
     def divided_iterate(self, i:int=1):
         """maps the functions to S, reassigning S,
@@ -286,18 +328,33 @@ class ArrayFractal:
         self._plot_list = [self.apply(i, scale*I) for i in self._plot_list]
 
     def make_image(self, resolution=(1080, 1080)):
-        pixels = np.uint8(
-            [[(0, 0, 0, 0) for _ in range(resolution[0])] 
-             for _ in range(resolution[1])]
-            )
-        # for point, index in zip(self.S, self.trans_used):
-        for point in self.S:
-            x, y = point
-            res = min(resolution)
-            pixelx = int((x - self.xlim[0])/(self.xlim[1] - self.xlim[0]) * res)
-            pixely = int((self.ylim[1] - y)/(self.ylim[1] - self.ylim[0]) * res)
-            # pixels[pixely, pixelx] = np.append(COLORS[index], 255)
-            pixels[pixely, pixelx] = np.append(COLORS[0], 255)
+        width, height = resolution
+        pixels = np.zeros((height, width, 4), dtype=np.uint8)
+        if len(self.S) == 0:
+            return Image.fromarray(pixels, "RGBA")
+
+        x = self.S[:, 0]
+        y = self.S[:, 1]
+        res = min(resolution)
+        denom_x = (self.xlim[1] - self.xlim[0])
+        denom_y = (self.ylim[1] - self.ylim[0])
+        if denom_x == 0 or denom_y == 0:
+            return Image.fromarray(pixels, "RGBA")
+
+        pixelx = ((x - self.xlim[0]) / denom_x * res).astype(np.int32)
+        pixely = ((self.ylim[1] - y) / denom_y * res).astype(np.int32)
+        mask = (
+            (pixelx >= 0) & (pixelx < width) &
+            (pixely >= 0) & (pixely < height)
+        )
+        if hasattr(self, "trans_used") and len(self.trans_used) == len(self.S):
+            color_idx = (self.trans_used % len(COLORS)).astype(np.intp)
+            colors = np.empty((len(self.S), 4), dtype=np.uint8)
+            colors[:, :3] = np.take(COLORS, color_idx, axis=0)
+            colors[:, 3] = 255
+            pixels[pixely[mask], pixelx[mask]] = colors[mask]
+        else:
+            pixels[pixely[mask], pixelx[mask]] = np.append(COLORS[0], 255)
         return Image.fromarray(pixels, "RGBA")
     
     def plot(self, autoscale=False):
@@ -327,15 +384,12 @@ class ArrayFractal:
     plot_fig = property(get_plot_fig)
     plot_ax = property(get_plot_ax)
 
-
-if __name__ == "__main__":
-#     levy_c = ArrayFractal(np.array([[0.0, 0.],
-#                                    [1., 0.]]), 
-#                np.array([[.5, -.5, .5, .5, 0, 0, .5],
-#                         [-.5, -.5, .5, -.5, 1, 0, .5]])
-# )
-#     # levy_c.plot()
+def main():
     from fractal import S0i, IFS_function
     test = ArrayFractal.from_imaginary(S0i, IFS_function["flowsnake"])
-    test.divided_iterate(7)
+    test.random_iterate(1_000_000)
     test.plot()
+
+
+if __name__ == "__main__":
+    main()
