@@ -221,6 +221,16 @@ end
     @test size(out3.image) == (40, 40)
     @test out3.method == :chaos
 
+    out3b = render(text; npoints=2000, method="deterministic", iterations=1, resolution=(24, 24), outpath=joinpath("media", "render_text_string_method_$suffix.png"))
+    @test isfile(out3b.outpath)
+    @test size(out3b.image) == (24, 24)
+    @test out3b.method == :deterministic
+
+    out3c = render(text; npoints=1500, method=Parallel, resolution=(20, 20), outpath=joinpath("media", "render_text_enum_method_$suffix.png"))
+    @test isfile(out3c.outpath)
+    @test size(out3c.image) == (20, 20)
+    @test out3c.method == :chaos
+
     mktemp() do path, io
         write(io, text)
         close(io)
@@ -230,10 +240,13 @@ end
     end
 
     @test_throws ArgumentError render(SMALL_EQ; method=:badmethod)
+    @test_throws ArgumentError render(SMALL_EQ; method="not_a_method")
 
     rm(out1.outpath; force=true)
     rm(out2.outpath; force=true)
     rm(out3.outpath; force=true)
+    rm(out3b.outpath; force=true)
+    rm(out3c.outpath; force=true)
     rm(joinpath("media", "render_file_$suffix.png"); force=true)
 end
 
@@ -269,4 +282,80 @@ end
         rm(out_idx.outpath; force=true)
         rm(out_name.outpath; force=true)
     end
+end
+
+@testset "Validation And Errors" begin
+    bad5 = ones(2, 5)
+    err = try
+        IFS(bad5; npoints=10)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("6 or 7 columns", sprint(showerror, err))
+
+    bad8 = ones(2, 8)
+    err = try
+        IFS(bad8; npoints=10)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("6 or 7 columns", sprint(showerror, err))
+
+    empty_eq = Matrix{Float64}(undef, 0, 6)
+    err = try
+        IFS(empty_eq; npoints=10)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("at least one row", sprint(showerror, err))
+
+    bad_nan = copy(SMALL_EQ)
+    bad_nan[1, 1] = NaN
+    err = try
+        IFS(bad_nan; npoints=10)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("non-finite values", sprint(showerror, err))
+
+    bad_prob_neg = copy(SMALL_EQ)
+    bad_prob_neg[1, 7] = -0.1
+    err = try
+        IFS(bad_prob_neg; npoints=10)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("nonnegative", sprint(showerror, err))
+
+    bad_prob_zero = copy(SMALL_EQ)
+    bad_prob_zero[:, 7] .= 0.0
+    err = try
+        IFS(bad_prob_zero; npoints=10)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("positive total weight", sprint(showerror, err))
+
+    ifs = IFS(SMALL_EQ; npoints=100)
+    img = make_image(ifs; resolution=(16, 16))
+    err = try
+        Fractals._iterate_image_single_map(ifs, img, 99)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("out of range", sprint(showerror, err))
 end

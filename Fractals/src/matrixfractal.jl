@@ -22,6 +22,44 @@ const DEFAULT_SAMPLES = 1_000_000
 const DEFAULT_MEDIA_DIR = "media"
 const DEFAULT_BASE_LIMITS = ((0.0, 1.0), (0.0, 1.0))
 
+@enum RenderMethod begin
+    Chaos
+    Parallel
+    Deterministic
+    Inverse
+end
+
+const _RENDER_METHOD_CHOICES = (
+    Chaos,
+    Parallel,
+    Deterministic,
+    Inverse,
+)
+
+@inline _render_method_symbol(m::RenderMethod) = Symbol(lowercase(string(m)))
+
+function _parse_render_method(method::RenderMethod)
+    return method
+end
+
+function _parse_render_method(method::Symbol)
+    m = Symbol(lowercase(String(method)))
+    if m == :chaos
+        return Chaos
+    elseif m == :parallel
+        return Parallel
+    elseif m == :deterministic
+        return Deterministic
+    elseif m == :inverse
+        return Inverse
+    end
+    throw(ArgumentError("Invalid method '$method'. Supported methods: chaos, parallel, deterministic, inverse"))
+end
+
+function _parse_render_method(method::AbstractString)
+    return _parse_render_method(Symbol(lowercase(strip(method))))
+end
+
 function _normalize_media_outpath(outpath::AbstractString)
     raw = String(outpath)
     media_prefix = string(DEFAULT_MEDIA_DIR, Base.Filesystem.path_separator)
@@ -330,6 +368,22 @@ function _build_maps_and_weights(eq::AbstractMatrix{<:Real})
     return maps, Weights(probs)
 end
 
+function _validate_eq_matrix(eq::AbstractMatrix{<:Real})
+    nrows, ncols = size(eq)
+    nrows > 0 || throw(ArgumentError("IFS equation matrix must have at least one row, got size $(size(eq))"))
+    (ncols == 6 || ncols == 7) || throw(ArgumentError("IFS equation matrix must have exactly 6 or 7 columns, got $ncols"))
+
+    all(isfinite, eq) || throw(ArgumentError("IFS equation matrix contains non-finite values (NaN or Inf)"))
+
+    if ncols == 7
+        probs = eq[:, 7]
+        all(p -> p >= 0, probs) || throw(ArgumentError("IFS probability column (7th column) must be nonnegative"))
+        sum(probs) > 0 || throw(ArgumentError("IFS probability column (7th column) must have positive total weight"))
+    end
+
+    return nothing
+end
+
 # --------------------------------
 # Compute limits via sampling
 # --------------------------------
@@ -379,6 +433,7 @@ function IFS(eq::AbstractMatrix{<:Real};
              name::AbstractString="",
              docs::AbstractString="")
 
+    _validate_eq_matrix(eq)
     maps, weights = _build_maps_and_weights(eq)
     limits = _get_limits(maps, weights)
 
@@ -767,6 +822,7 @@ function iterate_image(ifs::IFS, img::AbstractMatrix{<:Real})
 end
 
 function _iterate_image_single_map(ifs::IFS, img::AbstractMatrix{<:Real}, map_index::Integer)
+    1 <= map_index <= length(ifs.maps) || throw(ArgumentError("map_index $map_index is out of range. Valid range: 1-$(length(ifs.maps))"))
     rows, cols = size(img)
     newimg = zeros(Float32, rows, cols)
 
@@ -802,7 +858,7 @@ end
 # --------------------------------
 
 function _validate_render_options(
-    method::Symbol,
+    method::RenderMethod,
     npoints::Union{Nothing,Integer},
     warmup::Integer,
     resolution::Tuple{Int,Int},
@@ -811,8 +867,6 @@ function _validate_render_options(
     deterministic_depth::Integer,
     inverse_depth::Integer
 )
-    supported = (:chaos, :parallel, :deterministic, :inverse)
-    method in supported || throw(ArgumentError("Invalid method '$method'. Supported methods: $(collect(supported))"))
     isnothing(npoints) || npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
     warmup >= 0 || throw(ArgumentError("warmup must be >= 0, got $warmup"))
     resolution[1] > 0 && resolution[2] > 0 || throw(ArgumentError("resolution must be positive, got $resolution"))
@@ -925,9 +979,33 @@ function _resolve_render_input(
     return _select_ifs_definition(defs; ifs_index=ifs_index, ifs_name=ifs_name)
 end
 
+function _resolve_render_iterations(
+    iterations::Union{Nothing,Integer},
+    deterministic_depth::Integer,
+    inverse_depth::Integer
+)
+    if isnothing(iterations)
+        if deterministic_depth != 1 || inverse_depth != 8
+            @warn "deterministic_depth/inverse_depth are compatibility aliases; prefer iterations=..."
+        end
+        deterministic_iters = deterministic_depth
+        inverse_iters = inverse_depth
+    else
+        if deterministic_depth != 1 || inverse_depth != 8
+            @warn "iterations takes precedence over deterministic_depth/inverse_depth"
+        end
+        deterministic_iters = iterations
+        inverse_iters = iterations
+    end
+
+    deterministic_iters >= 0 || throw(ArgumentError("iterations must be >= 0, got $deterministic_iters"))
+    inverse_iters >= 0 || throw(ArgumentError("iterations must be >= 0, got $inverse_iters"))
+    return deterministic_iters, inverse_iters
+end
+
 function render(
     input;
-    method::Symbol=:chaos,
+    method::Union{RenderMethod,Symbol,AbstractString}=Chaos,
     npoints::Union{Nothing,Integer}=nothing,
     warmup::Integer=DEFAULT_WARMUP,
     resolution::Tuple{Int,Int}=RESOLUTION,
@@ -938,22 +1016,20 @@ function render(
     deterministic_depth::Integer=1,
     inverse_depth::Integer=8,
 )
-    _validate_render_options(method, npoints, warmup, resolution, ifs_index, ifs_name, deterministic_depth, inverse_depth)
+    parsed_method = _parse_render_method(method)
+    _validate_render_options(parsed_method, npoints, warmup, resolution, ifs_index, ifs_name, deterministic_depth, inverse_depth)
 
     ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index, ifs_name=ifs_name)
 
-    render_method = method == :parallel ? :chaos : method
+    render_method = parsed_method == Parallel ? Chaos : parsed_method
     rendered_ifs = ifs
-    deterministic_iters = isnothing(iterations) ? deterministic_depth : iterations
-    inverse_iters = isnothing(iterations) ? inverse_depth : iterations
+    deterministic_iters, inverse_iters =
+        _resolve_render_iterations(iterations, deterministic_depth, inverse_depth)
 
-    deterministic_iters >= 0 || throw(ArgumentError("iterations must be >= 0, got $deterministic_iters"))
-    inverse_iters >= 0 || throw(ArgumentError("iterations must be >= 0, got $inverse_iters"))
-
-    if render_method == :chaos
+    if render_method == Chaos
         iterate!(rendered_ifs; warmup=warmup)
         img = make_image(rendered_ifs; resolution=resolution)
-    elseif render_method == :deterministic
+    elseif render_method == Deterministic
         rendered_ifs = deterministic_iterate(rendered_ifs, deterministic_iters)
         img = make_image(rendered_ifs; resolution=resolution)
     else
@@ -963,7 +1039,10 @@ function render(
     final_outpath = _normalize_media_outpath(outpath)
     save(final_outpath, img)
 
-    return (ifs=rendered_ifs, image=img, outpath=final_outpath, method=render_method)
+    return (ifs=rendered_ifs,
+            image=img,
+            outpath=final_outpath,
+            method=_render_method_symbol(render_method))
 end
 
 # --------------------------------

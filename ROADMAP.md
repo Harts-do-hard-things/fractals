@@ -14,8 +14,8 @@
 ## 0-30 Days: Stabilize and Standardize
 
 ### API and UX
-- [ ] Add high-level `render(...)` entrypoint that wraps parser + iteration + rasterization.
-- [ ] Define method enum/options (`chaos`, `parallel`, `deterministic`, `inverse`) with consistent argument names.
+- [x] Add high-level `render(...)` entrypoint that wraps parser + iteration + rasterization.
+- [x] Define method enum/options (`chaos`, `parallel`, `deterministic`, `inverse`) with consistent argument names.
 - [ ] Add argument validation and clear error messages for bad `eq` shapes and invalid map indices.
 
 ### Reproducibility

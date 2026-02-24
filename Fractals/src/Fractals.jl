@@ -7,6 +7,11 @@ export AffineMap,
        IFS,
        IFSToken,
        IFSDefinition,
+       RenderMethod,
+       Chaos,
+       Parallel,
+       Deterministic,
+       Inverse,
        lex_ifs,
        parse_ifs_string,
        parse_ifs_file,
@@ -27,5 +32,4 @@ export AffineMap,
        DEFAULT_SAMPLES,
        HEIGHWAY_DRAGON,
        EISENSTEIN
-
 end
