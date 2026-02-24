@@ -24,7 +24,7 @@ julia --project=Fractals -e "using Pkg; Pkg.instantiate()"
 using Fractals
 
 result = render(HEIGHWAY_DRAGON;
-                method=:chaos,
+                method=Chaos,
                 npoints=200_000,
                 resolution=(1024, 1024),
                 outpath="media/render.png")
@@ -32,11 +32,13 @@ result = render(HEIGHWAY_DRAGON;
 println(result.outpath)
 ```
 
-Supported methods:
-- `:chaos` (auto-threaded)
-- `:parallel` (alias to `:chaos`)
-- `:deterministic`
-- `:inverse`
+Method options (all accepted by `render`):
+- enum values (preferred): `Chaos`, `Parallel`, `Deterministic`, `Inverse`
+- symbols: `:chaos`, `:parallel`, `:deterministic`, `:inverse`
+- strings: `"chaos"`, `"parallel"`, `"deterministic"`, `"inverse"`
+
+Dispatch behavior:
+- `Parallel`/`:parallel` is treated as `Chaos` because `iterate!` is auto-threaded.
 
 Iteration control:
 - Use `iterations=...` for both `:deterministic` and `:inverse`.
@@ -44,6 +46,7 @@ Iteration control:
   - `deterministic_depth=...`
   - `inverse_depth=...`
 - If `iterations` is provided, it takes precedence over depth aliases.
+- `deterministic_depth` and `inverse_depth` are compatibility aliases; prefer `iterations`.
 - `iterations` must be `>= 0`.
 - `npoints` behavior:
   - For matrix/string/file inputs, omitted `npoints` defaults to `DEFAULT_SAMPLES`.
@@ -186,6 +189,21 @@ Rules:
 - Accepted row widths are 6 (no explicit probability) or 7 (with probability)
 - Lines containing `(3D)` are ignored
 
+## Validation And Errors
+
+Input validation is enforced for matrix-based IFS construction (`IFS(eq; ...)`):
+- `eq` must have at least one row.
+- `eq` must have exactly 6 or 7 columns.
+- All entries must be finite (`NaN`/`Inf` are rejected).
+- If a 7th probability column is present:
+  - all probabilities must be nonnegative
+  - total probability weight must be positive
+
+Map-indexed operations validate bounds explicitly:
+- Invalid map indices throw `ArgumentError` with the valid range.
+
+Render selection errors for multi-definition `.ifs` files include available indexes and names.
+
 ## Exported Constants
 
 - `RESOLUTION`
@@ -199,5 +217,5 @@ Rules:
 Run from repository root:
 
 ```powershell
-julia --project=Fractals Fractals/test/runtests.jl
+julia --startup-file=no --project=Fractals Fractals/test/runtests.jl
 ```

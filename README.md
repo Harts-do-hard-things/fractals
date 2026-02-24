@@ -1,4 +1,5 @@
 # Fractals (Julia)
+[![CI](https://github.com/Harts-do-hard-things/fractals/actions/workflows/ci.yml/badge.svg)](https://github.com/Harts-do-hard-things/fractals/actions/workflows/ci.yml)
 
 `Fractals` is a Julia package for generating and rasterizing 2D iterated function system (IFS) fractals.
 
@@ -30,7 +31,7 @@ julia --project=Fractals -e "using Fractals, FileIO; ifs = IFS(HEIGHWAY_DRAGON; 
 ### 3. Run tests
 
 ```powershell
-julia --project=Fractals Fractals/test/runtests.jl
+julia --startup-file=no --project=Fractals Fractals/test/runtests.jl
 ```
 
 ## Minimal Julia Example
@@ -40,7 +41,7 @@ using Fractals
 using FileIO
 
 result = render(EISENSTEIN;
-                method=:chaos,
+                method=Chaos,
                 npoints=250_000,
                 resolution=(1200, 1200),
                 outpath="media/eisenstein.png")
@@ -48,6 +49,7 @@ result = render(EISENSTEIN;
 @show result.outpath
 ```
 
+`render` accepts method as enum (`Chaos`, `Parallel`, `Deterministic`, `Inverse`), symbol, or lowercase string.
 For `method=:deterministic` and `method=:inverse`, use `iterations=...` to control iteration depth.
 For `.ifs` files with multiple definitions, select one with `ifs_index=...` or `ifs_name=...`.
 
