@@ -34,6 +34,18 @@ julia --project=Fractals -e "using Fractals, FileIO; ifs = IFS(HEIGHWAY_DRAGON; 
 julia --startup-file=no --project=Fractals Fractals/test/runtests.jl
 ```
 
+### 4. Run formatter check
+
+```powershell
+julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1\"); using JuliaFormatter; ok = format([\"Fractals/src\", \"Fractals/test\"]; overwrite=false, verbose=true); ok || error(\"Formatting check failed\")"
+```
+
+To apply formatting locally:
+
+```powershell
+julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1\"); using JuliaFormatter; format([\"Fractals/src\", \"Fractals/test\"]; overwrite=true, verbose=true)"
+```
+
 ## Minimal Julia Example
 
 ```julia
