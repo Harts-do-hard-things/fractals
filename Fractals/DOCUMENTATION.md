@@ -8,6 +8,11 @@ Core source files:
 - `Fractals/src/matrixfractal.jl`: main types and rendering functions
 - `Fractals/src/ifsparser.jl`: parser for text-based IFS definitions
 
+Docs-site sources:
+- `mkdocs.yml`
+- `docs/index.md`
+- `docs/quick-recipes.md`
+
 ## Installation
 
 From repository root:

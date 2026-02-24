@@ -84,6 +84,8 @@ iterate!(ifs)
 
 ## Documentation
 
-Detailed package documentation is in `Fractals/DOCUMENTATION.md`.
+Docs-site source is in `docs/` with MkDocs config in `mkdocs.yml`.
+Quick recipes page: `docs/quick-recipes.md`.
+Detailed package reference is in `Fractals/DOCUMENTATION.md`.
 
 Generated images should be saved under `media/`.
