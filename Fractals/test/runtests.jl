@@ -5,6 +5,7 @@ using Fractals
 using Random
 using FileIO
 using Colors
+using JSON3
 
 const SMALL_EQ = [
     0.5  0.0  0.0  0.5  0.0  0.0  0.6;
@@ -451,8 +452,29 @@ end
             @test isfile(joinpath("media", "batch", "02_cli_second.png"))
 
             bench_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --npoints 1000 --resolution 16x16 --inverse-iterations 1`, String)
-            @test occursin("Benchmark results", bench_out)
+            @test occursin("Benchmark suite", bench_out)
             @test occursin("iterate!", bench_out)
+
+            bench_json = joinpath("media", "bench_small.json")
+            bench_out_json = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --json $bench_json`, String)
+            @test occursin("Wrote benchmark JSON", bench_out_json)
+            @test isfile(bench_json)
+            json_txt = read(bench_json, String)
+            @test occursin("\"results\"", json_txt)
+            @test occursin("\"small\"", json_txt)
+
+            payload = JSON3.read(json_txt)
+            @test haskey(payload.results, :small)
+            small = payload.results.small
+            for k in (:iterate!, Symbol("iterate_parallel!"), :make_image, :rasterize_image_inversely)
+                @test haskey(small, k)
+                @test haskey(small[k], :min_s)
+                @test haskey(small[k], :mean_s)
+                @test haskey(small[k], :max_s)
+                @test small[k].min_s >= 0
+                @test small[k].mean_s >= 0
+                @test small[k].max_s >= 0
+            end
 
             bad = run(`$jcmd --startup-file=no --project=$project $script validate-ifs --input missing_file.ifs`; wait=false)
             wait(bad)

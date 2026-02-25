@@ -44,8 +44,8 @@
 - [x] `benchmark` (run standard perf suite)
 
 ### Performance Baselines
-- [ ] Create benchmark suite with standard workloads.
-- [ ] Track `iterate!`, `iterate_parallel!`, `make_image`, `rasterize_image_inversely`.
+- [x] Create benchmark suite with standard workloads.
+- [x] Track `iterate!`, `iterate_parallel!`, `make_image`, `rasterize_image_inversely`.
 - [ ] Document target throughput and memory envelopes.
 - [ ] Add regression threshold checks in CI (report warnings/failures).
 
