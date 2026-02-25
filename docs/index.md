@@ -12,6 +12,7 @@ Fractals.jl provides fast tools for rendering 2D iterated function system fracta
 
 - [Quick Recipes](quick-recipes.md)
 - [CLI](cli.md)
+- [Benchmarks](benchmarks.md)
 - [Troubleshooting](troubleshooting.md)
 - Package reference: `Fractals/DOCUMENTATION.md`
 

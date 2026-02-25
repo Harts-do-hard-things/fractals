@@ -96,6 +96,7 @@ iterate!(ifs)
 Docs-site source is in `docs/` with MkDocs config in `mkdocs.yml`.
 Quick recipes page: `docs/quick-recipes.md`.
 CLI usage page: `docs/cli.md`.
+Benchmark usage page: `docs/benchmarks.md`.
 Troubleshooting notes: `docs/troubleshooting.md`.
 Detailed package reference is in `Fractals/DOCUMENTATION.md`.
 

@@ -13,6 +13,7 @@ Docs-site sources:
 - `docs/index.md`
 - `docs/quick-recipes.md`
 - `docs/cli.md`
+- `docs/benchmarks.md`
 - `docs/troubleshooting.md`
 
 ## Installation

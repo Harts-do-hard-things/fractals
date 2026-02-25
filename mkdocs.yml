@@ -7,4 +7,5 @@ nav:
   - Home: index.md
   - Quick Recipes: quick-recipes.md
   - CLI: cli.md
+  - Benchmarks: benchmarks.md
   - Troubleshooting: troubleshooting.md

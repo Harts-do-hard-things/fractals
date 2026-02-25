@@ -3,6 +3,9 @@
 using Fractals
 using DelimitedFiles
 
+include("../bench/benchmark_suite.jl")
+using .BenchmarkSuite
+
 function _usage()
     println(
         """
@@ -25,6 +28,9 @@ Common options:
   --ifs-name <name>        Select IFS by name from an .ifs file
   --out <path>             Output image path
   --out-dir <path>         Output directory for batch-render
+  --profile <name>         Benchmark profile: small|medium|large|all
+  --repeats <int>          Benchmark repeat count
+  --json <path>            Benchmark JSON output path
 """
     )
 end
@@ -192,20 +198,14 @@ function _cmd_validate_ifs(opts::Dict{String,Any})
 end
 
 function _cmd_benchmark(opts::Dict{String,Any})
-    npoints = _opt_int(opts, "npoints", 50_000)
-    resolution = haskey(opts, "resolution") ? _parse_resolution(string(opts["resolution"])) : (256, 256)
-    inverse_iterations = _opt_int(opts, "inverse-iterations", 2)
-
-    ifs = IFS(HEIGHWAY_DRAGON; npoints=npoints)
-
-    t_iter = @elapsed iterate!(ifs; warmup=DEFAULT_WARMUP)
-    t_img = @elapsed make_image(ifs; resolution=resolution)
-    t_inv = @elapsed rasterize_image_inversely(ifs, inverse_iterations, ifs.limits; resolution=resolution)
-
-    println("Benchmark results")
-    println("  iterate!:                 $(round(t_iter, digits=4)) s")
-    println("  make_image:               $(round(t_img, digits=4)) s")
-    println("  rasterize_image_inversely: $(round(t_inv, digits=4)) s")
+    profile = _opt_str(opts, "profile", "small")
+    repeats = _opt_int(opts, "repeats", 3)
+    json_path = _opt_str(opts, "json", nothing)
+    payload = BenchmarkSuite.run_suite(; profile=profile, repeats=repeats, json_path=json_path)
+    BenchmarkSuite.print_report(payload)
+    if !isnothing(json_path)
+        println("Wrote benchmark JSON to $json_path")
+    end
     return 0
 end
 
