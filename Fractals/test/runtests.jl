@@ -54,6 +54,26 @@ end
     @test length(ifs2.points) == 5000
 end
 
+@testset "Seeded Iterate Reproducibility" begin
+    ifs1 = IFS(SMALL_EQ; npoints=1500)
+    ifs2 = IFS(SMALL_EQ; npoints=1500)
+    ifs3 = IFS(SMALL_EQ; npoints=1500)
+
+    Fractals._iterate_serial!(ifs1; warmup=10, seed=12345)
+    Fractals._iterate_serial!(ifs2; warmup=10, seed=12345)
+    Fractals._iterate_serial!(ifs3; warmup=10, seed=54321)
+
+    @test ifs1.points == ifs2.points
+    @test ifs1.points != ifs3.points
+
+    # Alias should preserve seeded behavior.
+    ifs4 = IFS(SMALL_EQ; npoints=1200)
+    ifs5 = IFS(SMALL_EQ; npoints=1200)
+    iterate!(ifs4; warmup=8, seed=99)
+    iterate_parallel!(ifs5; warmup=8, seed=99)
+    @test ifs4.points == ifs5.points
+end
+
 @testset "Deterministic Iterate" begin
     ifs = IFS(SMALL_EQ; npoints=50)
     n = 2
@@ -358,4 +378,38 @@ end
     end
     @test err isa ArgumentError
     @test occursin("out of range", sprint(showerror, err))
+end
+
+@testset "Interactive And Main Entrypoints" begin
+    sample = """
+    PromptIFS {
+      0.5 0.0 0.0 0.5 0.0 0.0 0.6
+     -0.5 0.0 0.0 -0.5 1.0 0.0 0.4
+    }
+    """
+
+    mktempdir() do d
+        old = pwd()
+        cd(d)
+        try
+            ifs_path = joinpath(d, "prompt.ifs")
+            write(ifs_path, sample)
+
+            input_lines = "\n\n\n\n\n\n"  # accept defaults for selection/method/size/path prompts
+            stdin_path = joinpath(d, "stdin.txt")
+            write(stdin_path, input_lines)
+            selected = open(stdin_path, "r") do io
+                redirect_stdin(io) do
+                    prompt_ifs_and_render(ifs_path; npoints=100, resolution=(32, 32), outpath="media/prompt_output.png")
+                end
+            end
+            @test selected isa IFS
+            @test isfile(joinpath("media", "prompt_output.png"))
+
+            Fractals.main(eq=SMALL_EQ, npoints=1000, outpath="media/main_output.png")
+            @test isfile(joinpath("media", "main_output.png"))
+        finally
+            cd(old)
+        end
+    end
 end

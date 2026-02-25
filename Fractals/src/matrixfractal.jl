@@ -9,6 +9,7 @@ using StatsBase
 using Images
 using FileIO
 using Colors
+using Random
 using Base.Threads
 using Printf
 
@@ -458,7 +459,9 @@ end
 # Chaos Game Iteration
 # --------------------------------
 
-function _iterate_serial!(ifs::IFS; warmup=DEFAULT_WARMUP)
+function _iterate_serial!(ifs::IFS;
+                          warmup=DEFAULT_WARMUP,
+                          seed::Union{Nothing,Integer}=nothing)
 
     maps = ifs.maps
     weights = ifs.weights
@@ -466,11 +469,18 @@ function _iterate_serial!(ifs::IFS; warmup=DEFAULT_WARMUP)
 
     x = SVector{2,Float64}(0.0, 0.0)
 
-    for _ in 1:warmup
-        x = maps[sample(map_indices, weights)](x)
+    if isnothing(seed)
+        for _ in 1:warmup
+            x = maps[sample(map_indices, weights)](x)
+        end
+        idxs = sample(map_indices, weights, length(ifs.points))
+    else
+        rng = MersenneTwister(seed)
+        for _ in 1:warmup
+            x = maps[sample(rng, map_indices, weights)](x)
+        end
+        idxs = sample(rng, map_indices, weights, length(ifs.points))
     end
-
-    idxs = sample(map_indices, weights, length(ifs.points))
 
     for i in eachindex(ifs.points)
         x = maps[idxs[i]](x)
@@ -480,45 +490,60 @@ function _iterate_serial!(ifs::IFS; warmup=DEFAULT_WARMUP)
     return ifs
 end
 
-function _iterate_parallel!(ifs::IFS; warmup=DEFAULT_WARMUP)
+function _iterate_parallel!(ifs::IFS;
+                            warmup=DEFAULT_WARMUP,
+                            seed::Union{Nothing,Integer}=nothing)
     maps = ifs.maps
-    alias = StatsBase.AliasTable(ifs.weights)  # fast discrete sampling
+    weights = ifs.weights
+    map_indices = Base.OneTo(length(maps))
     npts = length(ifs.points)
 
     @threads for tid in 1:nthreads()
-        # thread-local RNG (deterministic per thread if you want reproducibility)
-        # rng = MersenneTwister(seed + UInt(tid))
-
         # chunk for this thread
         lo = fld((tid-1)*npts, nthreads()) + 1
         hi = fld(tid*npts, nthreads())
         lo > hi && continue
 
+        rng = isnothing(seed) ? nothing : MersenneTwister(seed + tid - 1)
+
         # independent chain per thread
         x = SVector{2,Float64}(0.0, 0.0)
-        for _ in 1:warmup
-            x = maps[rand(alias)](x)
-        end
-
-        @inbounds for i in lo:hi
-            x = maps[rand(alias)](x)
-            ifs.points[i] = x
+        if isnothing(rng)
+            for _ in 1:warmup
+                x = maps[sample(map_indices, weights)](x)
+            end
+            @inbounds for i in lo:hi
+                x = maps[sample(map_indices, weights)](x)
+                ifs.points[i] = x
+            end
+        else
+            for _ in 1:warmup
+                x = maps[sample(rng, map_indices, weights)](x)
+            end
+            @inbounds for i in lo:hi
+                x = maps[sample(rng, map_indices, weights)](x)
+                ifs.points[i] = x
+            end
         end
     end
 
     return ifs
 end
 
-function iterate!(ifs::IFS; warmup=DEFAULT_WARMUP)
+function iterate!(ifs::IFS;
+                  warmup=DEFAULT_WARMUP,
+                  seed::Union{Nothing,Integer}=nothing)
     if nthreads() > 1
-        return _iterate_parallel!(ifs; warmup=warmup)
+        return _iterate_parallel!(ifs; warmup=warmup, seed=seed)
     end
-    return _iterate_serial!(ifs; warmup=warmup)
+    return _iterate_serial!(ifs; warmup=warmup, seed=seed)
 end
 
 # Backward-compatible entrypoint. Iteration is now automatically threaded via iterate!.
-function iterate_parallel!(ifs::IFS; warmup=DEFAULT_WARMUP)
-    return iterate!(ifs; warmup=warmup)
+function iterate_parallel!(ifs::IFS;
+                           warmup=DEFAULT_WARMUP,
+                           seed::Union{Nothing,Integer}=nothing)
+    return iterate!(ifs; warmup=warmup, seed=seed)
 end
 
 # --------------------------------
@@ -541,7 +566,7 @@ function deterministic_iterate(ifs::IFS, n::Integer)
     current_len = length(points)
 
     for _ in 1:n
-        base = result[1:current_len]
+        base = view(result, 1:current_len)
 
         @threads for i in 1:nmaps
             start = (i-1)*current_len + 1
@@ -644,14 +669,14 @@ end
 # -------------------------------------------------
 
 function inverse_iterate(
-    ifs::IFS,
+    inverse_maps::Vector{AffineMap{Float64}},
+    limits::Tuple{Tuple{Float64,Float64},
+                  Tuple{Float64,Float64}},
     n::Integer,
     p0::SVector{2,Float64},
     p1::SVector{2,Float64},
     p2::SVector{2,Float64}
 )::Float32
-
-    inverse_maps = inv.(ifs.maps)
 
     current = Vector{NTuple{3,SVector{2,Float64}}}()
     push!(current, (p0, p1, p2))
@@ -663,9 +688,9 @@ function inverse_iterate(
         empty!(next)
 
         for tri in current
-            if !isinspace(tri[1], ifs.limits) &&
-               !isinspace(tri[2], ifs.limits) &&
-               !isinspace(tri[3], ifs.limits)
+            if !isinspace(tri[1], limits) &&
+               !isinspace(tri[2], limits) &&
+               !isinspace(tri[3], limits)
                 continue
             end
 
@@ -692,6 +717,18 @@ function inverse_iterate(
     return 0.0f0
 end
 
+function inverse_iterate(
+    ifs::IFS,
+    n::Integer,
+    p0::SVector{2,Float64},
+    p1::SVector{2,Float64},
+    p2::SVector{2,Float64}
+)::Float32
+
+    inverse_maps = inv.(ifs.maps)
+    return inverse_iterate(inverse_maps, ifs.limits, n, p0, p1, p2)
+end
+
 
 # -------------------------------------------------
 # Inverse rasterization
@@ -707,6 +744,7 @@ function rasterize_image_inversely(
 
     pixel_map = make_pixelate_map(limits;
                                   resolution=resolution)
+    inverse_maps = inv.(ifs.maps)
 
     inv_pixel_map = inv(pixel_map)
 
@@ -719,45 +757,12 @@ function rasterize_image_inversely(
             p1 = inv_pixel_map(SVector{2,Float64}(x + 1, y))
             p2 = inv_pixel_map(SVector{2,Float64}(x,     y + 1))
 
-            img[y, x] = inverse_iterate(ifs, n, p0, p1, p2)
+            img[y, x] = inverse_iterate(inverse_maps, ifs.limits, n, p0, p1, p2)
         end
     end
 
     return img
 end
-
-
-# -------------------------------------------------
-# Pixelate map (fully concrete matrix construction)
-# -------------------------------------------------
-
-function make_pixelate_map(
-    limits::Tuple{Tuple{Float64,Float64},
-                  Tuple{Float64,Float64}};
-    resolution::Tuple{Int,Int}=RESOLUTION
-    )
-
-    rows, cols = resolution
-
-    (xlim, ylim) = limits
-    xmin, xmax = xlim
-    ymin, ymax = ylim
-
-    r = min(rows, cols)
-    sx = r / (xmax - xmin)
-    sy = r / (ymax - ymin)
-
-    A = SMatrix{2,2,Float64,4}((sx, 0.0,
-                                0.0, sy))
-
-    b = SVector{2,Float64}(
-        -xmin*sx + (cols-r)/2 + 0.5,
-        -ymin*sy + (rows-r)/2 + 0.5
-    )
-
-    return AffineMap(A, b)
-end
-
 
 # -------------------------------------------------
 # Compose iterate map with pixel map

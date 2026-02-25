@@ -65,6 +65,15 @@ result = render(EISENSTEIN;
 For `method=:deterministic` and `method=:inverse`, use `iterations=...` to control iteration depth.
 For `.ifs` files with multiple definitions, select one with `ifs_index=...` or `ifs_name=...`.
 
+Reproducible chaos iteration example:
+
+```julia
+using Fractals
+
+ifs = IFS(HEIGHWAY_DRAGON; npoints=100_000)
+iterate!(ifs; warmup=20, seed=1234)
+```
+
 ## IFS Parser Example
 
 ```julia

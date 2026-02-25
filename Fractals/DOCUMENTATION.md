@@ -135,11 +135,15 @@ Constructors:
 
 ## Iteration Methods
 
-### `iterate!(ifs; warmup=DEFAULT_WARMUP)`
+### `iterate!(ifs; warmup=DEFAULT_WARMUP, seed=nothing)`
 
 Chaos-game iteration. Automatically uses threads when available (`Threads.nthreads() > 1`), otherwise runs single-threaded. Updates `ifs.points` in place.
 
-### `iterate_parallel!(ifs; warmup=DEFAULT_WARMUP)`
+Reproducibility:
+- Set `seed` to an integer for deterministic sampling.
+- Deterministic output is guaranteed for a fixed thread count and fixed inputs.
+
+### `iterate_parallel!(ifs; warmup=DEFAULT_WARMUP, seed=nothing)`
 
 Compatibility alias for `iterate!`. Kept for older call sites.
 

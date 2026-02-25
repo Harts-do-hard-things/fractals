@@ -16,20 +16,20 @@
 ### API and UX
 - [x] Add high-level `render(...)` entrypoint that wraps parser + iteration + rasterization.
 - [x] Define method enum/options (`chaos`, `parallel`, `deterministic`, `inverse`) with consistent argument names.
-- [ ] Add argument validation and clear error messages for bad `eq` shapes and invalid map indices.
+- [x] Add argument validation and clear error messages for bad `eq` shapes and invalid map indices.
 
 ### Reproducibility
-- [ ] Add optional RNG seed support to `iterate!`.
-- [ ] Add optional RNG seed support to `iterate_parallel!`.
-- [ ] Add tests proving same-seed reproducibility for single-threaded iteration.
+- [x] Add optional RNG seed support to `iterate!`.
+- [x] Add optional RNG seed support to `iterate_parallel!`.
+- [x] Add tests proving same-seed reproducibility for single-threaded iteration.
 
 ### Quality and CI
-- [ ] Add CI workflow for Windows + Linux with Julia matrix.
-- [ ] Run tests with `--startup-file=no` in CI.
-- [ ] Add lint/format check (`JuliaFormatter`) gate.
+- [x] Add CI workflow for Windows + Linux with Julia matrix.
+- [x] Run tests with `--startup-file=no` in CI.
+- [x] Add lint/format check (`JuliaFormatter`) gate.
 
 ### Docs
-- [ ] Add "Quick Recipes" page: render from matrix, render from `.ifs`, deterministic preview.
+- [x] Add "Quick Recipes" page: render from matrix, render from `.ifs`, deterministic preview.
 - [ ] Add troubleshooting notes for startup-file and cache/permission issues.
 
 ---
@@ -80,7 +80,7 @@
 
 ### M1 (Day 30)
 - [ ] `render(...)` API merged and documented
-- [ ] Seeded reproducibility in place
+- [x] Seeded reproducibility in place
 - [ ] CI passing on supported platforms
 
 ### M2 (Day 60)
@@ -97,7 +97,7 @@
 
 ## Suggested Priority Order (Backlog Top 10)
 - [ ] `render(...)` high-level API
-- [ ] Seed support for iteration methods
+- [x] Seed support for iteration methods
 - [ ] CI matrix with startup-file-safe test invocation
 - [ ] CLI `render`
 - [ ] Parser validation + negative tests
