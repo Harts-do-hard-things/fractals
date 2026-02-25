@@ -413,3 +413,52 @@ end
         end
     end
 end
+
+@testset "CLI Commands" begin
+    script = abspath(joinpath(@__DIR__, "..", "bin", "fractals.jl"))
+    project = abspath(joinpath(@__DIR__, ".."))
+    jcmd = Base.julia_cmd()
+
+    sample = """
+    CLI_First {
+      0.5 0.0 0.0 0.5 0.0 0.0 0.6
+     -0.5 0.0 0.0 -0.5 1.0 0.0 0.4
+    }
+    CLI_Second {
+      0.5 -0.5 0.5 0.5 0.0 0.0
+     -0.5 -0.5 0.5 -0.5 1.0 0.0
+    }
+    """
+
+    mktempdir() do d
+        old = pwd()
+        cd(d)
+        try
+            ifs_path = joinpath(d, "cli.ifs")
+            write(ifs_path, sample)
+
+            validate_out = read(`$jcmd --startup-file=no --project=$project $script validate-ifs --input $ifs_path`, String)
+            @test occursin("Definitions: 2", validate_out)
+            @test occursin("CLI_First", validate_out)
+
+            render_out = read(`$jcmd --startup-file=no --project=$project $script render --input $ifs_path --ifs-index 2 --npoints 2000 --resolution 32x32 --out media/cli_single.png`, String)
+            @test occursin("Rendered", render_out)
+            @test isfile(joinpath("media", "cli_single.png"))
+
+            batch_out = read(`$jcmd --startup-file=no --project=$project $script batch-render --input $ifs_path --npoints 1000 --resolution 24x24 --out-dir media/batch`, String)
+            @test occursin("Batch rendering 2 definitions", batch_out)
+            @test isfile(joinpath("media", "batch", "01_cli_first.png"))
+            @test isfile(joinpath("media", "batch", "02_cli_second.png"))
+
+            bench_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --npoints 1000 --resolution 16x16 --inverse-iterations 1`, String)
+            @test occursin("Benchmark results", bench_out)
+            @test occursin("iterate!", bench_out)
+
+            bad = run(`$jcmd --startup-file=no --project=$project $script validate-ifs --input missing_file.ifs`; wait=false)
+            wait(bad)
+            @test !success(bad)
+        finally
+            cd(old)
+        end
+    end
+end

@@ -1,0 +1,47 @@
+# CLI
+
+Entry point:
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl <command> [options]
+```
+
+## Commands
+
+### `render`
+
+Render one fractal from an `.ifs` file or matrix text file.
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl render --input my_fractals.ifs --ifs-name "Heighway Dragon" --method Chaos --npoints 200000 --resolution 1024x1024 --out media/cli_render.png
+```
+
+### `batch-render`
+
+Render all definitions from one `.ifs` file.
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl batch-render --input my_fractals.ifs --npoints 100000 --resolution 800x800 --out-dir media/batch
+```
+
+### `validate-ifs`
+
+Parse and validate `.ifs` input without rendering.
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl validate-ifs --input my_fractals.ifs
+```
+
+### `benchmark`
+
+Run a standard benchmark set.
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --npoints 50000 --resolution 256x256 --inverse-iterations 2
+```
+
+## Notes
+
+- Methods accepted by CLI are the same as the API (`Chaos`, `Parallel`, `Deterministic`, `Inverse`, plus symbol/string forms).
+- For deterministic/inverse methods, use `--iterations`.
+- For multi-definition `.ifs`, select one using `--ifs-index` or `--ifs-name`.

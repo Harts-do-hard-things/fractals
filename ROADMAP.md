@@ -37,11 +37,11 @@
 ## 31-60 Days: Tooling and Performance
 
 ### CLI
-- [ ] Add `Fractals/bin/fractals.jl` CLI with commands:
-- [ ] `render` (single render from matrix/IFS file)
-- [ ] `batch-render` (all definitions in a file)
-- [ ] `validate-ifs` (syntax/shape checks without rendering)
-- [ ] `benchmark` (run standard perf suite)
+- [x] Add `Fractals/bin/fractals.jl` CLI with commands:
+- [x] `render` (single render from matrix/IFS file)
+- [x] `batch-render` (all definitions in a file)
+- [x] `validate-ifs` (syntax/shape checks without rendering)
+- [x] `benchmark` (run standard perf suite)
 
 ### Performance Baselines
 - [ ] Create benchmark suite with standard workloads.
@@ -99,7 +99,7 @@
 - [ ] `render(...)` high-level API
 - [x] Seed support for iteration methods
 - [ ] CI matrix with startup-file-safe test invocation
-- [ ] CLI `render`
+- [x] CLI `render`
 - [ ] Parser validation + negative tests
 - [ ] Benchmark harness
 - [ ] Snapshot image tests

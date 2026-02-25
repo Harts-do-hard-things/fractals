@@ -12,6 +12,7 @@ Docs-site sources:
 - `mkdocs.yml`
 - `docs/index.md`
 - `docs/quick-recipes.md`
+- `docs/cli.md`
 - `docs/troubleshooting.md`
 
 ## Installation
