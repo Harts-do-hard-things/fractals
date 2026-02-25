@@ -95,6 +95,7 @@ iterate!(ifs)
 
 Docs-site source is in `docs/` with MkDocs config in `mkdocs.yml`.
 Quick recipes page: `docs/quick-recipes.md`.
+Troubleshooting notes: `docs/troubleshooting.md`.
 Detailed package reference is in `Fractals/DOCUMENTATION.md`.
 
 Generated images should be saved under `media/`.

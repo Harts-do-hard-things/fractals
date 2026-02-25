@@ -30,7 +30,7 @@
 
 ### Docs
 - [x] Add "Quick Recipes" page: render from matrix, render from `.ifs`, deterministic preview.
-- [ ] Add troubleshooting notes for startup-file and cache/permission issues.
+- [x] Add troubleshooting notes for startup-file and cache/permission issues.
 
 ---
 
