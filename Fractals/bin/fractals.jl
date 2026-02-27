@@ -80,26 +80,32 @@ function _parse_resolution(raw::String)
 end
 
 function _read_eq_file(path::String)
-    lines = split(read(path, String), '\n')
-    rows = Vector{Vector{Float64}}()
+    flat_vals = Float64[]
     width = 0
-    for line in lines
+    nrows = 0
+    for line in eachline(path)
         s = strip(line)
         isempty(s) && continue
         startswith(s, "#") && continue
         toks = split(replace(s, "," => " "))
         vals = Float64[parse(Float64, t) for t in toks]
+        row_width = length(vals)
         if width == 0
-            width = length(vals)
-        elseif length(vals) != width
-            throw(ArgumentError("Inconsistent matrix row width in '$path': expected $width values, got $(length(vals))"))
+            width = row_width
+        elseif row_width != width
+            throw(ArgumentError("Inconsistent matrix row width in '$path': expected $width values, got $row_width"))
         end
-        push!(rows, vals)
+        append!(flat_vals, vals)
+        nrows += 1
     end
-    isempty(rows) && throw(ArgumentError("Matrix file '$path' is empty"))
-    eq = Matrix{Float64}(undef, length(rows), width)
-    for (r, row) in enumerate(rows)
-        eq[r, :] .= row
+    nrows == 0 && throw(ArgumentError("Matrix file '$path' is empty"))
+    eq = Matrix{Float64}(undef, nrows, width)
+    k = 1
+    @inbounds for r in 1:nrows
+        for c in 1:width
+            eq[r, c] = flat_vals[k]
+            k += 1
+        end
     end
     return eq
 end

@@ -1,6 +1,12 @@
+struct IFSDefinition
+    name::String
+    docs::String
+    eq::Matrix{Float64}
+end
+
 struct IFSToken
     kind::Symbol
-    value
+    value::Union{Nothing,String,Vector{Float64}}
     line::Int
 end
 
@@ -40,8 +46,9 @@ end
 
 function lex_ifs(input::AbstractString)
     tokens = IFSToken[]
+    sizehint!(tokens, max(16, div(length(input), 32)))
     inside = false
-    for (lineno, raw) in enumerate(split(input, '\n'))
+    for (lineno, raw) in enumerate(eachline(IOBuffer(input)))
         line = rstrip(raw)
         isempty(line) && continue
 
@@ -57,13 +64,13 @@ function lex_ifs(input::AbstractString)
                     throw(ArgumentError("Missing name before '{' at line $lineno"))
                 end
                 push!(tokens, IFSToken(:NAME, name, lineno))
-                push!(tokens, IFSToken(:LBRACE, "{", lineno))
+                push!(tokens, IFSToken(:LBRACE, nothing, lineno))
                 inside = true
 
                 if length(parts) > 1
                     rest = strip(parts[2])
                     if startswith(rest, ";")
-                        push!(tokens, IFSToken(:DOCS, strip(rest[2:end]), lineno))
+                        push!(tokens, IFSToken(:DOCS, String(strip(rest[2:end])), lineno))
                     end
                 end
             end
@@ -71,13 +78,13 @@ function lex_ifs(input::AbstractString)
         end
 
         if occursin('}', line)
-            push!(tokens, IFSToken(:RBRACE, "}", lineno))
+            push!(tokens, IFSToken(:RBRACE, nothing, lineno))
             inside = false
             continue
         end
 
         if startswith(strip(line), ";")
-            push!(tokens, IFSToken(:DOCS, strip(strip(line)[2:end]), lineno))
+            push!(tokens, IFSToken(:DOCS, String(strip(strip(line)[2:end])), lineno))
             continue
         end
 
@@ -99,8 +106,8 @@ function lex_ifs(input::AbstractString)
     return tokens
 end
 
-function _parse_ifs_tokens(tokens::Vector{IFSToken}; npoints::Integer=DEFAULT_SAMPLES)
-    defs = IFS[]
+function _parse_ifs_tokens(tokens::Vector{IFSToken})
+    defs = IFSDefinition[]
     i = 1
     n = length(tokens)
     while i <= n
@@ -108,7 +115,7 @@ function _parse_ifs_tokens(tokens::Vector{IFSToken}; npoints::Integer=DEFAULT_SA
         if tok.kind != :NAME
             throw(ArgumentError("Expected NAME at token $i (line $(tok.line))"))
         end
-        name = tok.value
+        name = tok.value::String
         i += 1
 
         if i > n || tokens[i].kind != :LBRACE
@@ -117,13 +124,23 @@ function _parse_ifs_tokens(tokens::Vector{IFSToken}; npoints::Integer=DEFAULT_SA
         i += 1
 
         docs_lines = String[]
-        rows = Vector{Vector{Float64}}()
+        flat_vals = Float64[]
+        width = 0
+        nrows = 0
         while i <= n && tokens[i].kind != :RBRACE
             t = tokens[i]
             if t.kind == :DOCS
-                push!(docs_lines, t.value)
+                push!(docs_lines, t.value::String)
             elseif t.kind == :ARRAY
-                push!(rows, t.value)
+                row = t.value::Vector{Float64}
+                row_width = length(row)
+                if width == 0
+                    width = row_width
+                elseif row_width != width
+                    throw(ArgumentError("Row $(nrows + 1) for '$name' has length $row_width; expected $width"))
+                end
+                append!(flat_vals, row)
+                nrows += 1
             else
                 throw(ArgumentError("Unexpected token $(t.kind) at line $(t.line)"))
             end
@@ -135,32 +152,50 @@ function _parse_ifs_tokens(tokens::Vector{IFSToken}; npoints::Integer=DEFAULT_SA
         end
         i += 1  # consume RBRACE
 
-        if isempty(rows)
+        if nrows == 0
             throw(ArgumentError("IFS '$name' has no numeric rows"))
         end
-        width = length(rows[1])
-        for (idx, r) in enumerate(rows)
-            if length(r) != width
-                throw(ArgumentError("Row $idx for '$name' has length $(length(r)); expected $width"))
+        eq = Matrix{Float64}(undef, nrows, width)
+        k = 1
+        @inbounds for r in 1:nrows
+            for c in 1:width
+                eq[r, c] = flat_vals[k]
+                k += 1
             end
-        end
-        eq = Matrix{Float64}(undef, length(rows), width)
-        for (r, row) in enumerate(rows)
-            eq[r, :] .= row
         end
 
         docs = join(docs_lines, "\n")
-        push!(defs, IFS(eq; npoints=npoints, name=name, docs=docs))
+        push!(defs, IFSDefinition(name, docs, eq))
     end
     return defs
 end
 
+function parse_ifs_definitions_string(input::AbstractString)
+    return _parse_ifs_tokens(lex_ifs(input))
+end
+
+function parse_ifs_definitions_file(path::AbstractString)
+    return parse_ifs_definitions_string(read(path, String))
+end
+
 function parse_ifs_string(input::AbstractString; npoints::Integer=DEFAULT_SAMPLES)
-    return _parse_ifs_tokens(lex_ifs(input); npoints=npoints)
+    defs = parse_ifs_definitions_string(input)
+    out = Vector{IFS}(undef, length(defs))
+    @inbounds for i in eachindex(defs)
+        d = defs[i]
+        out[i] = IFS(d.eq; npoints=npoints, name=d.name, docs=d.docs)
+    end
+    return out
 end
 
 function parse_ifs_file(path::AbstractString; npoints::Integer=DEFAULT_SAMPLES)
-    return parse_ifs_string(read(path, String); npoints=npoints)
+    defs = parse_ifs_definitions_file(path)
+    out = Vector{IFS}(undef, length(defs))
+    @inbounds for i in eachindex(defs)
+        d = defs[i]
+        out[i] = IFS(d.eq; npoints=npoints, name=d.name, docs=d.docs)
+    end
+    return out
 end
 
 function prompt_ifs_and_render(path::AbstractString;
