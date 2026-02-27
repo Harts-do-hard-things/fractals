@@ -454,6 +454,7 @@ end
             bench_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --npoints 1000 --resolution 16x16 --inverse-iterations 1`, String)
             @test occursin("Benchmark suite", bench_out)
             @test occursin("iterate!", bench_out)
+            @test occursin("alloc_mean=", bench_out)
 
             bench_json = joinpath("media", "bench_small.json")
             bench_out_json = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --json $bench_json`, String)
@@ -471,10 +472,31 @@ end
                 @test haskey(small[k], :min_s)
                 @test haskey(small[k], :mean_s)
                 @test haskey(small[k], :max_s)
+                @test haskey(small[k], :mean_alloc_bytes)
                 @test small[k].min_s >= 0
                 @test small[k].mean_s >= 0
                 @test small[k].max_s >= 0
+                @test small[k].mean_alloc_bytes >= 0
             end
+
+            targets_path = abspath(joinpath(project, "bench", "perf_targets.toml"))
+            bench_targets_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $targets_path`, String)
+            @test occursin("Target comparison", bench_targets_out)
+            @test occursin("targets:", bench_targets_out)
+
+            strict_targets = joinpath(d, "strict_fail.toml")
+            write(strict_targets, """
+[thresholds]
+warn_ratio = 1.0
+fail_ratio = 1.0
+
+[targets.small."iterate!"]
+mean_s = 1.0e-12
+mean_alloc_bytes = 1
+""")
+            strict_bad = run(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $strict_targets --strict`; wait=false)
+            wait(strict_bad)
+            @test !success(strict_bad)
 
             bad = run(`$jcmd --startup-file=no --project=$project $script validate-ifs --input missing_file.ifs`; wait=false)
             wait(bad)

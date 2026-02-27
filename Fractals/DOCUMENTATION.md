@@ -231,3 +231,57 @@ Run from repository root:
 ```powershell
 julia --startup-file=no --project=Fractals Fractals/test/runtests.jl
 ```
+
+## Performance Targets
+
+Target latency and allocation envelopes are versioned in:
+- `Fractals/bench/perf_targets.toml`
+
+Profiles:
+- `small`: `npoints=20_000`, `resolution=(128,128)`, `inverse_iterations=2`
+- `medium`: `npoints=100_000`, `resolution=(256,256)`, `inverse_iterations=3`
+- `large`: `npoints=300_000`, `resolution=(512,512)`, `inverse_iterations=4`
+
+Tracked operations:
+- `iterate!`
+- `iterate_parallel!`
+- `make_image`
+- `rasterize_image_inversely`
+
+Per operation, benchmarks track:
+- `min_s`, `mean_s`, `max_s`
+- `min_alloc_bytes`, `mean_alloc_bytes`, `max_alloc_bytes`
+
+Comparison thresholds are set in `Fractals/bench/perf_targets.toml`:
+- `warn_ratio = 1.15`
+- `fail_ratio = 1.30`
+
+Interpretation:
+- `pass`: measured/target ratio `<= warn_ratio`
+- `warn`: ratio `> warn_ratio` and `<= fail_ratio`
+- `fail`: ratio `> fail_ratio`
+
+Run benchmark with target comparison:
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile all --repeats 3 --targets Fractals/bench/perf_targets.toml
+```
+
+Strict mode (non-zero exit when status is `fail`):
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile all --repeats 3 --targets Fractals/bench/perf_targets.toml --strict
+```
+
+## Throughput And Memory Envelopes
+
+Practical interpretation of target envelopes:
+- Throughput for chaos iteration can be estimated as `npoints / mean_s` from `iterate!` and `iterate_parallel!`.
+- Raster throughput can be estimated as `(height * width) / mean_s` for `make_image` and inverse rasterization.
+- Memory envelope is bounded by `mean_alloc_bytes` with guardrails via warn/fail thresholds.
+
+Always compare runs with matching:
+- Julia version
+- thread count
+- OS/CPU class
+- profile and repeat count

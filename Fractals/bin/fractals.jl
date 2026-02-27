@@ -31,6 +31,8 @@ Common options:
   --profile <name>         Benchmark profile: small|medium|large|all
   --repeats <int>          Benchmark repeat count
   --json <path>            Benchmark JSON output path
+  --targets <path>         Benchmark target envelope TOML file
+  --strict                 Fail benchmark command when targets status is fail
 """
     )
 end
@@ -207,7 +209,9 @@ function _cmd_benchmark(opts::Dict{String,Any})
     profile = _opt_str(opts, "profile", "small")
     repeats = _opt_int(opts, "repeats", 3)
     json_path = _opt_str(opts, "json", nothing)
-    payload = BenchmarkSuite.run_suite(; profile=profile, repeats=repeats, json_path=json_path)
+    targets_path = _opt_str(opts, "targets", nothing)
+    strict = get(opts, "strict", false) == true
+    payload = BenchmarkSuite.run_suite(; profile=profile, repeats=repeats, json_path=json_path, targets_path=targets_path, strict=strict)
     BenchmarkSuite.print_report(payload)
     if !isnothing(json_path)
         println("Wrote benchmark JSON to $json_path")

@@ -99,5 +99,6 @@ CLI usage page: `docs/cli.md`.
 Benchmark usage page: `docs/benchmarks.md`.
 Troubleshooting notes: `docs/troubleshooting.md`.
 Detailed package reference is in `Fractals/DOCUMENTATION.md`.
+Benchmark target envelopes are versioned in `Fractals/bench/perf_targets.toml` (latency + allocation thresholds).
 
 Generated images should be saved under `media/`.

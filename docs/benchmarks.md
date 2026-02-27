@@ -14,6 +14,18 @@ Write JSON output:
 julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile small --repeats 1 --json media/bench_small.json
 ```
 
+Compare against target envelopes:
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile all --repeats 3 --targets Fractals/bench/perf_targets.toml
+```
+
+Strict mode (fails command on target status `fail`):
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile all --repeats 3 --targets Fractals/bench/perf_targets.toml --strict
+```
+
 ## Profiles
 
 - `small`: fast smoke benchmark
@@ -23,11 +35,15 @@ julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --
 
 ## Metrics
 
-Each profile reports min/mean/max seconds for:
+Each profile reports min/mean/max for:
 - `iterate!`
 - `iterate_parallel!`
 - `make_image`
 - `rasterize_image_inversely`
+
+Both latency and memory allocation metrics are recorded:
+- `min_s`, `mean_s`, `max_s`
+- `min_alloc_bytes`, `mean_alloc_bytes`, `max_alloc_bytes`
 
 `iterate_parallel!` is tracked separately for historical/performance monitoring, even though it currently aliases auto-threaded `iterate!`.
 
@@ -36,3 +52,4 @@ Each profile reports min/mean/max seconds for:
 - Compare results only under similar machine/load/thread conditions.
 - Use a fixed profile and repeats for trend comparisons.
 - Thread count is included in benchmark output metadata.
+- CPU/OS metadata is included in benchmark output metadata.
