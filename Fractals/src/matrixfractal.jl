@@ -22,6 +22,14 @@ const DEFAULT_WARMUP = 50
 const DEFAULT_SAMPLES = 1_000_000
 const DEFAULT_MEDIA_DIR = "media"
 const DEFAULT_BASE_LIMITS = ((0.0, 1.0), (0.0, 1.0))
+const _BASE_L_SEGMENTS = [
+    (SVector{2,Float64}(0.0, 0.0), SVector{2,Float64}(1.0, 0.0)),
+    (SVector{2,Float64}(1.0, 0.0), SVector{2,Float64}(1.0, 1.0)),
+    (SVector{2,Float64}(1.0, 1.0), SVector{2,Float64}(0.0, 1.0)),
+    (SVector{2,Float64}(0.0, 1.0), SVector{2,Float64}(0.0, 0.0)),
+    (SVector{2,Float64}(1/6, 1/6), SVector{2,Float64}(1/6, 5/6)),
+    (SVector{2,Float64}(1/6, 5/6), SVector{2,Float64}(5/9, 5/6)),
+]
 
 @enum RenderMethod begin
     Chaos
@@ -79,15 +87,7 @@ end
 _base_limits_image() = DEFAULT_BASE_LIMITS
 
 function _base_l_image()
-    # Normalized to viewBox [0, 1] x [0, 1]
-    return [
-        (SVector{2,Float64}(0.0, 0.0), SVector{2,Float64}(1.0, 0.0)),
-        (SVector{2,Float64}(1.0, 0.0), SVector{2,Float64}(1.0, 1.0)),
-        (SVector{2,Float64}(1.0, 1.0), SVector{2,Float64}(0.0, 1.0)),
-        (SVector{2,Float64}(0.0, 1.0), SVector{2,Float64}(0.0, 0.0)),
-        (SVector{2,Float64}(1/6, 1/6), SVector{2,Float64}(1/6, 5/6)),
-        (SVector{2,Float64}(1/6, 5/6), SVector{2,Float64}(5/9, 5/6)),
-    ]
+    return _BASE_L_SEGMENTS
 end
 
 function _map_colors(n::Integer)
@@ -630,7 +630,10 @@ function make_image(ifs::IFS; resolution::Tuple{Int,Int}=RESOLUTION)
     end
     maxv = maximum(img)
     if maxv > 0f0
-        img .= log.(1 .+ img) ./ log(1 .+ maxv)
+        logmax = log1p(maxv)
+        @inbounds for i in eachindex(img)
+            img[i] = log1p(img[i]) / logmax
+        end
     end
     return img
 end
@@ -717,6 +720,50 @@ function inverse_iterate(
     return 0.0f0
 end
 
+function _inverse_iterate!(
+    current::Vector{NTuple{3,SVector{2,Float64}}},
+    next::Vector{NTuple{3,SVector{2,Float64}}},
+    inverse_maps::Vector{AffineMap{Float64}},
+    limits::Tuple{Tuple{Float64,Float64},
+                  Tuple{Float64,Float64}},
+    n::Integer,
+    p0::SVector{2,Float64},
+    p1::SVector{2,Float64},
+    p2::SVector{2,Float64}
+)::Float32
+    empty!(current)
+    empty!(next)
+    push!(current, (p0, p1, p2))
+
+    for j in 1:n
+        empty!(next)
+
+        for tri in current
+            if !isinspace(tri[1], limits) &&
+               !isinspace(tri[2], limits) &&
+               !isinspace(tri[3], limits)
+                continue
+            end
+
+            for imap in inverse_maps
+                push!(next, (imap(tri[1]), imap(tri[2]), imap(tri[3])))
+            end
+        end
+
+        if isempty(next)
+            return Float32(j / n * 0.5)
+        end
+
+        if any(points_contain_zero, next)
+            return 1.0f0
+        end
+
+        current, next = next, current
+    end
+
+    return 0.0f0
+end
+
 function inverse_iterate(
     ifs::IFS,
     n::Integer,
@@ -750,14 +797,20 @@ function rasterize_image_inversely(
 
     rows, cols = resolution
     img = zeros(Float32, rows, cols)
+    nthreads_local = nthreads()
+    current_buffers = [Vector{NTuple{3,SVector{2,Float64}}}() for _ in 1:nthreads_local]
+    next_buffers = [Vector{NTuple{3,SVector{2,Float64}}}() for _ in 1:nthreads_local]
 
     @threads for x in 1:cols
+        tid = threadid()
+        current = current_buffers[tid]
+        next = next_buffers[tid]
         @inbounds for y in 1:rows
             p0 = inv_pixel_map(SVector{2,Float64}(x,     y))
             p1 = inv_pixel_map(SVector{2,Float64}(x + 1, y))
             p2 = inv_pixel_map(SVector{2,Float64}(x,     y + 1))
 
-            img[y, x] = inverse_iterate(inverse_maps, ifs.limits, n, p0, p1, p2)
+            img[y, x] = _inverse_iterate!(current, next, inverse_maps, ifs.limits, n, p0, p1, p2)
         end
     end
 
@@ -789,7 +842,6 @@ function iterate_image(ifs::IFS, img::AbstractMatrix{<:Real})
     buffers = [zeros(Float32, rows, cols) for _ in 1:nthreads_local]
 
     pmap = make_pixelate_map(ifs.limits; resolution=(rows, cols))
-    invpmap = inv(pmap)  # compute once
 
     for nmap in ifs.maps
         cmap = _make_pixeliterate_map(nmap, pmap)  # use it!
@@ -916,7 +968,7 @@ function _resolve_render_input(
     return IFS(input; npoints=resolved_npoints)
 end
 
-function _ifs_choices_text(defs::Vector{IFS})
+function _ifs_choices_text(defs::AbstractVector)
     lines = ["Available IFS definitions:"]
     for (i, d) in enumerate(defs)
         push!(lines, "  [$i] $(d.name)")
@@ -925,7 +977,7 @@ function _ifs_choices_text(defs::Vector{IFS})
 end
 
 function _select_ifs_definition(
-    defs::Vector{IFS};
+    defs::AbstractVector;
     ifs_index::Union{Nothing,Integer},
     ifs_name::Union{Nothing,AbstractString}
 )
@@ -977,11 +1029,12 @@ function _resolve_render_input(
     ifs_name::Union{Nothing,AbstractString}
 )
     resolved_npoints = isnothing(npoints) ? DEFAULT_SAMPLES : npoints
-    defs = isfile(input) ? parse_ifs_file(input; npoints=resolved_npoints) :
-                           parse_ifs_string(input; npoints=resolved_npoints)
+    defs = isfile(input) ? parse_ifs_definitions_file(input) :
+                           parse_ifs_definitions_string(input)
 
     isempty(defs) && throw(ArgumentError("No IFS definitions found in input"))
-    return _select_ifs_definition(defs; ifs_index=ifs_index, ifs_name=ifs_name)
+    selected = _select_ifs_definition(defs; ifs_index=ifs_index, ifs_name=ifs_name)
+    return IFS(selected.eq; npoints=resolved_npoints, name=selected.name, docs=selected.docs)
 end
 
 function _resolve_render_iterations(
