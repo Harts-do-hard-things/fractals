@@ -51,7 +51,7 @@
 
 ### Test Expansion
 - [ ] Add parser negative tests (malformed braces, mixed row widths, bad floats).
-- [ ] Add property tests for affine inverse round-trip.
+- [x] Add property tests for affine inverse round-trip.
 - [ ] Add low-res golden-image snapshot tests for known fractals.
 
 ---

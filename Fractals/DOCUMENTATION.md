@@ -238,6 +238,10 @@ Run from repository root:
 julia --startup-file=no --project=Fractals Fractals/test/runtests.jl
 ```
 
+Test suite includes seeded property tests for affine inverse round-trip:
+- Random invertible affine maps are generated with a fixed seed.
+- Both `inv(m)(m(x)) ≈ x` and `m(inv(m)(x)) ≈ x` are asserted over randomized points.
+
 ## Performance Targets
 
 Target latency and allocation envelopes are versioned in:

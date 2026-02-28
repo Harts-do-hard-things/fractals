@@ -103,7 +103,7 @@ jobs:
 
       - name: Evaluate regression status (warn/fail)
         shell: bash
-        run: >
+        run: |
           julia --startup-file=no --project=Fractals -e '
           using JSON3;
           payload = JSON3.read(read("benchmarks/bench_ci.json", String));
@@ -119,7 +119,7 @@ jobs:
                       println("::error title=Benchmark regression failure::profile=$(pname) op=$(opname) status=fail");
                   end
               end
-          end
+          end;
           if status == "fail"
               error("Benchmark regression status is fail");
           end

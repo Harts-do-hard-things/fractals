@@ -24,6 +24,33 @@ const SMALL_EQ = [
     @test mi(y) ≈ x
 end
 
+@testset "Affine Inverse Property Tests" begin
+    rng = MersenneTwister(20260228)
+    n_maps = 180
+    n_points_per_map = 4
+    det_eps = 1e-3
+
+    for _ in 1:n_maps
+        A = zeros(Float64, 2, 2)
+        # Resample until we get a comfortably invertible matrix.
+        while true
+            A .= randn(rng, 2, 2)
+            abs(det(A)) > det_eps && break
+        end
+        b = randn(rng, 2)
+        m = AffineMap(A, b)
+        mi = inv(m)
+
+        for _ in 1:n_points_per_map
+            x = SVector{2,Float64}(randn(rng), randn(rng))
+            y = m(x)
+            z = mi(x)
+            @test mi(y) ≈ x atol=1e-10 rtol=1e-10
+            @test m(z) ≈ x atol=1e-10 rtol=1e-10
+        end
+    end
+end
+
 @testset "Build Maps And Weights" begin
     maps, weights = Fractals._build_maps_and_weights(SMALL_EQ)
     @test length(maps) == size(SMALL_EQ, 1)
