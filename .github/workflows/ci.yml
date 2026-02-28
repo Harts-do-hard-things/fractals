@@ -99,14 +99,14 @@ jobs:
           --profile small
           --repeats 3
           --targets Fractals/bench/perf_targets.toml
-          --json media/bench_ci.json
+          --json benchmarks/bench_ci.json
 
       - name: Evaluate regression status (warn/fail)
         shell: bash
         run: >
           julia --startup-file=no --project=Fractals -e '
           using JSON3;
-          payload = JSON3.read(read("media/bench_ci.json", String));
+          payload = JSON3.read(read("benchmarks/bench_ci.json", String));
           cmp = payload[:comparison];
           status = String(cmp[:status]);
           println("Benchmark comparison status: ", status);
@@ -130,4 +130,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bench-ci-json
-          path: media/bench_ci.json
+          path: benchmarks/bench_ci.json

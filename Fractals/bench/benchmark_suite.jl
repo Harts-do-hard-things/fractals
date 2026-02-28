@@ -225,6 +225,7 @@ function run_suite(; profile::String="small",
     end
 
     if !isnothing(json_path)
+        mkpath(dirname(json_path))
         write(json_path, JSON3.write(payload))
     end
 

@@ -11,7 +11,7 @@ julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --
 Write JSON output:
 
 ```powershell
-julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile small --repeats 1 --json media/bench_small.json
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile small --repeats 1 --json benchmarks/bench_small.json
 ```
 
 Compare against target envelopes:
@@ -59,7 +59,7 @@ Both latency and memory allocation metrics are recorded:
 CI runs benchmark comparison using:
 
 ```powershell
-julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile small --repeats 3 --targets Fractals/bench/perf_targets.toml --json media/bench_ci.json
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile small --repeats 3 --targets Fractals/bench/perf_targets.toml --json benchmarks/bench_ci.json
 ```
 
 Behavior:

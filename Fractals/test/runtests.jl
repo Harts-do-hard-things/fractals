@@ -519,7 +519,7 @@ end
             @test occursin("iterate!", bench_out)
             @test occursin("alloc_mean=", bench_out)
 
-            bench_json = joinpath("media", "bench_small.json")
+            bench_json = joinpath("benchmarks", "bench_small.json")
             bench_out_json = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --json $bench_json`, String)
             @test occursin("Wrote benchmark JSON", bench_out_json)
             @test isfile(bench_json)
@@ -546,7 +546,7 @@ end
             bench_targets_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $targets_path`, String)
             @test occursin("Target comparison", bench_targets_out)
             @test occursin("targets:", bench_targets_out)
-            bench_targets_json = joinpath("media", "bench_targets.json")
+            bench_targets_json = joinpath("benchmarks", "bench_targets.json")
             read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $targets_path --json $bench_targets_json`, String)
             cmp_payload = JSON3.read(read(bench_targets_json, String))
             @test haskey(cmp_payload, :comparison)
@@ -563,7 +563,7 @@ fail_ratio = 1.0e12
 mean_s = 1.0e12
 mean_alloc_bytes = 1.0e12
 """)
-            warn_json = joinpath("media", "bench_warn.json")
+            warn_json = joinpath("benchmarks", "bench_warn.json")
             read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $warn_targets --json $warn_json`, String)
             warn_payload = JSON3.read(read(warn_json, String))
             @test String(warn_payload.comparison.status) == "warn"
@@ -582,7 +582,7 @@ mean_alloc_bytes = 1
             wait(strict_bad)
             @test !success(strict_bad)
 
-            fail_json = joinpath("media", "bench_fail.json")
+            fail_json = joinpath("benchmarks", "bench_fail.json")
             read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $strict_targets --json $fail_json`, String)
             fail_payload = JSON3.read(read(fail_json, String))
             @test String(fail_payload.comparison.status) == "fail"
