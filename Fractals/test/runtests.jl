@@ -483,6 +483,27 @@ end
             bench_targets_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $targets_path`, String)
             @test occursin("Target comparison", bench_targets_out)
             @test occursin("targets:", bench_targets_out)
+            bench_targets_json = joinpath("media", "bench_targets.json")
+            read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $targets_path --json $bench_targets_json`, String)
+            cmp_payload = JSON3.read(read(bench_targets_json, String))
+            @test haskey(cmp_payload, :comparison)
+            @test haskey(cmp_payload.comparison, :status)
+            @test String(cmp_payload.comparison.status) in ("pass", "warn", "fail")
+
+            warn_targets = joinpath(d, "warn_only.toml")
+            write(warn_targets, """
+[thresholds]
+warn_ratio = 0.0
+fail_ratio = 1.0e12
+
+[targets.small."iterate!"]
+mean_s = 1.0e12
+mean_alloc_bytes = 1.0e12
+""")
+            warn_json = joinpath("media", "bench_warn.json")
+            read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $warn_targets --json $warn_json`, String)
+            warn_payload = JSON3.read(read(warn_json, String))
+            @test String(warn_payload.comparison.status) == "warn"
 
             strict_targets = joinpath(d, "strict_fail.toml")
             write(strict_targets, """
@@ -497,6 +518,11 @@ mean_alloc_bytes = 1
             strict_bad = run(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $strict_targets --strict`; wait=false)
             wait(strict_bad)
             @test !success(strict_bad)
+
+            fail_json = joinpath("media", "bench_fail.json")
+            read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $strict_targets --json $fail_json`, String)
+            fail_payload = JSON3.read(read(fail_json, String))
+            @test String(fail_payload.comparison.status) == "fail"
 
             bad = run(`$jcmd --startup-file=no --project=$project $script validate-ifs --input missing_file.ifs`; wait=false)
             wait(bad)

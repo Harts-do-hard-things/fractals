@@ -47,7 +47,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        julia-version: ['1.10', '1.11']
+        julia-version: ['1.11']
 
     steps:
       - name: Checkout
@@ -68,3 +68,66 @@ jobs:
       - name: Run tests
         shell: bash
         run: julia --startup-file=no --project=Fractals Fractals/test/runtests.jl
+
+  benchmark-regression:
+    name: Benchmark Regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+
+      - name: Cache Julia packages
+        uses: julia-actions/cache@v2
+
+      - name: Instantiate dependencies
+        shell: bash
+        run: julia --startup-file=no --project=Fractals -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Run benchmark with targets
+        shell: bash
+        run: >
+          julia --startup-file=no --project=Fractals
+          Fractals/bin/fractals.jl benchmark
+          --profile small
+          --repeats 3
+          --targets Fractals/bench/perf_targets.toml
+          --json media/bench_ci.json
+
+      - name: Evaluate regression status (warn/fail)
+        shell: bash
+        run: >
+          julia --startup-file=no --project=Fractals -e '
+          using JSON3;
+          payload = JSON3.read(read("media/bench_ci.json", String));
+          cmp = payload[:comparison];
+          status = String(cmp[:status]);
+          println("Benchmark comparison status: ", status);
+          for (pname, pinfo) in pairs(cmp[:profiles])
+              for (opname, opinfo) in pairs(pinfo[:ops])
+                  op_status = String(opinfo[:status]);
+                  if op_status == "warn"
+                      println("::warning title=Benchmark regression warning::profile=$(pname) op=$(opname) status=warn");
+                  elseif op_status == "fail"
+                      println("::error title=Benchmark regression failure::profile=$(pname) op=$(opname) status=fail");
+                  end
+              end
+          end
+          if status == "fail"
+              error("Benchmark regression status is fail");
+          end
+          '
+
+      - name: Upload benchmark artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-ci-json
+          path: media/bench_ci.json

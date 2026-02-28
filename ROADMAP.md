@@ -47,7 +47,7 @@
 - [x] Create benchmark suite with standard workloads.
 - [x] Track `iterate!`, `iterate_parallel!`, `make_image`, `rasterize_image_inversely`.
 - [x] Document target throughput and memory envelopes.
-- [ ] Add regression threshold checks in CI (report warnings/failures).
+- [x] Add regression threshold checks in CI (report warnings/failures).
 
 ### Test Expansion
 - [ ] Add parser negative tests (malformed braces, mixed row widths, bad floats).

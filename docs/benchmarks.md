@@ -53,3 +53,15 @@ Both latency and memory allocation metrics are recorded:
 - Use a fixed profile and repeats for trend comparisons.
 - Thread count is included in benchmark output metadata.
 - CPU/OS metadata is included in benchmark output metadata.
+
+## CI Regression Gate
+
+CI runs benchmark comparison using:
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile small --repeats 3 --targets Fractals/bench/perf_targets.toml --json media/bench_ci.json
+```
+
+Behavior:
+- `warn`: CI job stays green and emits workflow warnings.
+- `fail`: CI job fails.

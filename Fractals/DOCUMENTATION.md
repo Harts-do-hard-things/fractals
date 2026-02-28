@@ -273,6 +273,11 @@ Strict mode (non-zero exit when status is `fail`):
 julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile all --repeats 3 --targets Fractals/bench/perf_targets.toml --strict
 ```
 
+CI policy:
+- Benchmark gate runs with targets enabled and parses `comparison.status` from JSON output.
+- `warn` statuses are reported as workflow warnings.
+- `fail` status fails the CI benchmark job.
+
 ## Throughput And Memory Envelopes
 
 Practical interpretation of target envelopes:
