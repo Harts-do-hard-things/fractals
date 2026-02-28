@@ -155,6 +155,69 @@ end
     end
 end
 
+@testset "IFS Parser Negative Cases" begin
+    # Missing closing brace.
+    missing_close = """
+    BrokenIFS {
+      0.5 0.0 0.0 0.5 0.0 0.0
+    """
+    @test_throws EOFError parse_ifs_string(missing_close; npoints=1)
+
+    # Unexpected closing brace.
+    stray_close = """
+    }
+    ValidName {
+      0.5 0.0 0.0 0.5 0.0 0.0
+    }
+    """
+    err = try
+        parse_ifs_string(stray_close; npoints=1)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("Unexpected '}' outside IFS block", sprint(showerror, err))
+
+    # Mixed row widths in same block.
+    mixed_width = """
+    MixedWidth {
+      0.5 0.0 0.0 0.5 0.0 0.0
+      0.5 0.0 0.0 0.5 0.5 0.0 0.5
+    }
+    """
+    err = try
+        parse_ifs_string(mixed_width; npoints=1)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("has length", sprint(showerror, err))
+
+    # Bad float token.
+    bad_float = """
+    BadFloat {
+      0.5 0.0 abc 0.5 0.0 0.0
+    }
+    """
+    err = try
+        parse_ifs_string(bad_float; npoints=1)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("Invalid numeric token 'abc'", sprint(showerror, err))
+
+    # File parse should surface the same failures.
+    mktemp() do path, io
+        write(io, mixed_width)
+        close(io)
+        @test_throws ArgumentError parse_ifs_file(path; npoints=1)
+    end
+end
+
 @testset "Media Output Path" begin
     p1 = Fractals._normalize_media_outpath("output.png")
     @test p1 == joinpath("media", "output.png")

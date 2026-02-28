@@ -57,6 +57,9 @@ function lex_ifs(input::AbstractString)
         end
 
         if !inside
+            if occursin('}', line)
+                throw(ArgumentError("Unexpected '}' outside IFS block at line $lineno"))
+            end
             if occursin('{', line)
                 parts = split(line, '{', limit=2)
                 name = replace(strip(parts[1]), "'" => "")
@@ -94,13 +97,17 @@ function lex_ifs(input::AbstractString)
         nums = split(data)
         vals = Float64[]
         for n in nums
-            push!(vals, parse(Float64, n))
+            try
+                push!(vals, parse(Float64, n))
+            catch
+                throw(ArgumentError("Invalid numeric token '$n' at line $lineno"))
+            end
         end
         push!(tokens, IFSToken(:ARRAY, vals, lineno))
     end
 
     if inside
-        throw(EOFError("EOF while scanning IFS block: missing '}'"))
+        throw(EOFError())
     end
 
     return tokens
@@ -148,7 +155,7 @@ function _parse_ifs_tokens(tokens::Vector{IFSToken})
         end
 
         if i > n
-            throw(EOFError("EOF while scanning IFS block for '$name': missing '}'"))
+            throw(EOFError())
         end
         i += 1  # consume RBRACE
 

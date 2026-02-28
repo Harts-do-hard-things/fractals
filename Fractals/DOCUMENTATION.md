@@ -201,6 +201,12 @@ Rules:
 - Accepted row widths are 6 (no explicit probability) or 7 (with probability)
 - Lines containing `(3D)` are ignored
 
+Guaranteed parser failures:
+- Missing closing brace throws `EOFError`.
+- Unexpected `}` outside a block throws `ArgumentError` with line number.
+- Mixed row widths in one block throw `ArgumentError`.
+- Invalid numeric tokens throw `ArgumentError` with token and line number.
+
 ## Validation And Errors
 
 Input validation is enforced for matrix-based IFS construction (`IFS(eq; ...)`):
