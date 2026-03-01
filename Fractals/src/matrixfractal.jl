@@ -92,9 +92,26 @@ end
 
 function _map_colors(n::Integer)
     n <= 0 && return RGB{Float32}[]
-    # Generate visually distinct, deterministic colors and avoid white/black background tones.
-    palette = distinguishable_colors(n, [RGB(1, 1, 1), RGB(0, 0, 0)])
-    return [RGB{Float32}(Float32(c.r), Float32(c.g), Float32(c.b)) for c in palette]
+    # Generate visually distinct, deterministic colors and exclude near-white/near-black colors.
+    candidates = distinguishable_colors(max(3n, n + 8), [RGB(1, 1, 1), RGB(0, 0, 0)])
+    palette = RGB{Float32}[]
+    sizehint!(palette, n)
+    for c in candidates
+        # Relative luminance in sRGB space; keep mid-range tones only.
+        lum = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+        if 0.15 < lum < 0.85
+            push!(palette, RGB{Float32}(Float32(c.r), Float32(c.g), Float32(c.b)))
+            length(palette) == n && break
+        end
+    end
+    # Fallback to initial candidates if filtering was too aggressive for small n.
+    if length(palette) < n
+        for c in candidates
+            push!(palette, RGB{Float32}(Float32(c.r), Float32(c.g), Float32(c.b)))
+            length(palette) == n && break
+        end
+    end
+    return palette
 end
 
 @inline function _map_color_rgb(i::Integer, colors::Vector{RGB{Float32}})
@@ -835,47 +852,98 @@ function _make_pixeliterate_map(
     return AffineMap(A, b)
 end
 
-function iterate_image(ifs::IFS, img::AbstractMatrix{<:Real})
+function iterate_image(ifs::IFS, img::AbstractMatrix{<:Real}; colors::Bool=false)
     rows, cols = size(img)
 
     nthreads_local = nthreads()
     buffers = [zeros(Float32, rows, cols) for _ in 1:nthreads_local]
+    rbuffers = colors ? [zeros(Float32, rows, cols) for _ in 1:nthreads_local] : nothing
+    gbuffers = colors ? [zeros(Float32, rows, cols) for _ in 1:nthreads_local] : nothing
+    bbuffers = colors ? [zeros(Float32, rows, cols) for _ in 1:nthreads_local] : nothing
+    map_colors = colors ? _map_colors(length(ifs.maps)) : RGB{Float32}[]
 
     pmap = make_pixelate_map(ifs.limits; resolution=(rows, cols))
 
-    for nmap in ifs.maps
+    for (map_idx, nmap) in enumerate(ifs.maps)
         cmap = _make_pixeliterate_map(nmap, pmap)  # use it!
+        map_color = colors ? _map_color_rgb(map_idx, map_colors) : RGB{Float32}(0.0f0, 0.0f0, 0.0f0)
+        cr = map_color.r
+        cg = map_color.g
+        cb = map_color.b
 
         @threads for x in 1:cols
             tid = threadid()
+            graybuf = buffers[tid]
+            rbuf = colors ? rbuffers[tid] : graybuf
+            gbuf = colors ? gbuffers[tid] : graybuf
+            bbuf = colors ? bbuffers[tid] : graybuf
             @inbounds for y in 1:rows
                 val = img[y, x]
                 if val != 0
                     fx, fy = cmap(SVector(x, y))
 
-                    newx = clamp(round(Int, fx), 1, cols)
-                    newy = clamp(round(Int, fy), 1, rows)
+                    newx = round(Int, fx)
+                    newy = round(Int, fy)
+                    if !(1 <= newx <= cols && 1 <= newy <= rows)
+                        continue
+                    end
 
-                    buffers[tid][newy, newx] += val
+                    if colors
+                        fval = Float32(val)
+                        rbuf[newy, newx] += fval * cr
+                        gbuf[newy, newx] += fval * cg
+                        bbuf[newy, newx] += fval * cb
+                    else
+                        graybuf[newy, newx] += val
+                    end
                 end
             end
         end
     end
-    newimg = buffers[1]
-    for t in 2:nthreads_local
-        newimg .+= buffers[t]
+
+    if !colors
+        newimg = buffers[1]
+        for t in 2:nthreads_local
+            newimg .+= buffers[t]
+        end
+
+        maxv = maximum(newimg)
+        if maxv > 0f0
+            logmax = log(1f0 + maxv)
+            @inbounds for i in eachindex(newimg)
+                newimg[i] = log(1f0 + newimg[i]) / logmax
+            end
+        end
+
+        return Gray.(newimg)
     end
 
-    maxv = maximum(newimg)
+    rimg = rbuffers[1]
+    gimg = gbuffers[1]
+    bimg = bbuffers[1]
+    for t in 2:nthreads_local
+        rimg .+= rbuffers[t]
+        gimg .+= gbuffers[t]
+        bimg .+= bbuffers[t]
+    end
 
+    maxv = max(maximum(rimg), maximum(gimg), maximum(bimg))
     if maxv > 0f0
         logmax = log(1f0 + maxv)
-        @inbounds for i in eachindex(newimg)
-            newimg[i] = log(1f0 + newimg[i]) / logmax
+        @inbounds for i in eachindex(rimg)
+            rimg[i] = log(1f0 + rimg[i]) / logmax
+            gimg[i] = log(1f0 + gimg[i]) / logmax
+            bimg[i] = log(1f0 + bimg[i]) / logmax
         end
     end
 
-    return Gray.(newimg)
+    out = Matrix{RGB{Float32}}(undef, rows, cols)
+    @inbounds for y in 1:rows
+        for x in 1:cols
+            out[y, x] = RGB{Float32}(rimg[y, x], gimg[y, x], bimg[y, x])
+        end
+    end
+    return out
 end
 
 function _iterate_image_single_map(ifs::IFS, img::AbstractMatrix{<:Real}, map_index::Integer)
@@ -892,8 +960,11 @@ function _iterate_image_single_map(ifs::IFS, img::AbstractMatrix{<:Real}, map_in
             val = img[y, x]
             if val != 0
                 fx, fy = cmap(SVector(x, y))
-                newx = clamp(round(Int, fx), 1, cols)
-                newy = clamp(round(Int, fy), 1, rows)
+                newx = round(Int, fx)
+                newy = round(Int, fy)
+                if !(1 <= newx <= cols && 1 <= newy <= rows)
+                    continue
+                end
                 newimg[newy, newx] += val
             end
         end

@@ -50,9 +50,9 @@
 - [x] Add regression threshold checks in CI (report warnings/failures).
 
 ### Test Expansion
-- [ ] Add parser negative tests (malformed braces, mixed row widths, bad floats).
+- [x] Add parser negative tests (malformed braces, mixed row widths, bad floats).
 - [x] Add property tests for affine inverse round-trip.
-- [ ] Add low-res golden-image snapshot tests for known fractals.
+- [ ] Add low-res golden-image snapshot tests for known fractals (skip).
 
 ---
 
@@ -197,3 +197,45 @@
 20. `mode=:preview` stability tests under fixed seeds/settings.
 21. Add benchmark command/profile to report per-stage timings for both modes.
 22. Add docs for mode selection, complexity, limits, and recommended settings.
+
+---
+
+## Potential Improvement: GPU Acceleration for `iterate_image`
+
+### Option A: Scatter/Atomic Kernel (Parity-first)
+
+Goal:
+- Preserve current `iterate_image` semantics with minimal algorithm changes.
+
+Approach:
+1. Launch GPU kernel over source pixels (or source-pixel/map pairs).
+2. For each nonzero source pixel, apply each affine map and pixel transform.
+3. Atomically accumulate into destination buffer.
+4. For `colors=true`, atomically accumulate into 3 channel buffers (`R`, `G`, `B`).
+
+Pros:
+- Closest behavior to existing CPU implementation.
+- Lower migration risk and simpler parity validation.
+
+Cons:
+- High atomic contention in dense image regions.
+- Performance may flatten at higher resolutions/densities.
+
+### Option B: Gather/Backward-Warp Kernel (Throughput-first)
+
+Goal:
+- Reduce contention by writing each destination pixel once.
+
+Approach:
+1. Launch GPU kernel over destination pixels.
+2. Use inverse mapping logic to estimate source contributions per map.
+3. Read source values, sum locally in registers/shared memory.
+4. Write one final value per destination pixel (or RGB tuple for `colors=true`).
+
+Pros:
+- Avoids global atomic hotspots.
+- Better scaling potential for dense images.
+
+Cons:
+- Higher implementation complexity.
+- Requires careful parity checks and possibly interpolation/approximation choices.
