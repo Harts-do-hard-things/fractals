@@ -378,6 +378,64 @@ end
     rm(svg_path; force=true)
 end
 
+@testset "Initial Polygon Presets" begin
+    ifs = IFS(SMALL_EQ; npoints=20)
+    suffix = randstring(8)
+
+    png_triangle = render_transformations_png(ifs;
+                                              outpath=joinpath("media", "maps_triangle_$suffix.png"),
+                                              width=192,
+                                              height=192,
+                                              initial_polygon=:equilateral_triangle,
+                                              limits_mode=:default,
+                                              color=false)
+    @test isfile(png_triangle)
+    tri_img = load(png_triangle)
+    @test count(px -> alpha(px) > 0, tri_img) > 0
+
+    png_line = render_transformations_png(ifs;
+                                          outpath=joinpath("media", "maps_line_$suffix.png"),
+                                          width=192,
+                                          height=192,
+                                          initial_polygon=:line,
+                                          limits_mode=:default,
+                                          color=false)
+    @test isfile(png_line)
+    line_img = load(png_line)
+    @test count(px -> alpha(px) > 0, line_img) > 0
+
+    @test_throws ArgumentError render_transformations_png(ifs;
+                                                          outpath=joinpath("media", "never_write_badpoly_$suffix.png"),
+                                                          initial_polygon=:not_a_polygon)
+
+    seed_line = Fractals._resolve_image_source(ifs,
+                                               :polygon,
+                                               nothing,
+                                               (64, 64),
+                                               0,
+                                               1,
+                                               1,
+                                               :ifs,
+                                               true,
+                                               :line)
+    seed_triangle = Fractals._resolve_image_source(ifs,
+                                                   :polygon,
+                                                   nothing,
+                                                   (64, 64),
+                                                   0,
+                                                   1,
+                                                   1,
+                                                   :ifs,
+                                                   true,
+                                                   :equilateral_triangle)
+    @test count(>(0), seed_line) > 0
+    @test count(>(0), seed_triangle) > 0
+    @test seed_line != seed_triangle
+
+    rm(png_triangle; force=true)
+    rm(png_line; force=true)
+end
+
 @testset "Render Entrypoint" begin
     suffix = randstring(8)
 

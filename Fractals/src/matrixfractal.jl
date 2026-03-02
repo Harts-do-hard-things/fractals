@@ -21,8 +21,8 @@ const RESOLUTION = (1504, 2256)
 const DEFAULT_WARMUP = 50
 const DEFAULT_SAMPLES = 1_000_000
 const DEFAULT_MEDIA_DIR = "media"
-const DEFAULT_BASE_LIMITS = ((0.0, 1.0), (0.0, 1.0))
-const _BASE_L_SEGMENTS = [
+const _DEFAULT_INITIAL_POLYGON_LIMITS = ((0.0, 1.0), (0.0, 1.0))
+const _DEFAULT_INITIAL_POLYGON_SEGMENTS = [
     (SVector{2,Float64}(0.0, 1.0), SVector{2,Float64}(1.0, 1.0)),
     (SVector{2,Float64}(1.0, 1.0), SVector{2,Float64}(1.0, 0.0)),
     (SVector{2,Float64}(1.0, 0.0), SVector{2,Float64}(0.0, 0.0)),
@@ -30,6 +30,22 @@ const _BASE_L_SEGMENTS = [
     (SVector{2,Float64}(1/6, 5/6), SVector{2,Float64}(1/6, 1/6)),
     (SVector{2,Float64}(1/6, 1/6), SVector{2,Float64}(5/9, 1/6)),
 ]
+const _EQUILATERAL_TRIANGLE_LIMITS = ((0.0, 1.0), (0.0, sqrt(3.0) / 2.0))
+const _EQUILATERAL_TRIANGLE_SEGMENTS = [
+    (SVector{2,Float64}(0.0, 0.0), SVector{2,Float64}(1.0, 0.0)),
+    (SVector{2,Float64}(1.0, 0.0), SVector{2,Float64}(0.5, sqrt(3.0) / 2.0)),
+    (SVector{2,Float64}(0.5, sqrt(3.0) / 2.0), SVector{2,Float64}(0.0, 0.0)),
+]
+const _LINE_BASE_LIMITS = ((0.0, 1.0), (-0.1, 0.1))
+const _LINE_ARROW_SEGMENTS = [
+    (SVector{2,Float64}(0.0, 0.0), SVector{2,Float64}(1.0, 0.0)),
+    (SVector{2,Float64}(0.5, 0.0), SVector{2,Float64}(0.45, 0.05)),
+    (SVector{2,Float64}(0.5, 0.0), SVector{2,Float64}(0.45, -0.05)),
+]
+const _LINE_SEGMENTS = [
+    (SVector{2,Float64}(0.0, 0.0), SVector{2,Float64}(1.0, 0.0)),
+]
+const _INITIAL_POLYGON_NAMES = (:default, :equilateral_triangle, :line_arrow, :line)
 
 @enum RenderMethod begin
     Chaos
@@ -97,10 +113,32 @@ function _normalize_media_outpath(outpath::AbstractString)
     return final
 end
 
-_base_limits_image() = DEFAULT_BASE_LIMITS
+@inline function _initial_polygon_names_text()
+    return join(string.(collect(_INITIAL_POLYGON_NAMES)), ", ")
+end
 
-function _base_l_image()
-    return _BASE_L_SEGMENTS
+function _resolve_initial_polygon(initial_polygon::Symbol)
+    normalized = Symbol(lowercase(String(initial_polygon)))
+    if normalized == :default
+        return _DEFAULT_INITIAL_POLYGON_SEGMENTS, _DEFAULT_INITIAL_POLYGON_LIMITS
+    elseif normalized == :equilateral_triangle
+        return _EQUILATERAL_TRIANGLE_SEGMENTS, _EQUILATERAL_TRIANGLE_LIMITS
+    elseif normalized == :line_arrow
+        return _LINE_ARROW_SEGMENTS, _LINE_BASE_LIMITS
+    elseif normalized == :line
+        return _LINE_SEGMENTS, _LINE_BASE_LIMITS
+    end
+    throw(ArgumentError("Invalid initial_polygon '$initial_polygon'. Supported: $(_initial_polygon_names_text())"))
+end
+
+function _base_limits_image(initial_polygon::Symbol=:default)
+    _, limits = _resolve_initial_polygon(initial_polygon)
+    return limits
+end
+
+function _base_l_image(initial_polygon::Symbol=:default)
+    segments, _ = _resolve_initial_polygon(initial_polygon)
+    return segments
 end
 
 function _map_colors(n::Integer)
@@ -180,8 +218,8 @@ end
     return x, y
 end
 
-function _collect_transformed_base_segments(ifs; show_base::Bool=false)
-    base_segments = _base_l_image()
+function _collect_transformed_base_segments(ifs; show_base::Bool=false, initial_polygon::Symbol=:default)
+    base_segments = _base_l_image(initial_polygon)
     transformed_by_map = Vector{Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}}(undef, length(ifs.maps))
     all_segments = Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}()
 
@@ -204,10 +242,11 @@ function render_transformations_svg(
     width::Int=1200,
     height::Int=1200,
     show_base::Bool=false,
+    initial_polygon::Symbol=:default,
     stroke_width::Real=2.0
 )
     base_segments, transformed_by_map, all_segments =
-        _collect_transformed_base_segments(ifs; show_base=show_base)
+        _collect_transformed_base_segments(ifs; show_base=show_base, initial_polygon=initial_polygon)
     colors = _map_colors(length(transformed_by_map))
 
     sx, sy, ox, oy = _fit_bounds(all_segments, width, height)
@@ -285,16 +324,17 @@ function _render_transformations_image(
     width::Int=1200,
     height::Int=1200,
     show_base::Bool=false,
+    initial_polygon::Symbol=:default,
     limits_mode::Symbol=:ifs,
     color::Bool=true,
 )
     base_segments, transformed_by_map, all_segments =
-        _collect_transformed_base_segments(ifs; show_base=show_base)
+        _collect_transformed_base_segments(ifs; show_base=show_base, initial_polygon=initial_polygon)
     map_colors = _map_colors(length(transformed_by_map))
     img = fill(RGBA{Float32}(0.0f0, 0.0f0, 0.0f0, 0.0f0), height, width)
 
     if limits_mode == :ifs || limits_mode == :default
-        limits = limits_mode == :ifs ? ifs.limits : _base_limits_image()
+        limits = limits_mode == :ifs ? ifs.limits : _base_limits_image(initial_polygon)
         if show_base
             base_color = color ? RGBA{Float32}(0.2f0, 0.2f0, 0.2f0, 1.0f0) : RGBA{Float32}(1.0f0, 1.0f0, 1.0f0, 1.0f0)
             for (p1, p2) in base_segments
@@ -351,6 +391,7 @@ function render_transformations_png(
     width::Int=1200,
     height::Int=1200,
     show_base::Bool=false,
+    initial_polygon::Symbol=:default,
     limits_mode::Symbol=:ifs,
     color::Bool=true,
 )
@@ -358,6 +399,7 @@ function render_transformations_png(
                                         width=width,
                                         height=height,
                                         show_base=show_base,
+                                        initial_polygon=initial_polygon,
                                         limits_mode=limits_mode,
                                         color=color)
 
@@ -978,7 +1020,7 @@ function _to_grayscale_matrix(img::AbstractMatrix)
 end
 
 function _limits_from_points(points::Vector{SVector{2,Float64}})
-    isempty(points) && return DEFAULT_BASE_LIMITS
+    isempty(points) && return _DEFAULT_INITIAL_POLYGON_LIMITS
 
     xmin = Inf; xmax = -Inf
     ymin = Inf; ymax = -Inf
@@ -1013,7 +1055,8 @@ function _resolve_image_source(
     deterministic_iters::Integer,
     inverse_iters::Integer,
     polygon_limits_mode::Symbol,
-    show_divergence_scale::Bool
+    show_divergence_scale::Bool,
+    initial_polygon::Symbol=:default
 )
     if image_source == :file
         isnothing(image_path) && throw(ArgumentError("image_path is required when image_source=:file"))
@@ -1046,6 +1089,7 @@ function _resolve_image_source(
                                        width=resolution[2],
                                        height=resolution[1],
                                        show_base=false,
+                                       initial_polygon=initial_polygon,
                                        limits_mode=limits_mode,
                                        color=false)
             return _to_grayscale_matrix(load(p))
@@ -1191,6 +1235,7 @@ function _validate_render_options(
     image_path::Union{Nothing,AbstractString},
     image_iterations::Integer,
     polygon_limits_mode::Symbol,
+    initial_polygon::Symbol,
     deterministic_depth::Integer,
     inverse_depth::Integer
 )
@@ -1206,6 +1251,7 @@ function _validate_render_options(
         throw(ArgumentError("Invalid image_source '$image_source'. Supported: :polygon, :chaos, :point_deterministic, :inverse, :file"))
     polygon_limits_mode in (:ifs, :default) ||
         throw(ArgumentError("Invalid polygon_limits_mode '$polygon_limits_mode'. Supported: :ifs, :default"))
+    _resolve_initial_polygon(initial_polygon)
     image_source == :file && isnothing(image_path) &&
         throw(ArgumentError("image_path is required when image_source=:file"))
     method == ImageIterate && color &&
@@ -1351,6 +1397,7 @@ function render(
     image_path::Union{Nothing,AbstractString}=nothing,
     image_iterations::Integer=1,
     polygon_limits_mode::Symbol=:ifs,
+    initial_polygon::Symbol=:default,
     resolution::Tuple{Int,Int}=RESOLUTION,
     outpath::AbstractString="media/render.png",
     ifs_index::Union{Nothing,Integer}=nothing,
@@ -1360,7 +1407,7 @@ function render(
     inverse_depth::Integer=8,
 )
     parsed_method = _parse_render_method(method)
-    _validate_render_options(parsed_method, npoints, warmup, color, resolution, ifs_index, ifs_name, image_source, image_path, image_iterations, polygon_limits_mode, deterministic_depth, inverse_depth)
+    _validate_render_options(parsed_method, npoints, warmup, color, resolution, ifs_index, ifs_name, image_source, image_path, image_iterations, polygon_limits_mode, initial_polygon, deterministic_depth, inverse_depth)
 
     ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index, ifs_name=ifs_name)
 
@@ -1388,7 +1435,8 @@ function render(
                                     deterministic_iters,
                                     inverse_iters,
                                     polygon_limits_mode,
-                                    show_divergence_scale)
+                                    show_divergence_scale,
+                                    initial_polygon)
         for _ in 1:image_iterations
             img = iterate_image(rendered_ifs, img; colors=false)
         end

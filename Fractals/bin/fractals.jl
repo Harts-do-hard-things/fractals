@@ -27,6 +27,7 @@ Common options:
   --image-path <path>      Source image path when --image-source file
   --image-iterations <int> Number of iterate_image passes (ImageIterate only)
   --polygon-limits-mode    ifs|default (ImageIterate polygon source)
+  --initial-polygon <name> default|equilateral_triangle|line_arrow|line
   --resolution <HxW>       Image resolution (e.g. 1024x1024)
   --ifs-index <int>        Select IFS by index from an .ifs file
   --ifs-name <name>        Select IFS by name from an .ifs file
@@ -131,10 +132,14 @@ function _render_from_input(input::String, opts::Dict{String,Any})
     image_path = _opt_str(opts, "image-path", nothing)
     image_iterations = _opt_int(opts, "image-iterations", 1)
     polygon_limits_mode = Symbol(_opt_str(opts, "polygon-limits-mode", "ifs"))
+    initial_polygon = Symbol(_opt_str(opts, "initial-polygon", "default"))
     ifs_index = _opt_int(opts, "ifs-index", nothing)
     ifs_name = _opt_str(opts, "ifs-name", nothing)
     outpath = _opt_str(opts, "out", "media/cli_render.png")
     resolution = haskey(opts, "resolution") ? _parse_resolution(string(opts["resolution"])) : RESOLUTION
+    if image_source != :polygon && initial_polygon != :default
+        @warn "--initial-polygon is ignored unless --image-source polygon."
+    end
 
     if endswith(lowercase(input), ".ifs")
         return render(
@@ -146,6 +151,7 @@ function _render_from_input(input::String, opts::Dict{String,Any})
             image_path=image_path,
             image_iterations=image_iterations,
             polygon_limits_mode=polygon_limits_mode,
+            initial_polygon=initial_polygon,
             ifs_index=ifs_index,
             ifs_name=ifs_name,
             resolution=resolution,
@@ -163,6 +169,7 @@ function _render_from_input(input::String, opts::Dict{String,Any})
         image_path=image_path,
         image_iterations=image_iterations,
         polygon_limits_mode=polygon_limits_mode,
+        initial_polygon=initial_polygon,
         resolution=resolution,
         outpath=outpath,
     )
@@ -188,6 +195,7 @@ function _cmd_batch_render(opts::Dict{String,Any})
     image_path = _opt_str(opts, "image-path", nothing)
     image_iterations = _opt_int(opts, "image-iterations", 1)
     polygon_limits_mode = Symbol(_opt_str(opts, "polygon-limits-mode", "ifs"))
+    initial_polygon = Symbol(_opt_str(opts, "initial-polygon", "default"))
     outdir = _opt_str(opts, "out-dir", "media/batch")
     resolution = haskey(opts, "resolution") ? _parse_resolution(string(opts["resolution"])) : RESOLUTION
     mkpath(outdir)
@@ -196,6 +204,9 @@ function _cmd_batch_render(opts::Dict{String,Any})
     isempty(defs) && throw(ArgumentError("No IFS definitions found in '$input'"))
 
     println("Batch rendering $(length(defs)) definitions from $input")
+    if image_source != :polygon && initial_polygon != :default
+        @warn "--initial-polygon is ignored unless --image-source polygon."
+    end
     for (i, d) in enumerate(defs)
         filename = lpad(string(i), 2, '0') * "_" * _slug(d.name) * ".png"
         outpath = joinpath(outdir, filename)
@@ -208,6 +219,7 @@ function _cmd_batch_render(opts::Dict{String,Any})
             image_path=image_path,
             image_iterations=image_iterations,
             polygon_limits_mode=polygon_limits_mode,
+            initial_polygon=initial_polygon,
             ifs_index=i,
             resolution=resolution,
             outpath=outpath,

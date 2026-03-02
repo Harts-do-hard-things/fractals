@@ -50,4 +50,6 @@ julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --
   - `--image-iterations <int>`
   - `--polygon-limits-mode ifs|default`
     - For `--image-source polygon`, `default` is treated as `ifs` (compatibility alias).
+  - `--initial-polygon default|equilateral_triangle|line_arrow|line`
+    - Effective when `--image-source polygon`; otherwise ignored.
 - For multi-definition `.ifs`, select one using `--ifs-index` or `--ifs-name`.

@@ -75,12 +75,14 @@ result = render(EISENSTEIN;
                 method=ImageIterate,
                 image_source=:polygon,
                 image_iterations=3,
+                initial_polygon=:equilateral_triangle,
                 polygon_limits_mode=:ifs,
                 resolution=(900, 900),
                 outpath="media/recipe_image_iterate.png")
 ```
 
-The `:polygon` seed is produced via `render_transformations_png(...; show_base=false, color=false, limits_mode=:ifs)` and then read as grayscale.
+The `:polygon` seed is produced via `render_transformations_png(...; show_base=false, limits_mode=:ifs, initial_polygon=...)` and then read as grayscale.
+Built-in presets: `:default`, `:equilateral_triangle`, `:line_arrow`, `:line`.
 For `image_source=:polygon`, `polygon_limits_mode=:default` is treated as `:ifs` (compatibility alias).
 
 ## Optional: Inverse Render
