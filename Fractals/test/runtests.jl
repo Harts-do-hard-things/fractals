@@ -103,10 +103,21 @@ end
 end
 
 @testset "Deterministic Iterate" begin
-    ifs = IFS(SMALL_EQ; npoints=50)
+    ifs = IFS(SMALL_EQ; npoints=20)
     n = 2
-    out = deterministic_iterate(ifs, n)
+    ifs_orig_points = copy(ifs.points)
+
+    out = deterministic_iterate(ifs, n; warmup=5, seed=123)
     @test length(out.points) == length(ifs.points) * length(ifs.maps)^n
+    @test ifs.points == ifs_orig_points
+
+    # Deterministic iterate should chaos-initialize internally before expansion.
+    ifs2 = IFS(SMALL_EQ; npoints=20)
+    base = IFS(ifs2.name, ifs2.docs, copy(ifs2.points), ifs2.maps, ifs2.weights, ifs2.limits)
+    iterate!(base; warmup=5, seed=123)
+    expected_points = Fractals._deterministic_expand_points(base.points, ifs2.maps, n)
+    out2 = deterministic_iterate(ifs2, n; warmup=5, seed=123)
+    @test out2.points == expected_points
 end
 
 @testset "Pixel Maps" begin
@@ -139,13 +150,13 @@ end
     @test size(out) == (32, 32)
 end
 
-@testset "Iterate Image Colors Single Lookup" begin
+@testset "Iterate Image Colors" begin
     ifs = IFS(SMALL_EQ; npoints=1500)
     iterate!(ifs; warmup=5)
     img = make_image(ifs; resolution=(32, 32))
 
-    out1 = iterate_image(ifs, img; colors=true, single_lookup=true, seed=123)
-    out2 = iterate_image(ifs, img; colors=true, single_lookup=true, seed=123)
+    out1 = iterate_image(ifs, img; colors=true, seed=123)
+    out2 = iterate_image(ifs, img; colors=true, seed=123)
 
     @test size(out1) == (32, 32)
     @test eltype(out1) == RGB{Float32}

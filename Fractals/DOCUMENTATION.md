@@ -58,6 +58,7 @@ Iteration control:
 - If `iterations` is provided, it takes precedence over depth aliases.
 - `deterministic_depth` and `inverse_depth` are compatibility aliases; prefer `iterations`.
 - `iterations` must be `>= 0`.
+- `warmup` is applied to both chaos and deterministic render paths.
 - `npoints` behavior:
   - For matrix/string/file inputs, omitted `npoints` defaults to `DEFAULT_SAMPLES`.
   - For `IFS` input, omitted `npoints` keeps the existing point count.
@@ -152,9 +153,13 @@ Reproducibility:
 
 Compatibility alias for `iterate!`. Kept for older call sites.
 
-### `deterministic_iterate(ifs, n)`
+### `deterministic_iterate(ifs, n; warmup=DEFAULT_WARMUP, seed=nothing)`
 
-Applies every map to every point for `n` rounds. Returns a new `IFS`.
+Runs one chaos iteration pass first, then applies every map to every point for `n` rounds. Returns a new `IFS`.
+
+Notes:
+- Chaos initialization uses `warmup` and optional `seed`.
+- Input `ifs` is not mutated.
 
 Warning:
 - Point count grows as `length(points) * length(maps)^n`

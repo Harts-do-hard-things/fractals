@@ -567,10 +567,11 @@ end
 # Deterministic Iteration
 # --------------------------------
 
-function deterministic_iterate(ifs::IFS, n::Integer)
-
-    maps = ifs.maps
-    points = ifs.points
+function _deterministic_expand_points(
+    points::Vector{SVector{2,Float64}},
+    maps::Vector{AffineMap{Float64}},
+    n::Integer
+)
     nmaps = length(maps)
 
     newsize = length(points) * nmaps^n
@@ -595,7 +596,18 @@ function deterministic_iterate(ifs::IFS, n::Integer)
         current_len *= nmaps
     end
 
-    return IFS(ifs.name, ifs.docs, result, maps, ifs.weights, ifs.limits)
+    return result
+end
+
+function deterministic_iterate(ifs::IFS,
+                               n::Integer;
+                               warmup::Integer=DEFAULT_WARMUP,
+                               seed::Union{Nothing,Integer}=nothing)
+    base = IFS(ifs.name, ifs.docs, copy(ifs.points), ifs.maps, ifs.weights, ifs.limits)
+    iterate!(base; warmup=warmup, seed=seed)
+
+    result = _deterministic_expand_points(base.points, ifs.maps, n)
+    return IFS(ifs.name, ifs.docs, result, ifs.maps, ifs.weights, ifs.limits)
 end
 
 # --------------------------------
@@ -894,7 +906,6 @@ end
 function iterate_image(ifs::IFS,
                        img::AbstractMatrix{<:Real};
                        colors::Bool=false,
-                       single_lookup::Bool=false,
                        seed::Union{Nothing,Integer}=nothing)
     rows, cols = size(img)
 
@@ -906,57 +917,6 @@ function iterate_image(ifs::IFS,
     map_colors = colors ? _map_colors(length(ifs.maps)) : RGB{Float32}[]
 
     pmap = make_pixelate_map(ifs.limits; resolution=(rows, cols))
-
-    if colors && single_lookup
-        map_indices = Base.OneTo(length(ifs.maps))
-        weights = ifs.weights
-        cmaps = [_make_pixeliterate_map(nmap, pmap) for nmap in ifs.maps]
-        rngs = isnothing(seed) ? nothing :
-               [MersenneTwister(seed + tid - 1) for tid in 1:nthreads_local]
-
-        @threads for x in 1:cols
-            tid = threadid()
-            rbuf = rbuffers[tid]
-            gbuf = gbuffers[tid]
-            bbuf = bbuffers[tid]
-            rng = isnothing(rngs) ? nothing : rngs[tid]
-
-            @inbounds for y in 1:rows
-                val = img[y, x]
-                if val == 0
-                    continue
-                end
-
-                map_idx = isnothing(rng) ? sample(map_indices, weights) :
-                                           sample(rng, map_indices, weights)
-
-                fx, fy = cmaps[map_idx](SVector(x, y))
-                newx = round(Int, fx)
-                newy = round(Int, fy)
-                if !(1 <= newx <= cols && 1 <= newy <= rows)
-                    continue
-                end
-
-                c = _map_color_rgb(map_idx, map_colors)
-                fval = Float32(val)
-                rbuf[newy, newx] += fval * c.r
-                gbuf[newy, newx] += fval * c.g
-                bbuf[newy, newx] += fval * c.b
-            end
-        end
-
-        rimg = rbuffers[1]
-        gimg = gbuffers[1]
-        bimg = bbuffers[1]
-        for t in 2:nthreads_local
-            rimg .+= rbuffers[t]
-            gimg .+= gbuffers[t]
-            bimg .+= bbuffers[t]
-        end
-
-        _normalize_rgb_buffers!(rimg, gimg, bimg)
-        return _rgb_image_from_buffers(rimg, gimg, bimg)
-    end
 
     for (map_idx, nmap) in enumerate(ifs.maps)
         cmap = _make_pixeliterate_map(nmap, pmap)  # use it!
@@ -1239,22 +1199,17 @@ function render(
     if render_method == Chaos
         iterate!(rendered_ifs; warmup=warmup)
         img = make_image(rendered_ifs; resolution=resolution)
-        if color
-            img = iterate_image(rendered_ifs, img; colors=true, single_lookup=true)
-        end
     elseif render_method == Deterministic
-        rendered_ifs = deterministic_iterate(rendered_ifs, deterministic_iters)
+        rendered_ifs = deterministic_iterate(rendered_ifs, deterministic_iters; warmup=warmup)
         img = make_image(rendered_ifs; resolution=resolution)
-        if color
-            img = iterate_image(rendered_ifs, img; colors=true, single_lookup=true)
-        end
     else
         img = rasterize_image_inversely(rendered_ifs, inverse_iters, rendered_ifs.limits;
                                         resolution=resolution,
                                         show_divergence_scale=show_divergence_scale)
-        if color
-            img = iterate_image(rendered_ifs, img; colors=true, single_lookup=true)
-        end
+    end
+
+    if color
+        img = iterate_image(rendered_ifs, img; colors=true)
     end
 
     final_outpath = _normalize_media_outpath(outpath)
