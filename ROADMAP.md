@@ -63,17 +63,17 @@
 - [ ] Tag stable `v1.0.0` when API/CLI contracts are locked.
 
 ### Release Checklist
-- [ ] Confirm working tree is clean and branch is up to date with target base branch.
-- [ ] Bump project version in package metadata as needed for the release.
-- [ ] Update changelog/release notes text to summarize user-visible API/CLI/docs changes.
-- [ ] Run full test suite:
+- [x] Confirm working tree is clean and branch is up to date with target base branch.
+- [x] Bump project version in package metadata as needed for the release.
+- [x] Update changelog/release notes text to summarize user-visible API/CLI/docs changes.
+- [x] Run full test suite:
   - `julia --startup-file=no --project=Fractals Fractals/test/runtests.jl`
-- [ ] Run benchmark suite and review target envelope status:
+- [x] Run benchmark suite and review target envelope status:
   - `julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile medium --repeats 3`
-- [ ] If target envelopes are configured, run strict benchmark validation:
+- [x] If target envelopes are configured, run strict benchmark validation:
   - `julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile medium --repeats 3 --targets <path-to-targets.toml> --strict`
-- [ ] Verify docs impacted by the release are updated (`Fractals/DOCUMENTATION.md`, `docs/quick-recipes.md`, `docs/cli.md`, troubleshooting as needed).
-- [ ] Verify CLI help output matches docs for newly added or changed flags/options.
+- [x] Verify docs impacted by the release are updated (`Fractals/DOCUMENTATION.md`, `docs/quick-recipes.md`, `docs/cli.md`, troubleshooting as needed).
+- [x] Verify CLI help output matches docs for newly added or changed flags/options.
 - [ ] Commit release-prep changes with clear message.
 - [ ] Create and push release tag:
   - `git tag vX.Y.Z`
