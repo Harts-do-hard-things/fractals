@@ -737,6 +737,11 @@ function inverse_iterate(
     return 0.0f0
 end
 
+@inline function _inverse_hide_scale_value(v::Float32)::Float32
+    # 0.0 means did not diverge, 1.0 means contains-zero; both are white in hide mode.
+    return (v == 0.0f0 || v == 1.0f0) ? 1.0f0 : 0.0f0
+end
+
 function _inverse_iterate!(
     current::Vector{NTuple{3,SVector{2,Float64}}},
     next::Vector{NTuple{3,SVector{2,Float64}}},
@@ -803,7 +808,8 @@ function rasterize_image_inversely(
     n::Integer,
     limits::Tuple{Tuple{Float64,Float64},
                   Tuple{Float64,Float64}};
-    resolution::Tuple{Int,Int}=RESOLUTION
+    resolution::Tuple{Int,Int}=RESOLUTION,
+    show_divergence_scale::Bool=true
     )
 
     pixel_map = make_pixelate_map(limits;
@@ -827,7 +833,8 @@ function rasterize_image_inversely(
             p1 = inv_pixel_map(SVector{2,Float64}(x + 1, y))
             p2 = inv_pixel_map(SVector{2,Float64}(x,     y + 1))
 
-            img[y, x] = _inverse_iterate!(current, next, inverse_maps, ifs.limits, n, p0, p1, p2)
+            v = _inverse_iterate!(current, next, inverse_maps, ifs.limits, n, p0, p1, p2)
+            img[y, x] = show_divergence_scale ? v : _inverse_hide_scale_value(v)
         end
     end
 
@@ -852,7 +859,43 @@ function _make_pixeliterate_map(
     return AffineMap(A, b)
 end
 
-function iterate_image(ifs::IFS, img::AbstractMatrix{<:Real}; colors::Bool=false)
+function _normalize_rgb_buffers!(
+    rimg::AbstractMatrix{Float32},
+    gimg::AbstractMatrix{Float32},
+    bimg::AbstractMatrix{Float32}
+)
+    maxv = max(maximum(rimg), maximum(gimg), maximum(bimg))
+    if maxv > 0f0
+        logmax = log(1f0 + maxv)
+        @inbounds for i in eachindex(rimg)
+            rimg[i] = log(1f0 + rimg[i]) / logmax
+            gimg[i] = log(1f0 + gimg[i]) / logmax
+            bimg[i] = log(1f0 + bimg[i]) / logmax
+        end
+    end
+    return nothing
+end
+
+function _rgb_image_from_buffers(
+    rimg::AbstractMatrix{Float32},
+    gimg::AbstractMatrix{Float32},
+    bimg::AbstractMatrix{Float32}
+)
+    rows, cols = size(rimg)
+    out = Matrix{RGB{Float32}}(undef, rows, cols)
+    @inbounds for y in 1:rows
+        for x in 1:cols
+            out[y, x] = RGB{Float32}(rimg[y, x], gimg[y, x], bimg[y, x])
+        end
+    end
+    return out
+end
+
+function iterate_image(ifs::IFS,
+                       img::AbstractMatrix{<:Real};
+                       colors::Bool=false,
+                       single_lookup::Bool=false,
+                       seed::Union{Nothing,Integer}=nothing)
     rows, cols = size(img)
 
     nthreads_local = nthreads()
@@ -863,6 +906,57 @@ function iterate_image(ifs::IFS, img::AbstractMatrix{<:Real}; colors::Bool=false
     map_colors = colors ? _map_colors(length(ifs.maps)) : RGB{Float32}[]
 
     pmap = make_pixelate_map(ifs.limits; resolution=(rows, cols))
+
+    if colors && single_lookup
+        map_indices = Base.OneTo(length(ifs.maps))
+        weights = ifs.weights
+        cmaps = [_make_pixeliterate_map(nmap, pmap) for nmap in ifs.maps]
+        rngs = isnothing(seed) ? nothing :
+               [MersenneTwister(seed + tid - 1) for tid in 1:nthreads_local]
+
+        @threads for x in 1:cols
+            tid = threadid()
+            rbuf = rbuffers[tid]
+            gbuf = gbuffers[tid]
+            bbuf = bbuffers[tid]
+            rng = isnothing(rngs) ? nothing : rngs[tid]
+
+            @inbounds for y in 1:rows
+                val = img[y, x]
+                if val == 0
+                    continue
+                end
+
+                map_idx = isnothing(rng) ? sample(map_indices, weights) :
+                                           sample(rng, map_indices, weights)
+
+                fx, fy = cmaps[map_idx](SVector(x, y))
+                newx = round(Int, fx)
+                newy = round(Int, fy)
+                if !(1 <= newx <= cols && 1 <= newy <= rows)
+                    continue
+                end
+
+                c = _map_color_rgb(map_idx, map_colors)
+                fval = Float32(val)
+                rbuf[newy, newx] += fval * c.r
+                gbuf[newy, newx] += fval * c.g
+                bbuf[newy, newx] += fval * c.b
+            end
+        end
+
+        rimg = rbuffers[1]
+        gimg = gbuffers[1]
+        bimg = bbuffers[1]
+        for t in 2:nthreads_local
+            rimg .+= rbuffers[t]
+            gimg .+= gbuffers[t]
+            bimg .+= bbuffers[t]
+        end
+
+        _normalize_rgb_buffers!(rimg, gimg, bimg)
+        return _rgb_image_from_buffers(rimg, gimg, bimg)
+    end
 
     for (map_idx, nmap) in enumerate(ifs.maps)
         cmap = _make_pixeliterate_map(nmap, pmap)  # use it!
@@ -927,23 +1021,8 @@ function iterate_image(ifs::IFS, img::AbstractMatrix{<:Real}; colors::Bool=false
         bimg .+= bbuffers[t]
     end
 
-    maxv = max(maximum(rimg), maximum(gimg), maximum(bimg))
-    if maxv > 0f0
-        logmax = log(1f0 + maxv)
-        @inbounds for i in eachindex(rimg)
-            rimg[i] = log(1f0 + rimg[i]) / logmax
-            gimg[i] = log(1f0 + gimg[i]) / logmax
-            bimg[i] = log(1f0 + bimg[i]) / logmax
-        end
-    end
-
-    out = Matrix{RGB{Float32}}(undef, rows, cols)
-    @inbounds for y in 1:rows
-        for x in 1:cols
-            out[y, x] = RGB{Float32}(rimg[y, x], gimg[y, x], bimg[y, x])
-        end
-    end
-    return out
+    _normalize_rgb_buffers!(rimg, gimg, bimg)
+    return _rgb_image_from_buffers(rimg, gimg, bimg)
 end
 
 function _iterate_image_single_map(ifs::IFS, img::AbstractMatrix{<:Real}, map_index::Integer)
@@ -1137,6 +1216,8 @@ function render(
     method::Union{RenderMethod,Symbol,AbstractString}=Chaos,
     npoints::Union{Nothing,Integer}=nothing,
     warmup::Integer=DEFAULT_WARMUP,
+    color::Bool=false,
+    show_divergence_scale::Bool=true,
     resolution::Tuple{Int,Int}=RESOLUTION,
     outpath::AbstractString="media/render.png",
     ifs_index::Union{Nothing,Integer}=nothing,
@@ -1158,11 +1239,22 @@ function render(
     if render_method == Chaos
         iterate!(rendered_ifs; warmup=warmup)
         img = make_image(rendered_ifs; resolution=resolution)
+        if color
+            img = iterate_image(rendered_ifs, img; colors=true, single_lookup=true)
+        end
     elseif render_method == Deterministic
         rendered_ifs = deterministic_iterate(rendered_ifs, deterministic_iters)
         img = make_image(rendered_ifs; resolution=resolution)
+        if color
+            img = iterate_image(rendered_ifs, img; colors=true, single_lookup=true)
+        end
     else
-        img = rasterize_image_inversely(rendered_ifs, inverse_iters, rendered_ifs.limits; resolution=resolution)
+        img = rasterize_image_inversely(rendered_ifs, inverse_iters, rendered_ifs.limits;
+                                        resolution=resolution,
+                                        show_divergence_scale=show_divergence_scale)
+        if color
+            img = iterate_image(rendered_ifs, img; colors=true, single_lookup=true)
+        end
     end
 
     final_outpath = _normalize_media_outpath(outpath)

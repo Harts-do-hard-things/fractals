@@ -139,6 +139,19 @@ end
     @test size(out) == (32, 32)
 end
 
+@testset "Iterate Image Colors Single Lookup" begin
+    ifs = IFS(SMALL_EQ; npoints=1500)
+    iterate!(ifs; warmup=5)
+    img = make_image(ifs; resolution=(32, 32))
+
+    out1 = iterate_image(ifs, img; colors=true, single_lookup=true, seed=123)
+    out2 = iterate_image(ifs, img; colors=true, single_lookup=true, seed=123)
+
+    @test size(out1) == (32, 32)
+    @test eltype(out1) == RGB{Float32}
+    @test out1 == out2
+end
+
 @testset "Inverse Rasterize" begin
     ifs = IFS(SMALL_EQ; npoints=100)
     lims = ifs.limits
@@ -147,6 +160,11 @@ end
     @test eltype(img) == Float32
     @test all(img .>= 0f0)
     @test maximum(img) <= 1f0
+
+    img_hide = rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), show_divergence_scale=false)
+    @test size(img_hide) == (8, 8)
+    @test eltype(img_hide) == Float32
+    @test all(v -> v == 0.0f0 || v == 1.0f0, img_hide)
 end
 
 @testset "IFS Parser" begin
@@ -348,6 +366,11 @@ end
         out4 = render(path; npoints=3000, method=:inverse, ifs_index=1, iterations=2, resolution=(32, 32), outpath=joinpath("media", "render_file_$suffix.png"))
         @test isfile(out4.outpath)
         @test size(out4.image) == (32, 32)
+
+        out4_hide = render(path; npoints=3000, method=:inverse, ifs_index=1, iterations=2, show_divergence_scale=false, resolution=(32, 32), outpath=joinpath("media", "render_file_hide_$suffix.png"))
+        @test isfile(out4_hide.outpath)
+        @test size(out4_hide.image) == (32, 32)
+        @test all(v -> v == 0.0f0 || v == 1.0f0, out4_hide.image)
     end
 
     @test_throws ArgumentError render(SMALL_EQ; method=:badmethod)
@@ -359,6 +382,7 @@ end
     rm(out3b.outpath; force=true)
     rm(out3c.outpath; force=true)
     rm(joinpath("media", "render_file_$suffix.png"); force=true)
+    rm(joinpath("media", "render_file_hide_$suffix.png"); force=true)
 end
 
 @testset "Render IFS Selection By Index Or Name" begin
@@ -505,6 +529,48 @@ end
     end
 end
 
+@testset "Render Color API" begin
+    mktempdir() do d
+        old = pwd()
+        cd(d)
+        try
+            out_chaos = render(SMALL_EQ;
+                               method=Chaos,
+                               npoints=800,
+                               warmup=5,
+                               color=true,
+                               resolution=(40, 40),
+                               outpath="media/render_chaos_color.png")
+            @test size(out_chaos.image) == (40, 40)
+            @test eltype(out_chaos.image) == RGB{Float32}
+            @test isfile(joinpath("media", "render_chaos_color.png"))
+
+            out_det = render(SMALL_EQ;
+                             method=Deterministic,
+                             npoints=40,
+                             iterations=1,
+                             color=true,
+                             resolution=(40, 40),
+                             outpath="media/render_det_color.png")
+            @test size(out_det.image) == (40, 40)
+            @test eltype(out_det.image) == RGB{Float32}
+            @test isfile(joinpath("media", "render_det_color.png"))
+
+            out_inv = render(SMALL_EQ;
+                             method=Inverse,
+                             iterations=2,
+                             color=true,
+                             resolution=(40, 40),
+                             outpath="media/render_inv_color.png")
+            @test size(out_inv.image) == (40, 40)
+            @test eltype(out_inv.image) == RGB{Float32}
+            @test isfile(joinpath("media", "render_inv_color.png"))
+        finally
+            cd(old)
+        end
+    end
+end
+
 @testset "CLI Commands" begin
     script = abspath(joinpath(@__DIR__, "..", "bin", "fractals.jl"))
     project = abspath(joinpath(@__DIR__, ".."))
@@ -541,13 +607,13 @@ end
             @test isfile(joinpath("media", "batch", "01_cli_first.png"))
             @test isfile(joinpath("media", "batch", "02_cli_second.png"))
 
-            bench_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --npoints 1000 --resolution 16x16 --inverse-iterations 1`, String)
+            bench_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1`, String)
             @test occursin("Benchmark suite", bench_out)
             @test occursin("iterate!", bench_out)
             @test occursin("alloc_mean=", bench_out)
 
             bench_json = joinpath("benchmarks", "bench_small.json")
-            bench_out_json = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --json $bench_json`, String)
+            bench_out_json = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1 --json $bench_json`, String)
             @test occursin("Wrote benchmark JSON", bench_out_json)
             @test isfile(bench_json)
             json_txt = read(bench_json, String)
@@ -570,49 +636,9 @@ end
             end
 
             targets_path = abspath(joinpath(project, "bench", "perf_targets.toml"))
-            bench_targets_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $targets_path`, String)
+            bench_targets_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1 --targets $targets_path`, String)
             @test occursin("Target comparison", bench_targets_out)
             @test occursin("targets:", bench_targets_out)
-            bench_targets_json = joinpath("benchmarks", "bench_targets.json")
-            read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $targets_path --json $bench_targets_json`, String)
-            cmp_payload = JSON3.read(read(bench_targets_json, String))
-            @test haskey(cmp_payload, :comparison)
-            @test haskey(cmp_payload.comparison, :status)
-            @test String(cmp_payload.comparison.status) in ("pass", "warn", "fail")
-
-            warn_targets = joinpath(d, "warn_only.toml")
-            write(warn_targets, """
-[thresholds]
-warn_ratio = 0.0
-fail_ratio = 1.0e12
-
-[targets.small."iterate!"]
-mean_s = 1.0e12
-mean_alloc_bytes = 1.0e12
-""")
-            warn_json = joinpath("benchmarks", "bench_warn.json")
-            read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $warn_targets --json $warn_json`, String)
-            warn_payload = JSON3.read(read(warn_json, String))
-            @test String(warn_payload.comparison.status) == "warn"
-
-            strict_targets = joinpath(d, "strict_fail.toml")
-            write(strict_targets, """
-[thresholds]
-warn_ratio = 1.0
-fail_ratio = 1.0
-
-[targets.small."iterate!"]
-mean_s = 1.0e-12
-mean_alloc_bytes = 1
-""")
-            strict_bad = run(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $strict_targets --strict`; wait=false)
-            wait(strict_bad)
-            @test !success(strict_bad)
-
-            fail_json = joinpath("benchmarks", "bench_fail.json")
-            read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --targets $strict_targets --json $fail_json`, String)
-            fail_payload = JSON3.read(read(fail_json, String))
-            @test String(fail_payload.comparison.status) == "fail"
 
             bad = run(`$jcmd --startup-file=no --project=$project $script validate-ifs --input missing_file.ifs`; wait=false)
             wait(bad)

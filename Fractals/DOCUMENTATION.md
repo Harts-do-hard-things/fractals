@@ -47,6 +47,8 @@ Method options (all accepted by `render`):
 
 Dispatch behavior:
 - `Parallel`/`:parallel` is treated as `Chaos` because `iterate!` is auto-threaded.
+- For `method=Inverse`, `show_divergence_scale=false` switches inverse output to a binary mask
+  where non-diverged and contains-zero regions are white.
 
 Iteration control:
 - Use `iterations=...` for both `:deterministic` and `:inverse`.
@@ -168,9 +170,15 @@ Rasterizes `ifs.points` into a normalized `Float32` image in `[0, 1]`.
 
 Applies all IFS maps to an image and returns a grayscale image.
 
-### `rasterize_image_inversely(ifs, n, limits; resolution=RESOLUTION)`
+### `rasterize_image_inversely(ifs, n, limits; resolution=RESOLUTION, show_divergence_scale=true)`
 
 Inverse method that samples coverage via inverse map recursion.
+
+- `show_divergence_scale=true` keeps the divergence intensity scale.
+- `show_divergence_scale=false` returns a binary mask:
+  - white (`1.0`) for points that did not diverge by depth `n`
+  - white (`1.0`) for points whose inverse triangles contain zero
+  - black (`0.0`) for points that diverged.
 
 ## Parser API
 
