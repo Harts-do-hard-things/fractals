@@ -42,6 +42,11 @@ julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --
 
 ## Notes
 
-- Methods accepted by CLI are the same as the API (`Chaos`, `Parallel`, `Deterministic`, `Inverse`, plus symbol/string forms).
-- For deterministic/inverse methods, use `--iterations`.
+- Methods accepted by CLI are the same as the API (`Chaos`, `Parallel`, `PointDeterministic`, `ImageIterate`, `Inverse`, plus symbol/string forms).
+- For point-deterministic/inverse methods, use `--iterations`.
+- For image-iterate method, use:
+  - `--image-source polygon|chaos|point_deterministic|inverse|file`
+  - `--image-path <path>` when source is `file`
+  - `--image-iterations <int>`
+  - `--polygon-limits-mode iterated_ifs|ifs`
 - For multi-definition `.ifs`, select one using `--ifs-index` or `--ifs-name`.

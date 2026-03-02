@@ -147,7 +147,9 @@ end
     iterate!(ifs; warmup=5)
     img = make_image(ifs; resolution=(32, 32))
     out = iterate_image(ifs, img)
+    out2 = iterate_image(ifs, out)
     @test size(out) == (32, 32)
+    @test size(out2) == (32, 32)
 end
 
 @testset "Iterate Image Colors" begin
@@ -345,7 +347,7 @@ end
     @test size(out1.image) == (64, 64)
 
     ifs = IFS(SMALL_EQ; npoints=2000)
-    out2 = render(ifs; method=:deterministic, iterations=1, resolution=(48, 48), outpath=joinpath("media", "render_ifs_$suffix.png"))
+    out2 = render(ifs; method=:point_deterministic, iterations=1, resolution=(48, 48), outpath=joinpath("media", "render_ifs_$suffix.png"))
     @test isfile(out2.outpath)
     @test size(out2.image) == (48, 48)
     @test length(out2.ifs.points) == length(ifs.points) * length(ifs.maps)
@@ -361,10 +363,10 @@ end
     @test size(out3.image) == (40, 40)
     @test out3.method == :chaos
 
-    out3b = render(text; npoints=2000, method="deterministic", iterations=1, resolution=(24, 24), outpath=joinpath("media", "render_text_string_method_$suffix.png"))
+    out3b = render(text; npoints=2000, method="point_deterministic", iterations=1, resolution=(24, 24), outpath=joinpath("media", "render_text_string_method_$suffix.png"))
     @test isfile(out3b.outpath)
     @test size(out3b.image) == (24, 24)
-    @test out3b.method == :deterministic
+    @test out3b.method == :point_deterministic
 
     out3c = render(text; npoints=1500, method=Parallel, resolution=(20, 20), outpath=joinpath("media", "render_text_enum_method_$suffix.png"))
     @test isfile(out3c.outpath)
@@ -386,6 +388,7 @@ end
 
     @test_throws ArgumentError render(SMALL_EQ; method=:badmethod)
     @test_throws ArgumentError render(SMALL_EQ; method="not_a_method")
+    @test_throws ArgumentError render(SMALL_EQ; method=:deterministic)
 
     rm(out1.outpath; force=true)
     rm(out2.outpath; force=true)
@@ -394,6 +397,56 @@ end
     rm(out3c.outpath; force=true)
     rm(joinpath("media", "render_file_$suffix.png"); force=true)
     rm(joinpath("media", "render_file_hide_$suffix.png"); force=true)
+end
+
+@testset "Render Image Iterate API" begin
+    suffix = randstring(8)
+
+    out_poly = render(SMALL_EQ;
+                      method=:image_iterate,
+                      image_source=:polygon,
+                      image_iterations=2,
+                      resolution=(48, 48),
+                      outpath=joinpath("media", "render_image_poly_$suffix.png"))
+    @test isfile(out_poly.outpath)
+    @test size(out_poly.image) == (48, 48)
+    @test out_poly.method == :image_iterate
+    @test eltype(out_poly.image) <: Gray
+
+    out_chaos = render(SMALL_EQ;
+                       method=ImageIterate,
+                       image_source=:chaos,
+                       image_iterations=2,
+                       npoints=400,
+                       warmup=5,
+                       resolution=(40, 40),
+                       outpath=joinpath("media", "render_image_chaos_$suffix.png"))
+    @test isfile(out_chaos.outpath)
+    @test size(out_chaos.image) == (40, 40)
+
+    mktempdir() do d
+        p = joinpath(d, "seed.png")
+        src = fill(Gray{Float32}(0.0f0), 20, 20)
+        src[6:15, 6:15] .= Gray{Float32}(1.0f0)
+        save(p, src)
+        out_file = render(SMALL_EQ;
+                          method=:image_iterate,
+                          image_source=:file,
+                          image_path=p,
+                          image_iterations=2,
+                          resolution=(20, 20),
+                          outpath=joinpath("media", "render_image_file_$suffix.png"))
+        @test isfile(out_file.outpath)
+        @test size(out_file.image) == (20, 20)
+    end
+
+    @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, color=true, resolution=(24, 24), outpath=joinpath("media", "never_write_$suffix.png"))
+    @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, image_source=:file, image_path=nothing, resolution=(24, 24), outpath=joinpath("media", "never_write2_$suffix.png"))
+    @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, polygon_limits_mode=:bad_mode, resolution=(24, 24), outpath=joinpath("media", "never_write3_$suffix.png"))
+
+    rm(out_poly.outpath; force=true)
+    rm(out_chaos.outpath; force=true)
+    rm(joinpath("media", "render_image_file_$suffix.png"); force=true)
 end
 
 @testset "Render IFS Selection By Index Or Name" begin
@@ -557,7 +610,7 @@ end
             @test isfile(joinpath("media", "render_chaos_color.png"))
 
             out_det = render(SMALL_EQ;
-                             method=Deterministic,
+                             method=PointDeterministic,
                              npoints=40,
                              iterations=1,
                              color=true,

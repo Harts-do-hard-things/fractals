@@ -34,18 +34,27 @@ const _BASE_L_SEGMENTS = [
 @enum RenderMethod begin
     Chaos
     Parallel
-    Deterministic
+    PointDeterministic
+    ImageIterate
     Inverse
 end
 
 const _RENDER_METHOD_CHOICES = (
     Chaos,
     Parallel,
-    Deterministic,
+    PointDeterministic,
+    ImageIterate,
     Inverse,
 )
 
-@inline _render_method_symbol(m::RenderMethod) = Symbol(lowercase(string(m)))
+function _render_method_symbol(m::RenderMethod)
+    if m == PointDeterministic
+        return :point_deterministic
+    elseif m == ImageIterate
+        return :image_iterate
+    end
+    return Symbol(lowercase(string(m)))
+end
 
 function _parse_render_method(method::RenderMethod)
     return method
@@ -57,12 +66,16 @@ function _parse_render_method(method::Symbol)
         return Chaos
     elseif m == :parallel
         return Parallel
-    elseif m == :deterministic
-        return Deterministic
+    elseif m == :point_deterministic || m == :pointdeterministic
+        return PointDeterministic
+    elseif m == :image_iterate || m == :imageiterate
+        return ImageIterate
     elseif m == :inverse
         return Inverse
+    elseif m == :deterministic
+        throw(ArgumentError("Method '$method' was removed. Use point_deterministic."))
     end
-    throw(ArgumentError("Invalid method '$method'. Supported methods: chaos, parallel, deterministic, inverse"))
+    throw(ArgumentError("Invalid method '$method'. Supported methods: chaos, parallel, point_deterministic, image_iterate, inverse"))
 end
 
 function _parse_render_method(method::AbstractString)
@@ -903,11 +916,155 @@ function _rgb_image_from_buffers(
     return out
 end
 
+function _to_grayscale_matrix(img::AbstractMatrix)
+    return Float32.(Gray.(img))
+end
+
+function _limits_from_points(points::Vector{SVector{2,Float64}})
+    isempty(points) && return DEFAULT_BASE_LIMITS
+
+    xmin = Inf; xmax = -Inf
+    ymin = Inf; ymax = -Inf
+    @inbounds for p in points
+        x, y = p
+        xmin = min(xmin, x)
+        xmax = max(xmax, x)
+        ymin = min(ymin, y)
+        ymax = max(ymax, y)
+    end
+
+    dx = xmax - xmin
+    dy = ymax - ymin
+    m = max(dx, dy)
+    m = m == 0 ? 1e-9 : m
+    pad = 0.05m
+
+    cx = (xmin + xmax) / 2
+    cy = (ymin + ymax) / 2
+    half = (m + 2pad) / 2
+
+    return ((cx - half, cx + half),
+            (cy - half, cy + half))
+end
+
+function _iterated_limits(ifs::IFS; warmup::Integer=DEFAULT_WARMUP)
+    tifs = IFS(ifs.name, ifs.docs, copy(ifs.points), ifs.maps, ifs.weights, ifs.limits)
+    iterate!(tifs; warmup=warmup)
+    return _limits_from_points(tifs.points)
+end
+
+@inline function _point_in_triangle(
+    x::Float64,
+    y::Float64,
+    a::Tuple{Float64,Float64},
+    b::Tuple{Float64,Float64},
+    c::Tuple{Float64,Float64}
+)
+    ax, ay = a
+    bx, by = b
+    cx, cy = c
+    v0x = cx - ax
+    v0y = cy - ay
+    v1x = bx - ax
+    v1y = by - ay
+    v2x = x - ax
+    v2y = y - ay
+
+    dot00 = v0x * v0x + v0y * v0y
+    dot01 = v0x * v1x + v0y * v1y
+    dot02 = v0x * v2x + v0y * v2y
+    dot11 = v1x * v1x + v1y * v1y
+    dot12 = v1x * v2x + v1y * v2y
+
+    denom = dot00 * dot11 - dot01 * dot01
+    denom == 0 && return false
+    invden = 1.0 / denom
+    u = (dot11 * dot02 - dot01 * dot12) * invden
+    v = (dot00 * dot12 - dot01 * dot02) * invden
+    return u >= 0 && v >= 0 && (u + v) <= 1
+end
+
+function _initial_polygon_image(
+    limits::Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}};
+    resolution::Tuple{Int,Int}=RESOLUTION
+)
+    rows, cols = resolution
+    (xlim, ylim) = limits
+    xmin, xmax = xlim
+    ymin, ymax = ylim
+    dx = xmax - xmin
+    dy = ymax - ymin
+    dx = dx == 0 ? 1e-9 : dx
+    dy = dy == 0 ? 1e-9 : dy
+
+    p1 = SVector{2,Float64}(xmin + 0.15 * dx, ymin + 0.15 * dy)
+    p2 = SVector{2,Float64}(xmax - 0.15 * dx, ymin + 0.20 * dy)
+    p3 = SVector{2,Float64}(xmin + 0.50 * dx, ymax - 0.15 * dy)
+
+    pmap = make_pixelate_map(limits; resolution=resolution)
+    q1 = pmap(p1); q2 = pmap(p2); q3 = pmap(p3)
+    a = (q1[1], q1[2])
+    b = (q2[1], q2[2])
+    c = (q3[1], q3[2])
+
+    img = zeros(Float32, rows, cols)
+    @inbounds for x in 1:cols
+        xf = Float64(x)
+        for y in 1:rows
+            if _point_in_triangle(xf, Float64(y), a, b, c)
+                img[y, x] = 1.0f0
+            end
+        end
+    end
+    return img
+end
+
+function _resolve_image_source(
+    ifs::IFS,
+    image_source::Symbol,
+    image_path::Union{Nothing,AbstractString},
+    resolution::Tuple{Int,Int},
+    warmup::Integer,
+    deterministic_iters::Integer,
+    inverse_iters::Integer,
+    polygon_limits_mode::Symbol,
+    show_divergence_scale::Bool
+)
+    if image_source == :file
+        isnothing(image_path) && throw(ArgumentError("image_path is required when image_source=:file"))
+        isfile(image_path) || throw(ArgumentError("image_path '$image_path' does not exist"))
+        return _to_grayscale_matrix(load(image_path))
+    elseif image_source == :chaos
+        tifs = IFS(ifs.name, ifs.docs, copy(ifs.points), ifs.maps, ifs.weights, ifs.limits)
+        iterate!(tifs; warmup=warmup)
+        return make_image(tifs; resolution=resolution)
+    elseif image_source == :point_deterministic
+        tifs = deterministic_iterate(ifs, deterministic_iters; warmup=warmup)
+        return make_image(tifs; resolution=resolution)
+    elseif image_source == :inverse
+        return rasterize_image_inversely(ifs, inverse_iters, ifs.limits;
+                                         resolution=resolution,
+                                         show_divergence_scale=show_divergence_scale)
+    elseif image_source == :polygon
+        limits = if polygon_limits_mode == :iterated_ifs
+            _iterated_limits(ifs; warmup=warmup)
+        elseif polygon_limits_mode == :ifs
+            ifs.limits
+        else
+            throw(ArgumentError("Invalid polygon_limits_mode '$polygon_limits_mode'. Supported: :iterated_ifs, :ifs"))
+        end
+        return _initial_polygon_image(limits; resolution=resolution)
+    end
+
+    throw(ArgumentError("Invalid image_source '$image_source'. Supported: :polygon, :chaos, :point_deterministic, :inverse, :file"))
+end
+
 function iterate_image(ifs::IFS,
-                       img::AbstractMatrix{<:Real};
+                       img::AbstractMatrix;
                        colors::Bool=false,
                        seed::Union{Nothing,Integer}=nothing)
-    rows, cols = size(img)
+    src = _to_grayscale_matrix(img)
+    rows, cols = size(src)
 
     nthreads_local = nthreads()
     buffers = [zeros(Float32, rows, cols) for _ in 1:nthreads_local]
@@ -932,7 +1089,7 @@ function iterate_image(ifs::IFS,
             gbuf = colors ? gbuffers[tid] : graybuf
             bbuf = colors ? bbuffers[tid] : graybuf
             @inbounds for y in 1:rows
-                val = img[y, x]
+                val = src[y, x]
                 if val != 0
                     fx, fy = cmap(SVector(x, y))
 
@@ -1028,9 +1185,14 @@ function _validate_render_options(
     method::RenderMethod,
     npoints::Union{Nothing,Integer},
     warmup::Integer,
+    color::Bool,
     resolution::Tuple{Int,Int},
     ifs_index::Union{Nothing,Integer},
     ifs_name::Union{Nothing,AbstractString},
+    image_source::Symbol,
+    image_path::Union{Nothing,AbstractString},
+    image_iterations::Integer,
+    polygon_limits_mode::Symbol,
     deterministic_depth::Integer,
     inverse_depth::Integer
 )
@@ -1039,8 +1201,17 @@ function _validate_render_options(
     resolution[1] > 0 && resolution[2] > 0 || throw(ArgumentError("resolution must be positive, got $resolution"))
     isnothing(ifs_index) || ifs_index > 0 || throw(ArgumentError("ifs_index must be >= 1, got $ifs_index"))
     isnothing(ifs_name) || !isempty(strip(ifs_name)) || throw(ArgumentError("ifs_name must be non-empty when provided"))
+    image_iterations > 0 || throw(ArgumentError("image_iterations must be > 0, got $image_iterations"))
     deterministic_depth >= 0 || throw(ArgumentError("deterministic_depth must be >= 0, got $deterministic_depth"))
     inverse_depth >= 0 || throw(ArgumentError("inverse_depth must be >= 0, got $inverse_depth"))
+    image_source in (:polygon, :chaos, :point_deterministic, :inverse, :file) ||
+        throw(ArgumentError("Invalid image_source '$image_source'. Supported: :polygon, :chaos, :point_deterministic, :inverse, :file"))
+    polygon_limits_mode in (:iterated_ifs, :ifs) ||
+        throw(ArgumentError("Invalid polygon_limits_mode '$polygon_limits_mode'. Supported: :iterated_ifs, :ifs"))
+    image_source == :file && isnothing(image_path) &&
+        throw(ArgumentError("image_path is required when image_source=:file"))
+    method == ImageIterate && color &&
+        throw(ArgumentError("color=true is not supported for method=ImageIterate. ImageIterate is grayscale-only."))
     return nothing
 end
 
@@ -1178,6 +1349,10 @@ function render(
     warmup::Integer=DEFAULT_WARMUP,
     color::Bool=false,
     show_divergence_scale::Bool=true,
+    image_source::Symbol=:polygon,
+    image_path::Union{Nothing,AbstractString}=nothing,
+    image_iterations::Integer=1,
+    polygon_limits_mode::Symbol=:iterated_ifs,
     resolution::Tuple{Int,Int}=RESOLUTION,
     outpath::AbstractString="media/render.png",
     ifs_index::Union{Nothing,Integer}=nothing,
@@ -1187,7 +1362,7 @@ function render(
     inverse_depth::Integer=8,
 )
     parsed_method = _parse_render_method(method)
-    _validate_render_options(parsed_method, npoints, warmup, resolution, ifs_index, ifs_name, deterministic_depth, inverse_depth)
+    _validate_render_options(parsed_method, npoints, warmup, color, resolution, ifs_index, ifs_name, image_source, image_path, image_iterations, polygon_limits_mode, deterministic_depth, inverse_depth)
 
     ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index, ifs_name=ifs_name)
 
@@ -1199,16 +1374,29 @@ function render(
     if render_method == Chaos
         iterate!(rendered_ifs; warmup=warmup)
         img = make_image(rendered_ifs; resolution=resolution)
-    elseif render_method == Deterministic
+    elseif render_method == PointDeterministic
         rendered_ifs = deterministic_iterate(rendered_ifs, deterministic_iters; warmup=warmup)
         img = make_image(rendered_ifs; resolution=resolution)
-    else
+    elseif render_method == Inverse
         img = rasterize_image_inversely(rendered_ifs, inverse_iters, rendered_ifs.limits;
                                         resolution=resolution,
                                         show_divergence_scale=show_divergence_scale)
+    else
+        img = _resolve_image_source(rendered_ifs,
+                                    image_source,
+                                    image_path,
+                                    resolution,
+                                    warmup,
+                                    deterministic_iters,
+                                    inverse_iters,
+                                    polygon_limits_mode,
+                                    show_divergence_scale)
+        for _ in 1:image_iterations
+            img = iterate_image(rendered_ifs, img; colors=false)
+        end
     end
 
-    if color
+    if color && render_method != ImageIterate
         img = iterate_image(rendered_ifs, img; colors=true)
     end
 

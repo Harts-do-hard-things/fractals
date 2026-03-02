@@ -228,7 +228,7 @@ function prompt_ifs_and_render(path::AbstractString;
     println("Iteration methods:")
     println("  [1] chaos auto-threaded (iterate!)")
     println("  [2] chaos auto-threaded (iterate_parallel! alias)")
-    println("  [3] deterministic (deterministic_iterate, n=1)")
+    println("  [3] point deterministic (deterministic_iterate, n=1)")
     method = _prompt_choice("Select method [1-3] (default 1): ", 3, 1)
 
     npoints = _prompt_int("Number of points (default $(npoints)): ", npoints)

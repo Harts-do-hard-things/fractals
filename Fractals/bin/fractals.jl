@@ -20,9 +20,13 @@ Commands:
 
 Common options:
   --input <path>           Input file path
-  --method <method>        Chaos|Parallel|Deterministic|Inverse (or lowercase/symbol forms)
+  --method <method>        Chaos|Parallel|PointDeterministic|ImageIterate|Inverse
   --npoints <int>          Number of points
   --iterations <int>       Iterations for deterministic/inverse methods
+  --image-source <name>    polygon|chaos|point_deterministic|inverse|file (ImageIterate only)
+  --image-path <path>      Source image path when --image-source file
+  --image-iterations <int> Number of iterate_image passes (ImageIterate only)
+  --polygon-limits-mode    iterated_ifs|ifs (ImageIterate polygon source)
   --resolution <HxW>       Image resolution (e.g. 1024x1024)
   --ifs-index <int>        Select IFS by index from an .ifs file
   --ifs-name <name>        Select IFS by name from an .ifs file
@@ -123,6 +127,10 @@ function _render_from_input(input::String, opts::Dict{String,Any})
     method = _opt_str(opts, "method", "Chaos")
     npoints = _opt_int(opts, "npoints", nothing)
     iterations = _opt_int(opts, "iterations", nothing)
+    image_source = Symbol(_opt_str(opts, "image-source", "polygon"))
+    image_path = _opt_str(opts, "image-path", nothing)
+    image_iterations = _opt_int(opts, "image-iterations", 1)
+    polygon_limits_mode = Symbol(_opt_str(opts, "polygon-limits-mode", "iterated_ifs"))
     ifs_index = _opt_int(opts, "ifs-index", nothing)
     ifs_name = _opt_str(opts, "ifs-name", nothing)
     outpath = _opt_str(opts, "out", "media/cli_render.png")
@@ -134,6 +142,10 @@ function _render_from_input(input::String, opts::Dict{String,Any})
             method=method,
             npoints=npoints,
             iterations=iterations,
+            image_source=image_source,
+            image_path=image_path,
+            image_iterations=image_iterations,
+            polygon_limits_mode=polygon_limits_mode,
             ifs_index=ifs_index,
             ifs_name=ifs_name,
             resolution=resolution,
@@ -147,6 +159,10 @@ function _render_from_input(input::String, opts::Dict{String,Any})
         method=method,
         npoints=npoints,
         iterations=iterations,
+        image_source=image_source,
+        image_path=image_path,
+        image_iterations=image_iterations,
+        polygon_limits_mode=polygon_limits_mode,
         resolution=resolution,
         outpath=outpath,
     )
@@ -168,6 +184,10 @@ function _cmd_batch_render(opts::Dict{String,Any})
     method = _opt_str(opts, "method", "Chaos")
     npoints = _opt_int(opts, "npoints", nothing)
     iterations = _opt_int(opts, "iterations", nothing)
+    image_source = Symbol(_opt_str(opts, "image-source", "polygon"))
+    image_path = _opt_str(opts, "image-path", nothing)
+    image_iterations = _opt_int(opts, "image-iterations", 1)
+    polygon_limits_mode = Symbol(_opt_str(opts, "polygon-limits-mode", "iterated_ifs"))
     outdir = _opt_str(opts, "out-dir", "media/batch")
     resolution = haskey(opts, "resolution") ? _parse_resolution(string(opts["resolution"])) : RESOLUTION
     mkpath(outdir)
@@ -184,6 +204,10 @@ function _cmd_batch_render(opts::Dict{String,Any})
             method=method,
             npoints=npoints,
             iterations=iterations,
+            image_source=image_source,
+            image_path=image_path,
+            image_iterations=image_iterations,
+            polygon_limits_mode=polygon_limits_mode,
             ifs_index=i,
             resolution=resolution,
             outpath=outpath,

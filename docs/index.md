@@ -5,7 +5,7 @@ Fractals.jl provides fast tools for rendering 2D iterated function system fracta
 ## Start Here
 
 - Use the high-level `render(...)` API for most workflows.
-- Use `Chaos`, `Parallel`, `Deterministic`, and `Inverse` methods depending on your use case.
+- Use `Chaos`, `Parallel`, `PointDeterministic`, `ImageIterate`, and `Inverse` methods depending on your use case.
 - Save outputs to `media/` (default behavior).
 
 ## Key Links

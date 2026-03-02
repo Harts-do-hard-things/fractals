@@ -61,8 +61,8 @@ result = render(EISENSTEIN;
 @show result.outpath
 ```
 
-`render` accepts method as enum (`Chaos`, `Parallel`, `Deterministic`, `Inverse`), symbol, or lowercase string.
-For `method=:deterministic` and `method=:inverse`, use `iterations=...` to control iteration depth.
+`render` accepts method as enum (`Chaos`, `Parallel`, `PointDeterministic`, `ImageIterate`, `Inverse`), symbol, or lowercase string.
+For `method=:point_deterministic` and `method=:inverse`, use `iterations=...` to control iteration depth.
 For `.ifs` files with multiple definitions, select one with `ifs_index=...` or `ifs_name=...`.
 
 Reproducible chaos iteration example:

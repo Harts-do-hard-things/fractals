@@ -53,17 +53,31 @@ result = render("my_fractals.ifs";
 
 If no `ifs_index`/`ifs_name` is provided and the file contains multiple definitions, `render(...)` prints available options and asks for confirmation before selecting index `1`.
 
-## Recipe 3: Deterministic Preview
+## Recipe 3: Point Deterministic Preview
 
 ```julia
 using Fractals
 
 result = render(EISENSTEIN;
-                method=Deterministic,
+                method=PointDeterministic,
                 npoints=300,
                 iterations=2,
                 resolution=(900, 900),
                 outpath="media/recipe_deterministic.png")
+```
+
+## Recipe 4: Image Iterate From Polygon
+
+```julia
+using Fractals
+
+result = render(EISENSTEIN;
+                method=ImageIterate,
+                image_source=:polygon,
+                image_iterations=3,
+                polygon_limits_mode=:iterated_ifs,
+                resolution=(900, 900),
+                outpath="media/recipe_image_iterate.png")
 ```
 
 ## Optional: Inverse Render

@@ -41,27 +41,34 @@ println(result.outpath)
 ```
 
 Method options (all accepted by `render`):
-- enum values (preferred): `Chaos`, `Parallel`, `Deterministic`, `Inverse`
-- symbols: `:chaos`, `:parallel`, `:deterministic`, `:inverse`
-- strings: `"chaos"`, `"parallel"`, `"deterministic"`, `"inverse"`
+- enum values (preferred): `Chaos`, `Parallel`, `PointDeterministic`, `ImageIterate`, `Inverse`
+- symbols: `:chaos`, `:parallel`, `:point_deterministic`, `:image_iterate`, `:inverse`
+- strings: `"chaos"`, `"parallel"`, `"point_deterministic"`, `"image_iterate"`, `"inverse"`
 
 Dispatch behavior:
 - `Parallel`/`:parallel` is treated as `Chaos` because `iterate!` is auto-threaded.
 - For `method=Inverse`, `show_divergence_scale=false` switches inverse output to a binary mask
   where non-diverged and contains-zero regions are white.
+- `method=:deterministic` is removed; use `:point_deterministic`.
 
 Iteration control:
-- Use `iterations=...` for both `:deterministic` and `:inverse`.
+- Use `iterations=...` for both `:point_deterministic` and `:inverse`.
 - Backward-compatible aliases still work:
   - `deterministic_depth=...`
   - `inverse_depth=...`
 - If `iterations` is provided, it takes precedence over depth aliases.
 - `deterministic_depth` and `inverse_depth` are compatibility aliases; prefer `iterations`.
 - `iterations` must be `>= 0`.
-- `warmup` is applied to both chaos and deterministic render paths.
+- `warmup` is applied to chaos, point-deterministic, and image-source generation paths.
 - `npoints` behavior:
   - For matrix/string/file inputs, omitted `npoints` defaults to `DEFAULT_SAMPLES`.
   - For `IFS` input, omitted `npoints` keeps the existing point count.
+- `ImageIterate` options:
+  - `image_source=:polygon|:chaos|:point_deterministic|:inverse|:file`
+  - `image_path=...` required when `image_source=:file`
+  - `image_iterations` controls repeated `iterate_image` passes
+  - `polygon_limits_mode=:iterated_ifs|:ifs`
+  - `color=true` is not supported for `ImageIterate` (grayscale-only by design)
 
 Selecting an IFS from `.ifs` files with multiple definitions:
 - Use `ifs_index=...` or `ifs_name=...` (provide only one).
@@ -74,11 +81,14 @@ Examples:
 ```julia
 using Fractals
 
-# Deterministic: apply maps for 2 rounds
-out1 = render(EISENSTEIN; method=:deterministic, iterations=2, npoints=500)
+# Point deterministic: apply maps for 2 rounds
+out1 = render(EISENSTEIN; method=:point_deterministic, iterations=2, npoints=500)
 
 # Inverse: run inverse rasterization for 6 rounds
 out2 = render(EISENSTEIN; method=:inverse, iterations=6, resolution=(800, 800))
+
+# Image iterate: iterate a grayscale source image through map-space transforms
+out3 = render(EISENSTEIN; method=:image_iterate, image_source=:polygon, image_iterations=3, resolution=(800, 800))
 ```
 
 ### Basic render
@@ -92,7 +102,7 @@ img = make_image(ifs; resolution=(1024, 1024))
 save("media/dragon.png", img)
 ```
 
-### Deterministic preview
+### Point deterministic preview
 
 ```julia
 using Fractals, FileIO
@@ -174,6 +184,10 @@ Rasterizes `ifs.points` into a normalized `Float32` image in `[0, 1]`.
 ### `iterate_image(ifs, img)`
 
 Applies all IFS maps to an image and returns a grayscale image.
+
+Notes:
+- Input is converted to grayscale internally.
+- Safe to call repeatedly (`iterate_image(ifs, iterate_image(ifs, img))`).
 
 ### `rasterize_image_inversely(ifs, n, limits; resolution=RESOLUTION, show_divergence_scale=true)`
 
