@@ -75,10 +75,13 @@ result = render(EISENSTEIN;
                 method=ImageIterate,
                 image_source=:polygon,
                 image_iterations=3,
-                polygon_limits_mode=:iterated_ifs,
+                polygon_limits_mode=:ifs,
                 resolution=(900, 900),
                 outpath="media/recipe_image_iterate.png")
 ```
+
+The `:polygon` seed is produced via `render_transformations_png(...; show_base=false, color=false, limits_mode=:ifs)` and then read as grayscale.
+For `image_source=:polygon`, `polygon_limits_mode=:default` is treated as `:ifs` (compatibility alias).
 
 ## Optional: Inverse Render
 

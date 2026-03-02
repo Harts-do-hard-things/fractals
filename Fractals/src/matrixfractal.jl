@@ -23,12 +23,12 @@ const DEFAULT_SAMPLES = 1_000_000
 const DEFAULT_MEDIA_DIR = "media"
 const DEFAULT_BASE_LIMITS = ((0.0, 1.0), (0.0, 1.0))
 const _BASE_L_SEGMENTS = [
-    (SVector{2,Float64}(0.0, 0.0), SVector{2,Float64}(1.0, 0.0)),
-    (SVector{2,Float64}(1.0, 0.0), SVector{2,Float64}(1.0, 1.0)),
-    (SVector{2,Float64}(1.0, 1.0), SVector{2,Float64}(0.0, 1.0)),
-    (SVector{2,Float64}(0.0, 1.0), SVector{2,Float64}(0.0, 0.0)),
-    (SVector{2,Float64}(1/6, 1/6), SVector{2,Float64}(1/6, 5/6)),
-    (SVector{2,Float64}(1/6, 5/6), SVector{2,Float64}(5/9, 5/6)),
+    (SVector{2,Float64}(0.0, 1.0), SVector{2,Float64}(1.0, 1.0)),
+    (SVector{2,Float64}(1.0, 1.0), SVector{2,Float64}(1.0, 0.0)),
+    (SVector{2,Float64}(1.0, 0.0), SVector{2,Float64}(0.0, 0.0)),
+    (SVector{2,Float64}(0.0, 0.0), SVector{2,Float64}(0.0, 1.0)),
+    (SVector{2,Float64}(1/6, 5/6), SVector{2,Float64}(1/6, 1/6)),
+    (SVector{2,Float64}(1/6, 1/6), SVector{2,Float64}(5/9, 1/6)),
 ]
 
 @enum RenderMethod begin
@@ -266,38 +266,100 @@ function _draw_line!(
     end
 end
 
+function _limits_xy(p::SVector{2,Float64}, limits, width::Int, height::Int)
+    (xmin, xmax), (ymin, ymax) = limits
+    dx = xmax - xmin
+    dy = ymax - ymin
+    dx = dx == 0 ? 1.0 : dx
+    dy = dy == 0 ? 1.0 : dy
+
+    nx = (p[1] - xmin) / dx
+    ny = (p[2] - ymin) / dy
+    x = 1 + nx * (width - 1)
+    y = 1 + (1 - ny) * (height - 1)
+    return x, y
+end
+
+function _render_transformations_image(
+    ifs;
+    width::Int=1200,
+    height::Int=1200,
+    show_base::Bool=false,
+    limits_mode::Symbol=:ifs,
+    color::Bool=true,
+)
+    base_segments, transformed_by_map, all_segments =
+        _collect_transformed_base_segments(ifs; show_base=show_base)
+    map_colors = _map_colors(length(transformed_by_map))
+    img = fill(RGBA{Float32}(0.0f0, 0.0f0, 0.0f0, 0.0f0), height, width)
+
+    if limits_mode == :ifs || limits_mode == :default
+        limits = limits_mode == :ifs ? ifs.limits : _base_limits_image()
+        if show_base
+            base_color = color ? RGBA{Float32}(0.2f0, 0.2f0, 0.2f0, 1.0f0) : RGBA{Float32}(1.0f0, 1.0f0, 1.0f0, 1.0f0)
+            for (p1, p2) in base_segments
+                x1, y1 = _limits_xy(p1, limits, width, height)
+                x2, y2 = _limits_xy(p2, limits, width, height)
+                _draw_line!(img, x1, y1, x2, y2, base_color)
+            end
+        end
+
+        for (i, transformed) in enumerate(transformed_by_map)
+            map_color = color ? begin
+                c = _map_color_rgb(i, map_colors)
+                RGBA{Float32}(c.r, c.g, c.b, 1.0f0)
+            end : RGBA{Float32}(1.0f0, 1.0f0, 1.0f0, 1.0f0)
+            for (p1, p2) in transformed
+                x1, y1 = _limits_xy(p1, limits, width, height)
+                x2, y2 = _limits_xy(p2, limits, width, height)
+                _draw_line!(img, x1, y1, x2, y2, map_color)
+            end
+        end
+        return img
+    elseif limits_mode == :fit
+        sx, sy, ox, oy = _fit_bounds(all_segments, width, height)
+
+        if show_base
+            base_color = color ? RGBA{Float32}(0.2f0, 0.2f0, 0.2f0, 1.0f0) : RGBA{Float32}(1.0f0, 1.0f0, 1.0f0, 1.0f0)
+            for (p1, p2) in base_segments
+                x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
+                x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
+                _draw_line!(img, x1, y1, x2, y2, base_color)
+            end
+        end
+
+        for (i, transformed) in enumerate(transformed_by_map)
+            map_color = color ? begin
+                c = _map_color_rgb(i, map_colors)
+                RGBA{Float32}(c.r, c.g, c.b, 1.0f0)
+            end : RGBA{Float32}(1.0f0, 1.0f0, 1.0f0, 1.0f0)
+            for (p1, p2) in transformed
+                x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
+                x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
+                _draw_line!(img, x1, y1, x2, y2, map_color)
+            end
+        end
+        return img
+    end
+
+    throw(ArgumentError("Invalid limits_mode '$limits_mode'. Supported: :ifs, :default"))
+end
+
 function render_transformations_png(
     ifs;
     outpath::AbstractString="media/affine_maps.png",
     width::Int=1200,
     height::Int=1200,
     show_base::Bool=false,
+    limits_mode::Symbol=:ifs,
+    color::Bool=true,
 )
-    base_segments, transformed_by_map, all_segments =
-        _collect_transformed_base_segments(ifs; show_base=show_base)
-    colors = _map_colors(length(transformed_by_map))
-
-    sx, sy, ox, oy = _fit_bounds(all_segments, width, height)
-    img = fill(RGBA{Float32}(0.0f0, 0.0f0, 0.0f0, 0.0f0), height, width)
-
-    if show_base
-        base_color = RGBA{Float32}(0.2f0, 0.2f0, 0.2f0, 1.0f0)
-        for (p1, p2) in base_segments
-            x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
-            x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
-            _draw_line!(img, x1, y1, x2, y2, base_color)
-        end
-    end
-
-    for (i, transformed) in enumerate(transformed_by_map)
-        c = _map_color_rgb(i, colors)
-        color = RGBA{Float32}(c.r, c.g, c.b, 1.0f0)
-        for (p1, p2) in transformed
-            x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
-            x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
-            _draw_line!(img, x1, y1, x2, y2, color)
-        end
-    end
+    img = _render_transformations_image(ifs;
+                                        width=width,
+                                        height=height,
+                                        show_base=show_base,
+                                        limits_mode=limits_mode,
+                                        color=color)
 
     final_outpath = _normalize_media_outpath(outpath)
     save(final_outpath, img)
@@ -590,26 +652,21 @@ function _deterministic_expand_points(
     newsize = length(points) * nmaps^n
     @assert newsize ≥ 0 "Integer overflow"
     @assert newsize < 10^8 "Too many points allocated"
-
-    result = Vector{SVector{2,Float64}}(undef, newsize)
-    result[1:length(points)] = points
-
-    current_len = length(points)
-
+    current = points
     for _ in 1:n
-        base = view(result, 1:current_len)
+        current_len = length(current)
+        next = Vector{SVector{2,Float64}}(undef, current_len * nmaps)
 
         @threads for i in 1:nmaps
-            start = (i-1)*current_len + 1
-            stop  = i*current_len
-            @inbounds result[start:stop] =
-                maps[i].(base)
+            start = (i-1) * current_len + 1
+            stop = i * current_len
+            @inbounds next[start:stop] = maps[i].(current)
         end
 
-        current_len *= nmaps
+        current = next
     end
 
-    return result
+    return current
 end
 
 function deterministic_iterate(ifs::IFS,
@@ -947,78 +1004,6 @@ function _limits_from_points(points::Vector{SVector{2,Float64}})
             (cy - half, cy + half))
 end
 
-function _iterated_limits(ifs::IFS; warmup::Integer=DEFAULT_WARMUP)
-    tifs = IFS(ifs.name, ifs.docs, copy(ifs.points), ifs.maps, ifs.weights, ifs.limits)
-    iterate!(tifs; warmup=warmup)
-    return _limits_from_points(tifs.points)
-end
-
-@inline function _point_in_triangle(
-    x::Float64,
-    y::Float64,
-    a::Tuple{Float64,Float64},
-    b::Tuple{Float64,Float64},
-    c::Tuple{Float64,Float64}
-)
-    ax, ay = a
-    bx, by = b
-    cx, cy = c
-    v0x = cx - ax
-    v0y = cy - ay
-    v1x = bx - ax
-    v1y = by - ay
-    v2x = x - ax
-    v2y = y - ay
-
-    dot00 = v0x * v0x + v0y * v0y
-    dot01 = v0x * v1x + v0y * v1y
-    dot02 = v0x * v2x + v0y * v2y
-    dot11 = v1x * v1x + v1y * v1y
-    dot12 = v1x * v2x + v1y * v2y
-
-    denom = dot00 * dot11 - dot01 * dot01
-    denom == 0 && return false
-    invden = 1.0 / denom
-    u = (dot11 * dot02 - dot01 * dot12) * invden
-    v = (dot00 * dot12 - dot01 * dot02) * invden
-    return u >= 0 && v >= 0 && (u + v) <= 1
-end
-
-function _initial_polygon_image(
-    limits::Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}};
-    resolution::Tuple{Int,Int}=RESOLUTION
-)
-    rows, cols = resolution
-    (xlim, ylim) = limits
-    xmin, xmax = xlim
-    ymin, ymax = ylim
-    dx = xmax - xmin
-    dy = ymax - ymin
-    dx = dx == 0 ? 1e-9 : dx
-    dy = dy == 0 ? 1e-9 : dy
-
-    p1 = SVector{2,Float64}(xmin + 0.15 * dx, ymin + 0.15 * dy)
-    p2 = SVector{2,Float64}(xmax - 0.15 * dx, ymin + 0.20 * dy)
-    p3 = SVector{2,Float64}(xmin + 0.50 * dx, ymax - 0.15 * dy)
-
-    pmap = make_pixelate_map(limits; resolution=resolution)
-    q1 = pmap(p1); q2 = pmap(p2); q3 = pmap(p3)
-    a = (q1[1], q1[2])
-    b = (q2[1], q2[2])
-    c = (q3[1], q3[2])
-
-    img = zeros(Float32, rows, cols)
-    @inbounds for x in 1:cols
-        xf = Float64(x)
-        for y in 1:rows
-            if _point_in_triangle(xf, Float64(y), a, b, c)
-                img[y, x] = 1.0f0
-            end
-        end
-    end
-    return img
-end
-
 function _resolve_image_source(
     ifs::IFS,
     image_source::Symbol,
@@ -1046,14 +1031,27 @@ function _resolve_image_source(
                                          resolution=resolution,
                                          show_divergence_scale=show_divergence_scale)
     elseif image_source == :polygon
-        limits = if polygon_limits_mode == :iterated_ifs
-            _iterated_limits(ifs; warmup=warmup)
-        elseif polygon_limits_mode == :ifs
-            ifs.limits
+        limits_mode = if polygon_limits_mode == :ifs
+            :ifs
+        elseif polygon_limits_mode == :default
+            @warn "polygon_limits_mode=:default is treated as :ifs for image_source=:polygon."
+            :ifs
         else
-            throw(ArgumentError("Invalid polygon_limits_mode '$polygon_limits_mode'. Supported: :iterated_ifs, :ifs"))
+            throw(ArgumentError("Invalid polygon_limits_mode '$polygon_limits_mode'. Supported: :ifs, :default"))
         end
-        return _initial_polygon_image(limits; resolution=resolution)
+        p = joinpath(DEFAULT_MEDIA_DIR, "polygon_seed_$(randstring(12)).png")
+        try
+            render_transformations_png(ifs;
+                                       outpath=p,
+                                       width=resolution[2],
+                                       height=resolution[1],
+                                       show_base=false,
+                                       limits_mode=limits_mode,
+                                       color=false)
+            return _to_grayscale_matrix(load(p))
+        finally
+            rm(p; force=true)
+        end
     end
 
     throw(ArgumentError("Invalid image_source '$image_source'. Supported: :polygon, :chaos, :point_deterministic, :inverse, :file"))
@@ -1206,8 +1204,8 @@ function _validate_render_options(
     inverse_depth >= 0 || throw(ArgumentError("inverse_depth must be >= 0, got $inverse_depth"))
     image_source in (:polygon, :chaos, :point_deterministic, :inverse, :file) ||
         throw(ArgumentError("Invalid image_source '$image_source'. Supported: :polygon, :chaos, :point_deterministic, :inverse, :file"))
-    polygon_limits_mode in (:iterated_ifs, :ifs) ||
-        throw(ArgumentError("Invalid polygon_limits_mode '$polygon_limits_mode'. Supported: :iterated_ifs, :ifs"))
+    polygon_limits_mode in (:ifs, :default) ||
+        throw(ArgumentError("Invalid polygon_limits_mode '$polygon_limits_mode'. Supported: :ifs, :default"))
     image_source == :file && isnothing(image_path) &&
         throw(ArgumentError("image_path is required when image_source=:file"))
     method == ImageIterate && color &&
@@ -1352,7 +1350,7 @@ function render(
     image_source::Symbol=:polygon,
     image_path::Union{Nothing,AbstractString}=nothing,
     image_iterations::Integer=1,
-    polygon_limits_mode::Symbol=:iterated_ifs,
+    polygon_limits_mode::Symbol=:ifs,
     resolution::Tuple{Int,Int}=RESOLUTION,
     outpath::AbstractString="media/render.png",
     ifs_index::Union{Nothing,Integer}=nothing,

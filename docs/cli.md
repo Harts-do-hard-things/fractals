@@ -48,5 +48,6 @@ julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --
   - `--image-source polygon|chaos|point_deterministic|inverse|file`
   - `--image-path <path>` when source is `file`
   - `--image-iterations <int>`
-  - `--polygon-limits-mode iterated_ifs|ifs`
+  - `--polygon-limits-mode ifs|default`
+    - For `--image-source polygon`, `default` is treated as `ifs` (compatibility alias).
 - For multi-definition `.ifs`, select one using `--ifs-index` or `--ifs-name`.

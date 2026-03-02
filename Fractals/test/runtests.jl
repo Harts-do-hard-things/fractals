@@ -103,6 +103,21 @@ end
 end
 
 @testset "Deterministic Iterate" begin
+    function _safe_expand(points, maps, n)
+        cur = copy(points)
+        for _ in 1:n
+            next = Vector{SVector{2,Float64}}(undef, length(cur) * length(maps))
+            clen = length(cur)
+            for i in 1:length(maps)
+                start = (i - 1) * clen + 1
+                stop = i * clen
+                next[start:stop] = maps[i].(cur)
+            end
+            cur = next
+        end
+        return cur
+    end
+
     ifs = IFS(SMALL_EQ; npoints=20)
     n = 2
     ifs_orig_points = copy(ifs.points)
@@ -115,9 +130,18 @@ end
     ifs2 = IFS(SMALL_EQ; npoints=20)
     base = IFS(ifs2.name, ifs2.docs, copy(ifs2.points), ifs2.maps, ifs2.weights, ifs2.limits)
     iterate!(base; warmup=5, seed=123)
-    expected_points = Fractals._deterministic_expand_points(base.points, ifs2.maps, n)
+    expected_points = _safe_expand(base.points, ifs2.maps, n)
     out2 = deterministic_iterate(ifs2, n; warmup=5, seed=123)
     @test out2.points == expected_points
+
+    # For one round, each map block must be exactly map(points).
+    one_round = Fractals._deterministic_expand_points(base.points, ifs2.maps, 1)
+    base_len = length(base.points)
+    for i in 1:length(ifs2.maps)
+        start = (i - 1) * base_len + 1
+        stop = i * base_len
+        @test one_round[start:stop] == ifs2.maps[i].(base.points)
+    end
 end
 
 @testset "Pixel Maps" begin
@@ -313,9 +337,24 @@ end
     @test filesize(png_path) > 0
     png_img = load(png_path)
     @test alpha(png_img[1, 1]) == 0
+    colored_nonzero = count(px -> alpha(px) > 0 && (red(px) != green(px) || green(px) != blue(px)), png_img)
+    @test colored_nonzero > 0
+
+    png_path_white = render_transformations_png(ifs;
+                                                outpath=joinpath("media", "maps_white_$suffix.png"),
+                                                width=256,
+                                                height=256,
+                                                color=false,
+                                                limits_mode=:default,
+                                                show_base=true)
+    @test isfile(png_path_white)
+    png_img_white = load(png_path_white)
+    white_nonzero = count(px -> alpha(px) > 0 && red(px) == 1 && green(px) == 1 && blue(px) == 1, png_img_white)
+    @test white_nonzero > 0
 
     rm(svg_path; force=true)
     rm(png_path; force=true)
+    rm(png_path_white; force=true)
 end
 
 @testset "Affine Map Color Assignment By Map" begin
@@ -443,6 +482,44 @@ end
     @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, color=true, resolution=(24, 24), outpath=joinpath("media", "never_write_$suffix.png"))
     @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, image_source=:file, image_path=nothing, resolution=(24, 24), outpath=joinpath("media", "never_write2_$suffix.png"))
     @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, polygon_limits_mode=:bad_mode, resolution=(24, 24), outpath=joinpath("media", "never_write3_$suffix.png"))
+
+    # Polygon seed should remain sparse line art, generated from render_transformations_png.
+    poly_seed = Fractals._resolve_image_source(IFS(SMALL_EQ; npoints=10),
+                                               :polygon,
+                                               nothing,
+                                               (64, 64),
+                                               0,
+                                               1,
+                                               1,
+                                               :ifs,
+                                               true)
+    density = count(>(0f0), Float32.(poly_seed)) / length(poly_seed)
+    @test density > 0.005
+    @test density < 0.25
+
+    poly_seed_default = Fractals._resolve_image_source(IFS(SMALL_EQ; npoints=10),
+                                                       :polygon,
+                                                       nothing,
+                                                       (64, 64),
+                                                       0,
+                                                       1,
+                                                       1,
+                                                       :default,
+                                                       true)
+    @test count(>(0), poly_seed_default) > 0
+    @test poly_seed_default == poly_seed
+
+    @test_logs (:warn, r"polygon_limits_mode=:default is treated as :ifs") Fractals._resolve_image_source(
+        IFS(SMALL_EQ; npoints=10),
+        :polygon,
+        nothing,
+        (64, 64),
+        0,
+        1,
+        1,
+        :default,
+        true
+    )
 
     rm(out_poly.outpath; force=true)
     rm(out_chaos.outpath; force=true)

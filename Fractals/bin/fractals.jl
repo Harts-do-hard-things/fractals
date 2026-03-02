@@ -26,7 +26,7 @@ Common options:
   --image-source <name>    polygon|chaos|point_deterministic|inverse|file (ImageIterate only)
   --image-path <path>      Source image path when --image-source file
   --image-iterations <int> Number of iterate_image passes (ImageIterate only)
-  --polygon-limits-mode    iterated_ifs|ifs (ImageIterate polygon source)
+  --polygon-limits-mode    ifs|default (ImageIterate polygon source)
   --resolution <HxW>       Image resolution (e.g. 1024x1024)
   --ifs-index <int>        Select IFS by index from an .ifs file
   --ifs-name <name>        Select IFS by name from an .ifs file
@@ -130,7 +130,7 @@ function _render_from_input(input::String, opts::Dict{String,Any})
     image_source = Symbol(_opt_str(opts, "image-source", "polygon"))
     image_path = _opt_str(opts, "image-path", nothing)
     image_iterations = _opt_int(opts, "image-iterations", 1)
-    polygon_limits_mode = Symbol(_opt_str(opts, "polygon-limits-mode", "iterated_ifs"))
+    polygon_limits_mode = Symbol(_opt_str(opts, "polygon-limits-mode", "ifs"))
     ifs_index = _opt_int(opts, "ifs-index", nothing)
     ifs_name = _opt_str(opts, "ifs-name", nothing)
     outpath = _opt_str(opts, "out", "media/cli_render.png")
@@ -187,7 +187,7 @@ function _cmd_batch_render(opts::Dict{String,Any})
     image_source = Symbol(_opt_str(opts, "image-source", "polygon"))
     image_path = _opt_str(opts, "image-path", nothing)
     image_iterations = _opt_int(opts, "image-iterations", 1)
-    polygon_limits_mode = Symbol(_opt_str(opts, "polygon-limits-mode", "iterated_ifs"))
+    polygon_limits_mode = Symbol(_opt_str(opts, "polygon-limits-mode", "ifs"))
     outdir = _opt_str(opts, "out-dir", "media/batch")
     resolution = haskey(opts, "resolution") ? _parse_resolution(string(opts["resolution"])) : RESOLUTION
     mkpath(outdir)
