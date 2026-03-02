@@ -59,8 +59,26 @@
 
 ### Ecosystem/Release
 - [x] Add curated `Fractals/data/*.ifs` library with metadata.
-- [ ] Add release checklist (version bump, changelog, benchmarks, docs updates).
+- [x] Add release checklist (version bump, changelog, benchmarks, docs updates).
 - [ ] Tag stable `v1.0.0` when API/CLI contracts are locked.
+
+### Release Checklist
+- [ ] Confirm working tree is clean and branch is up to date with target base branch.
+- [ ] Bump project version in package metadata as needed for the release.
+- [ ] Update changelog/release notes text to summarize user-visible API/CLI/docs changes.
+- [ ] Run full test suite:
+  - `julia --startup-file=no --project=Fractals Fractals/test/runtests.jl`
+- [ ] Run benchmark suite and review target envelope status:
+  - `julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile medium --repeats 3`
+- [ ] If target envelopes are configured, run strict benchmark validation:
+  - `julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile medium --repeats 3 --targets <path-to-targets.toml> --strict`
+- [ ] Verify docs impacted by the release are updated (`Fractals/DOCUMENTATION.md`, `docs/quick-recipes.md`, `docs/cli.md`, troubleshooting as needed).
+- [ ] Verify CLI help output matches docs for newly added or changed flags/options.
+- [ ] Commit release-prep changes with clear message.
+- [ ] Create and push release tag:
+  - `git tag vX.Y.Z`
+  - `git push origin vX.Y.Z`
+- [ ] Draft and publish release notes (GitHub release entry or equivalent).
 
 ### Animation
 - [ ] Add transform interpolation for animated sequences.
@@ -71,15 +89,18 @@
 
 ## Milestones and Exit Criteria
 
+Note: milestone checks below are based on repository state; live CI pass/fail depends on the latest GitHub Actions runs.
+
 ### M1 (Day 30)
-- [ ] `render(...)` API merged and documented
+- [x] `render(...)` API merged and documented
 - [x] Seeded reproducibility in place
 - [ ] CI passing on supported platforms
 
 ### M2 (Day 60)
-- [ ] CLI commands usable end-to-end
-- [ ] Benchmarks and regression checks live
-- [ ] Parser and snapshot test coverage increased
+- [x] CLI commands usable end-to-end
+- [x] Benchmarks and regression checks live
+- [x] Parser negative/validation test coverage increased
+- [ ] Snapshot image tests added
 
 ### M3 (Day 90)
 - [ ] Enhanced rendering controls shipped
@@ -89,15 +110,15 @@
 ---
 
 ## Suggested Priority Order (Backlog Top 10)
-- [ ] `render(...)` high-level API
+- [x] `render(...)` high-level API
 - [x] Seed support for iteration methods
-- [ ] CI matrix with startup-file-safe test invocation
+- [x] CI matrix with startup-file-safe test invocation
 - [x] CLI `render`
 - [x] Parser validation + negative tests
 - [x] Benchmark harness
 - [ ] Snapshot image tests
-- [ ] Batch rendering CLI
-- [ ] Curated `.ifs` dataset
+- [x] Batch rendering CLI
+- [x] Curated `.ifs` dataset
 
 ---
 
