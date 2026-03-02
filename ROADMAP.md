@@ -52,27 +52,20 @@
 ### Test Expansion
 - [x] Add parser negative tests (malformed braces, mixed row widths, bad floats).
 - [x] Add property tests for affine inverse round-trip.
-- [ ] Add low-res golden-image snapshot tests for known fractals (skip).
 
 ---
 
 ## 61-90 Days: Visual Quality and Distribution
 
-### Rendering Features
-- [ ] Add colormap support (grayscale + perceptual maps).
-- [ ] Add gamma/exposure controls.
-- [ ] Add supersampling / anti-aliasing path.
-- [ ] Add optional 16-bit export pipeline.
+### Ecosystem/Release
+- [x] Add curated `Fractals/data/*.ifs` library with metadata.
+- [ ] Add release checklist (version bump, changelog, benchmarks, docs updates).
+- [ ] Tag stable `v1.0.0` when API/CLI contracts are locked.
 
 ### Animation
 - [ ] Add transform interpolation for animated sequences.
 - [ ] Add frame renderer (`media/frames/...`) with deterministic naming.
 - [ ] Add GIF/MP4 export helper scripts.
-
-### Ecosystem/Release
-- [ ] Add curated `Fractals/data/*.ifs` library with metadata.
-- [ ] Add release checklist (version bump, changelog, benchmarks, docs updates).
-- [ ] Tag stable `v1.0.0` when API/CLI contracts are locked.
 
 ---
 
@@ -100,10 +93,9 @@
 - [x] Seed support for iteration methods
 - [ ] CI matrix with startup-file-safe test invocation
 - [x] CLI `render`
-- [ ] Parser validation + negative tests
-- [ ] Benchmark harness
+- [x] Parser validation + negative tests
+- [x] Benchmark harness
 - [ ] Snapshot image tests
-- [ ] Colormaps + gamma
 - [ ] Batch rendering CLI
 - [ ] Curated `.ifs` dataset
 
