@@ -252,3 +252,224 @@ Pros:
 Cons:
 - Higher implementation complexity.
 - Requires careful parity checks and possibly interpolation/approximation choices.
+
+---
+
+## Planned GUI Milestone: Iteractable 3-Panel Desktop GUI
+
+### Summary
+- Build a new Gtk.jl desktop GUI (`Fractals/bin/gui.jl`) with three synchronized panels:
+1. Editable transformation matrix panel (always 7 columns).
+2. True SVG preview panel of current transformations.
+3. Placeholder fractal panel with wiring hooks for future rendering.
+
+- Add context-menu-driven loading that supports:
+  - Quick-load from `./Fractals/data/*.ifs`
+  - External `.ifs` file picker
+  - Two-step definition selection for multi-definition files
+
+- This milestone delivers GUI infrastructure and interaction model; fractal rendering panel remains placeholder but fully integrated in event flow.
+
+### Architecture and File Layout
+1. New launcher script:
+  - `Fractals/bin/gui.jl`
+  - Responsibilities:
+    - Start Gtk app/window
+    - Construct all panels and menu actions
+    - Wire state updates and refresh pipeline
+
+2. New GUI module source:
+  - `Fractals/src/gui.jl`
+  - Responsibilities:
+    - App state model
+    - Widget construction helpers
+    - Menu/context actions
+    - Matrix-table <-> model sync
+    - SVG refresh/render pipeline
+    - Placeholder fractal panel update hook
+
+3. Package export wiring:
+  - `Fractals/src/Fractals.jl`
+  - Add `include("gui.jl")` and export GUI entrypoint (e.g. `launch_gui`).
+
+4. Documentation updates:
+  - `README.md` and `Fractals/DOCUMENTATION.md`:
+    - How to launch GUI
+    - `.ifs` load behavior
+    - Panel behavior and current limitations (fractal pane placeholder)
+
+### Public API / Interface Additions
+1. New API entrypoint:
+  - `launch_gui(; data_dir::AbstractString="Fractals/data")`
+  - Opens main GUI window.
+  - Optional `data_dir` for testing/custom datasets.
+
+2. New CLI-style launcher script:
+  - `julia --startup-file=no --project=Fractals Fractals/bin/gui.jl`
+
+- No breaking changes to existing render/CLI APIs.
+
+### State Model (Decision-Complete)
+- Create a central mutable GUI state struct containing:
+
+1. Current source metadata:
+  - `source_file::Union{Nothing,String}`
+  - `definition_index::Int`
+  - `definition_name::String`
+
+2. Current IFS definition data:
+  - `eq_matrix::Matrix{Float64}` always normalized to 7 columns in UI state
+  - `docs::String`
+
+3. Derived render state:
+  - `ifs::IFS`
+  - `svg_string::String` (current transformation SVG markup)
+  - `svg_temp_path::String` (for Gtk SVG widget source)
+  - `fractal_placeholder_text::String` (status-only for v1)
+
+4. Dirty/validation state:
+  - `last_error::Union{Nothing,String}`
+  - `is_valid::Bool`
+
+- Normalization rule:
+  - UI always presents 7 columns: `a11 a12 a21 a22 b1 b2 p`.
+  - If loaded source had 6 cols, populate `p` using existing weight derivation logic so edits remain explicit and stable.
+
+### GUI Layout and Behavior
+
+#### Window
+- Single top-level window with horizontal 3-panel split.
+
+#### Panel 1: Matrix Panel (editable)
+- Gtk table/grid with one row per transform.
+- 7 editable numeric columns.
+- Row add/remove controls.
+- “Apply” + “Reset to loaded” actions.
+- Validation feedback inline/status bar:
+  - non-numeric
+  - invalid dimensions
+  - negative probability column (if present)
+  - zero-row matrix
+
+- On successful apply:
+  - Rebuild current `IFS`
+  - Refresh SVG panel
+  - Trigger placeholder fractal panel update hook text
+
+#### Panel 2: SVG Panel (true SVG)
+- Use Gtk SVG-capable widget path (e.g., Rsvg-backed image/viewer in Gtk) to display real vector SVG.
+- SVG generated via existing transformation pipeline (reuse `render_transformations_svg` logic).
+- Refresh on:
+  - file/definition load
+  - matrix edits apply
+  - row add/remove
+
+#### Panel 3: Fractal Panel (placeholder with wiring)
+- Placeholder widget with:
+  - title
+  - current source + definition
+  - “Fractal preview not yet implemented” state message
+  - hook status (“ready to render” if matrix valid)
+
+- This panel subscribes to same state updates so future render integration only plugs into existing event path.
+
+### Context Menu and Load Flow
+- Right-click context menu on main window (and mirrored in menu bar if desired):
+
+1. `Load from data/`
+  - Dynamically lists `./Fractals/data/*.ifs`.
+  - Selecting a file triggers definition picker dialog if multiple definitions found.
+  - Two-step selection:
+    - file selection
+    - definition index/name selection dialog
+
+2. `Open .ifs...`
+  - Native file chooser for external path.
+  - Same two-step definition selection flow.
+
+3. `Reload current source`
+  - Re-parse and refresh state.
+
+4. `Clear to empty template`
+  - Initializes one-row editable default matrix.
+
+- Definition selection behavior:
+  - Always explicit picker for multi-definition files.
+  - Auto-select definition 1 only when file contains exactly one definition.
+
+### Data and Parser Reuse
+- Reuse existing parser APIs:
+  - `parse_ifs_file`
+  - `parse_ifs_definitions_file` (for names/docs and selection dialog metadata)
+
+- Reuse existing transformation rendering path:
+  - `render_transformations_svg` (or extracted in-memory variant to avoid unnecessary disk churn where feasible)
+
+### Validation and Error Handling
+1. Input validation before apply:
+  - finite numeric values only
+  - at least one row
+  - exactly 7 columns in UI model
+  - `p >= 0` for all rows
+
+2. Error UX:
+  - Non-blocking status bar + modal dialog for critical load/parse errors.
+  - Keep last valid state when apply fails.
+
+3. File handling:
+  - Gracefully handle missing/unreadable files.
+  - Defensive parsing with clear error propagation.
+
+### Tests and Scenarios
+- Add `Fractals/test/gui_smoke.jl` (or integrated guarded tests) with non-interactive coverage:
+
+1. State/model tests:
+  - 6-col source normalization to 7-col UI matrix.
+  - Apply path rebuilds `IFS` and updates SVG string marker.
+  - Validation rejects invalid numeric/probability inputs.
+
+2. Load workflow tests:
+  - Enumerate `Fractals/data/*.ifs` list.
+  - Parse selected file and choose definition by index.
+  - External path load behavior.
+
+3. SVG generation tests:
+  - Updated matrix changes SVG output deterministically (basic string/line count assertions).
+
+4. GUI construction smoke test (headless-safe where possible):
+  - Window/panel initialization without crash.
+  - Event handlers registered.
+
+- Manual QA checklist:
+  - Right-click menu appears.
+  - Data file load + definition selection works.
+  - Matrix edits update SVG panel.
+  - Placeholder panel reflects state changes.
+
+### Dependencies and Build Notes
+1. Add GUI dependencies to `Fractals/Project.toml`:
+  - `Gtk` (or `Gtk4`) and SVG rendering dependency (Rsvg-capable path).
+
+2. Keep startup recommendations:
+  - Run GUI with `--startup-file=no` in docs examples to avoid local startup interference.
+
+3. Platform notes:
+  - Document native library requirements if Gtk/Rsvg backends require them.
+
+### Acceptance Criteria
+1. Launching `Fractals/bin/gui.jl` opens a 3-panel window.
+2. Matrix panel is editable and always 7 columns.
+3. SVG panel shows true SVG and refreshes after edits/loads.
+4. Fractal panel exists as placeholder with active state wiring.
+5. Context menu supports:
+  - `.ifs` selection from `./Fractals/data`
+  - external `.ifs` via file picker
+  - multi-definition selection flow
+6. Existing package APIs and CLI remain backward-compatible.
+7. Basic automated smoke/model tests pass.
+
+### Assumptions and Defaults
+1. First milestone is desktop Gtk.jl (not web UI).
+2. Fractal panel intentionally remains non-rendering placeholder in v1.
+3. UI normalizes to 7-column matrix editing model.
+4. SVG must be true vector display (not PNG fallback) for this milestone.
