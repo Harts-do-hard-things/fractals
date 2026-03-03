@@ -3,6 +3,8 @@
 
 `Fractals` is a Julia package for generating and rasterizing 2D iterated function system (IFS) fractals.
 
+Supported Julia versions: `1.11` and `1.12`.
+
 The package includes:
 - Chaos-game iteration (`iterate!`, `iterate_parallel!`)
 - Deterministic expansion (`deterministic_iterate`)

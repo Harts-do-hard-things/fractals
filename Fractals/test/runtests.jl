@@ -156,6 +156,11 @@ end
     @test direct ≈ composed
 end
 
+@testset "Thread Buffer Slots" begin
+    @test Fractals._thread_buffer_slots() >= Base.Threads.nthreads()
+    @test Fractals._thread_buffer_slots() >= Base.Threads.maxthreadid()
+end
+
 @testset "Make Image" begin
     ifs = IFS(SMALL_EQ; npoints=2000)
     iterate!(ifs; warmup=5)

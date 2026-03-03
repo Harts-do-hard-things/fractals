@@ -18,6 +18,8 @@ Docs-site sources:
 
 ## Installation
 
+Supported Julia versions: `1.11` and `1.12`.
+
 From repository root:
 
 ```powershell

@@ -141,6 +141,10 @@ function _base_l_image(initial_polygon::Symbol=:default)
     return segments
 end
 
+@inline function _thread_buffer_slots()
+    return max(nthreads(), Base.Threads.maxthreadid())
+end
+
 function _map_colors(n::Integer)
     n <= 0 && return RGB{Float32}[]
     # Generate visually distinct, deterministic colors and exclude near-white/near-black colors.
@@ -752,7 +756,7 @@ end
 function make_image(ifs::IFS; resolution::Tuple{Int,Int}=RESOLUTION)
     map = make_pixelate_map(ifs.limits; resolution=resolution)
     rows, cols = resolution
-    nthreads_local = nthreads()
+    nthreads_local = _thread_buffer_slots()
     buffers = [zeros(Float32, rows, cols) for _ in 1:nthreads_local]
 
     @threads for idx in eachindex(ifs.points)
@@ -944,7 +948,7 @@ function rasterize_image_inversely(
 
     rows, cols = resolution
     img = zeros(Float32, rows, cols)
-    nthreads_local = nthreads()
+    nthreads_local = _thread_buffer_slots()
     current_buffers = [Vector{NTuple{3,SVector{2,Float64}}}() for _ in 1:nthreads_local]
     next_buffers = [Vector{NTuple{3,SVector{2,Float64}}}() for _ in 1:nthreads_local]
 
@@ -1108,7 +1112,7 @@ function iterate_image(ifs::IFS,
     src = _to_grayscale_matrix(img)
     rows, cols = size(src)
 
-    nthreads_local = nthreads()
+    nthreads_local = _thread_buffer_slots()
     buffers = [zeros(Float32, rows, cols) for _ in 1:nthreads_local]
     rbuffers = colors ? [zeros(Float32, rows, cols) for _ in 1:nthreads_local] : nothing
     gbuffers = colors ? [zeros(Float32, rows, cols) for _ in 1:nthreads_local] : nothing
