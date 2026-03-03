@@ -19,6 +19,10 @@ mean_alloc_bytes = 600000
 mean_s = 0.0025
 mean_alloc_bytes = 90000
 
+[targets.small."iterate_image"]
+mean_s = 0.0200
+mean_alloc_bytes = 200000
+
 [targets.small."rasterize_image_inversely"]
 mean_s = 0.0090
 mean_alloc_bytes = 90000
@@ -35,6 +39,10 @@ mean_alloc_bytes = 2600000
 mean_s = 0.0100
 mean_alloc_bytes = 300000
 
+[targets.medium."iterate_image"]
+mean_s = 0.0800
+mean_alloc_bytes = 600000
+
 [targets.medium."rasterize_image_inversely"]
 mean_s = 0.0380
 mean_alloc_bytes = 300000
@@ -50,6 +58,10 @@ mean_alloc_bytes = 7300000
 [targets.large."make_image"]
 mean_s = 0.0380
 mean_alloc_bytes = 1200000
+
+[targets.large."iterate_image"]
+mean_s = 0.3500
+mean_alloc_bytes = 2400000
 
 [targets.large."rasterize_image_inversely"]
 mean_s = 0.1970

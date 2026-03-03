@@ -3,7 +3,7 @@ module FractalsCUDAExt
 using CUDA
 using Fractals
 
-import Fractals: IFS, RESOLUTION, _gpu_backend_available, _make_image_gpu, _rasterize_image_inversely_gpu
+import Fractals: IFS, RESOLUTION, _gpu_backend_available, _make_image_gpu, _rasterize_image_inversely_gpu, _iterate_image_gpu
 
 @inline function _gpu_backend_available(::Val{:cuda})
     try
@@ -253,6 +253,109 @@ function _normalize_image_kernel!(img, n::Int32, logmax::Float32)
     return
 end
 
+function _iterate_image_gray_kernel!(
+    dst,
+    src,
+    map_a11,
+    map_a12,
+    map_a21,
+    map_a22,
+    map_b1,
+    map_b2,
+    nmaps::Int32,
+    rows::Int32,
+    cols::Int32,
+    npix::Int32
+)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if i > npix
+        return
+    end
+
+    y = ((i - 1) % rows) + 1
+    x = ((i - 1) ÷ rows) + 1
+    @inbounds val = src[y, x]
+    if val == 0f0
+        return
+    end
+
+    fx0 = Float64(x)
+    fy0 = Float64(y)
+    m = Int32(1)
+    while m <= nmaps
+        fx = map_a11[m] * fx0 + map_a12[m] * fy0 + map_b1[m]
+        fy = map_a21[m] * fx0 + map_a22[m] * fy0 + map_b2[m]
+
+        px = Int(round(fx))
+        py = Int(round(fy))
+        if 1 <= px <= cols && 1 <= py <= rows
+            CUDA.@atomic dst[py, px] += val
+        end
+        m += 1
+    end
+    return
+end
+
+function _iterate_image_rgb_kernel!(
+    rdst,
+    gdst,
+    bdst,
+    src,
+    map_a11,
+    map_a12,
+    map_a21,
+    map_a22,
+    map_b1,
+    map_b2,
+    map_cr,
+    map_cg,
+    map_cb,
+    nmaps::Int32,
+    rows::Int32,
+    cols::Int32,
+    npix::Int32
+)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if i > npix
+        return
+    end
+
+    y = ((i - 1) % rows) + 1
+    x = ((i - 1) ÷ rows) + 1
+    @inbounds val = src[y, x]
+    if val == 0f0
+        return
+    end
+
+    fx0 = Float64(x)
+    fy0 = Float64(y)
+    m = Int32(1)
+    while m <= nmaps
+        fx = map_a11[m] * fx0 + map_a12[m] * fy0 + map_b1[m]
+        fy = map_a21[m] * fx0 + map_a22[m] * fy0 + map_b2[m]
+
+        px = Int(round(fx))
+        py = Int(round(fy))
+        if 1 <= px <= cols && 1 <= py <= rows
+            CUDA.@atomic rdst[py, px] += val * map_cr[m]
+            CUDA.@atomic gdst[py, px] += val * map_cg[m]
+            CUDA.@atomic bdst[py, px] += val * map_cb[m]
+        end
+        m += 1
+    end
+    return
+end
+
+function _normalize_rgb_image_kernel!(rimg, gimg, bimg, n::Int32, logmax::Float32)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if i <= n
+        @inbounds rimg[i] = log1p(rimg[i]) / logmax
+        @inbounds gimg[i] = log1p(gimg[i]) / logmax
+        @inbounds bimg[i] = log1p(bimg[i]) / logmax
+    end
+    return
+end
+
 function _make_image_gpu(ifs::IFS, ::Val{:cuda}; resolution::Tuple{Int,Int}=RESOLUTION)
     _gpu_backend_available(Val(:cuda)) ||
         throw(ArgumentError("GPU backend is not available. Ensure CUDA.jl is installed and CUDA.functional() is true."))
@@ -400,6 +503,127 @@ function _rasterize_image_inversely_gpu(
     end
 
     return Array(img_d)
+end
+
+function _iterate_image_gpu(
+    ifs::IFS,
+    src::AbstractMatrix{Float32};
+    colors::Bool=false,
+    seed::Union{Nothing,Integer}=nothing
+)
+    _gpu_backend_available(Val(:cuda)) ||
+        throw(ArgumentError("GPU backend is not available. Ensure CUDA.jl is installed and CUDA.functional() is true."))
+
+    _ = seed
+    rows, cols = size(src)
+    npix = rows * cols
+    nmaps = length(ifs.maps)
+
+    pmap = Fractals.make_pixelate_map(ifs.limits; resolution=(rows, cols))
+    map_a11_h = Vector{Float64}(undef, nmaps)
+    map_a12_h = Vector{Float64}(undef, nmaps)
+    map_a21_h = Vector{Float64}(undef, nmaps)
+    map_a22_h = Vector{Float64}(undef, nmaps)
+    map_b1_h = Vector{Float64}(undef, nmaps)
+    map_b2_h = Vector{Float64}(undef, nmaps)
+    @inbounds for i in 1:nmaps
+        cmap = Fractals._make_pixeliterate_map(ifs.maps[i], pmap)
+        map_a11_h[i] = cmap.A[1, 1]
+        map_a12_h[i] = cmap.A[1, 2]
+        map_a21_h[i] = cmap.A[2, 1]
+        map_a22_h[i] = cmap.A[2, 2]
+        map_b1_h[i] = cmap.b[1]
+        map_b2_h[i] = cmap.b[2]
+    end
+
+    map_a11 = CuArray(map_a11_h)
+    map_a12 = CuArray(map_a12_h)
+    map_a21 = CuArray(map_a21_h)
+    map_a22 = CuArray(map_a22_h)
+    map_b1 = CuArray(map_b1_h)
+    map_b2 = CuArray(map_b2_h)
+
+    src_d = CuArray(src)
+    threads = 256
+    blocks = cld(npix, threads)
+
+    if !colors
+        out_d = CUDA.zeros(Float32, rows, cols)
+        @cuda threads=threads blocks=blocks _iterate_image_gray_kernel!(
+            out_d,
+            src_d,
+            map_a11,
+            map_a12,
+            map_a21,
+            map_a22,
+            map_b1,
+            map_b2,
+            Int32(nmaps),
+            Int32(rows),
+            Int32(cols),
+            Int32(npix)
+        )
+
+        maxv = CUDA.maximum(out_d)
+        if maxv > 0f0
+            logmax = log1p(maxv)
+            @cuda threads=threads blocks=blocks _normalize_image_kernel!(out_d, Int32(npix), logmax)
+        end
+
+        return Fractals.Gray.(Array(out_d))
+    end
+
+    colors_h = Fractals._map_colors(nmaps)
+    map_cr_h = Vector{Float32}(undef, nmaps)
+    map_cg_h = Vector{Float32}(undef, nmaps)
+    map_cb_h = Vector{Float32}(undef, nmaps)
+    @inbounds for i in 1:nmaps
+        c = Fractals._map_color_rgb(i, colors_h)
+        map_cr_h[i] = c.r
+        map_cg_h[i] = c.g
+        map_cb_h[i] = c.b
+    end
+    map_cr = CuArray(map_cr_h)
+    map_cg = CuArray(map_cg_h)
+    map_cb = CuArray(map_cb_h)
+
+    r_d = CUDA.zeros(Float32, rows, cols)
+    g_d = CUDA.zeros(Float32, rows, cols)
+    b_d = CUDA.zeros(Float32, rows, cols)
+
+    @cuda threads=threads blocks=blocks _iterate_image_rgb_kernel!(
+        r_d,
+        g_d,
+        b_d,
+        src_d,
+        map_a11,
+        map_a12,
+        map_a21,
+        map_a22,
+        map_b1,
+        map_b2,
+        map_cr,
+        map_cg,
+        map_cb,
+        Int32(nmaps),
+        Int32(rows),
+        Int32(cols),
+        Int32(npix)
+    )
+
+    maxv = max(CUDA.maximum(r_d), max(CUDA.maximum(g_d), CUDA.maximum(b_d)))
+    if maxv > 0f0
+        logmax = log1p(maxv)
+        @cuda threads=threads blocks=blocks _normalize_rgb_image_kernel!(
+            r_d,
+            g_d,
+            b_d,
+            Int32(npix),
+            logmax
+        )
+    end
+
+    return Fractals._rgb_image_from_buffers(Array(r_d), Array(g_d), Array(b_d))
 end
 
 end

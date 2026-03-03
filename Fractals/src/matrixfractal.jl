@@ -804,6 +804,15 @@ function _rasterize_image_inversely_gpu(
     throw(ArgumentError("GPU backend is not available. Install CUDA.jl and ensure a functional CUDA runtime, or use backend=:cpu/:auto."))
 end
 
+function _iterate_image_gpu(
+    ifs::IFS,
+    src::AbstractMatrix{Float32};
+    colors::Bool=false,
+    seed::Union{Nothing,Integer}=nothing
+)
+    throw(ArgumentError("GPU backend is not available. Install CUDA.jl and ensure a functional CUDA runtime, or use backend=:cpu/:auto."))
+end
+
 function make_image(ifs::IFS; resolution::Tuple{Int,Int}=RESOLUTION, backend::Symbol=:cpu)
     if backend == :cpu
         return _make_image_cpu(ifs; resolution=resolution)
@@ -1250,11 +1259,12 @@ function _resolve_image_source(
     throw(ArgumentError("Invalid image_source '$image_source'. Supported: :polygon, :chaos, :point_deterministic, :inverse, :file"))
 end
 
-function iterate_image(ifs::IFS,
-                       img::AbstractMatrix;
-                       colors::Bool=false,
-                       seed::Union{Nothing,Integer}=nothing)
-    src = _to_grayscale_matrix(img)
+function _iterate_image_cpu(
+    ifs::IFS,
+    src::AbstractMatrix{Float32};
+    colors::Bool=false,
+    seed::Union{Nothing,Integer}=nothing
+)
     rows, cols = size(src)
 
     nthreads_local = _thread_buffer_slots()
@@ -1331,6 +1341,35 @@ function iterate_image(ifs::IFS,
 
     _normalize_rgb_buffers!(rimg, gimg, bimg)
     return _rgb_image_from_buffers(rimg, gimg, bimg)
+end
+
+function iterate_image(
+    ifs::IFS,
+    img::AbstractMatrix;
+    colors::Bool=false,
+    seed::Union{Nothing,Integer}=nothing,
+    backend::Symbol=:cpu
+)
+    src = _to_grayscale_matrix(img)
+    if backend == :cpu
+        return _iterate_image_cpu(ifs, src; colors=colors, seed=seed)
+    elseif backend == :gpu
+        return _iterate_image_gpu(ifs, src; colors=colors, seed=seed)
+    elseif backend == :auto
+        if _gpu_backend_available(Val(:cuda))
+            try
+                return _iterate_image_gpu(ifs, src; colors=colors, seed=seed)
+            catch err
+                if err isa ArgumentError
+                    return _iterate_image_cpu(ifs, src; colors=colors, seed=seed)
+                end
+                rethrow(err)
+            end
+        end
+        return _iterate_image_cpu(ifs, src; colors=colors, seed=seed)
+    end
+
+    throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
 end
 
 function _iterate_image_single_map(ifs::IFS, img::AbstractMatrix{<:Real}, map_index::Integer)
@@ -1593,12 +1632,12 @@ function render(
                                     initial_polygon,
                                     backend)
         for _ in 1:image_iterations
-            img = iterate_image(rendered_ifs, img; colors=false)
+            img = iterate_image(rendered_ifs, img; colors=false, backend=backend)
         end
     end
 
     if color && render_method != ImageIterate
-        img = iterate_image(rendered_ifs, img; colors=true)
+        img = iterate_image(rendered_ifs, img; colors=true, backend=backend)
     end
 
     final_outpath = _normalize_media_outpath(outpath)

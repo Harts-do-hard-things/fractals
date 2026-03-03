@@ -63,7 +63,7 @@ Iteration control:
 - `deterministic_depth` and `inverse_depth` are compatibility aliases; prefer `iterations`.
 - `iterations` must be `>= 0`.
 - `warmup` is applied to chaos, point-deterministic, and image-source generation paths.
-- `backend=:cpu|:gpu|:auto` controls `make_image` backend in chaos/point-deterministic render paths (and image-source generation where `make_image` is used).
+- `backend=:cpu|:gpu|:auto` controls GPU-capable render backends (`make_image`, `iterate_image`, and inverse rasterization where applicable).
   - `:cpu` always uses CPU implementation.
   - `:gpu` requires CUDA support and errors if unavailable.
   - `:auto` silently falls back to CPU when GPU support is unavailable.
@@ -195,13 +195,15 @@ Warning:
 
 Rasterizes `ifs.points` into a normalized `Float32` image in `[0, 1]`.
 
-### `iterate_image(ifs, img)`
+### `iterate_image(ifs, img; colors=false, seed=nothing, backend=:cpu)`
 
 Applies all IFS maps to an image and returns a grayscale image.
 
 Notes:
 - Input is converted to grayscale internally.
 - Safe to call repeatedly (`iterate_image(ifs, iterate_image(ifs, img))`).
+- `backend=:cpu|:gpu|:auto` selects execution backend (`:gpu` requires CUDA, `:auto` falls back to CPU when unavailable).
+- `colors=true` returns `RGB{Float32}` output.
 
 ### `rasterize_image_inversely(ifs, n, limits; resolution=RESOLUTION, show_divergence_scale=true, backend=:cpu, mode=:exact)`
 

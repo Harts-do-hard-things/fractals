@@ -106,8 +106,13 @@ function _bench_one(
 
     # Build once for make_image benchmark.
     iterate!(ifs; warmup=warmup, seed=1234)
+    iterate_img_src = make_image(ifs; resolution=resolution, backend=:cpu)
     image_stats = _time_repeats(repeats) do
         make_image(ifs; resolution=resolution, backend=backend)
+    end
+
+    iterate_image_stats = _time_repeats(repeats) do
+        iterate_image(ifs, iterate_img_src; backend=backend)
     end
 
     inverse_stats = _time_repeats(repeats) do
@@ -124,19 +129,27 @@ function _bench_one(
         "iterate!" => _metric_dict(iter_stats),
         "iterate_parallel!" => _metric_dict(iter_parallel_stats),
         "make_image" => _metric_dict(image_stats),
+        "iterate_image" => _metric_dict(iterate_image_stats),
         "rasterize_image_inversely" => _metric_dict(inverse_stats),
     )
 
     if include_gpu_bench
         if !(backend == :gpu || backend == :auto)
             out["make_image_gpu"] = Dict("status" => "skipped", "reason" => "include_gpu_bench requires backend=:gpu|:auto")
+            out["iterate_image_gpu"] = Dict("status" => "skipped", "reason" => "include_gpu_bench requires backend=:gpu|:auto")
         elseif !Fractals._gpu_backend_available(Val(:cuda))
             out["make_image_gpu"] = Dict("status" => "skipped", "reason" => "GPU backend unavailable on this machine")
+            out["iterate_image_gpu"] = Dict("status" => "skipped", "reason" => "GPU backend unavailable on this machine")
         else
             gpu_stats = _time_repeats(repeats) do
                 make_image(ifs; resolution=resolution, backend=:gpu)
             end
             out["make_image_gpu"] = _metric_dict(gpu_stats)
+
+            iterate_gpu_stats = _time_repeats(repeats) do
+                iterate_image(ifs, iterate_img_src; backend=:gpu)
+            end
+            out["iterate_image_gpu"] = _metric_dict(iterate_gpu_stats)
         end
     end
 
@@ -174,7 +187,7 @@ function _compare_against_targets(payload::Dict{String,Any}, targets_path::Strin
         ops = Dict{String,Any}()
         profile_status = "pass"
 
-        for op in ("iterate!", "iterate_parallel!", "make_image", "rasterize_image_inversely")
+        for op in ("iterate!", "iterate_parallel!", "make_image", "iterate_image", "rasterize_image_inversely")
             if !haskey(profile_targets, op) || !haskey(result, op)
                 continue
             end
@@ -278,7 +291,7 @@ function print_report(payload::Dict{String,Any})
     for name in sort(collect(keys(payload["results"])))
         item = payload["results"][name]
         println("[$name] npoints=$(item["npoints"]) resolution=$(Tuple(item["resolution"])) inverse_iterations=$(item["inverse_iterations"])")
-        for key in ("iterate!", "iterate_parallel!", "make_image", "rasterize_image_inversely")
+        for key in ("iterate!", "iterate_parallel!", "make_image", "iterate_image", "rasterize_image_inversely")
             stats = item[key]
             println("  ", rpad(key, 26),
                     " min=$(round(stats["min_s"], digits=4))s  mean=$(round(stats["mean_s"], digits=4))s  max=$(round(stats["max_s"], digits=4))s",
@@ -294,6 +307,16 @@ function print_report(payload::Dict{String,Any})
                         "  alloc_mean=$(round(gpu_stats["mean_alloc_bytes"] / 1024^2, digits=3)) MiB")
             end
         end
+        if haskey(item, "iterate_image_gpu")
+            gpu_stats = item["iterate_image_gpu"]
+            if haskey(gpu_stats, "status")
+                println("  ", rpad("iterate_image_gpu", 26), " ", gpu_stats["status"], " (", gpu_stats["reason"], ")")
+            else
+                println("  ", rpad("iterate_image_gpu", 26),
+                        " min=$(round(gpu_stats["min_s"], digits=4))s  mean=$(round(gpu_stats["mean_s"], digits=4))s  max=$(round(gpu_stats["max_s"], digits=4))s",
+                        "  alloc_mean=$(round(gpu_stats["mean_alloc_bytes"] / 1024^2, digits=3)) MiB")
+            end
+        end
         println("")
     end
 
@@ -305,7 +328,7 @@ function print_report(payload::Dict{String,Any})
         for name in sort(collect(keys(cmp["profiles"])))
             prof = cmp["profiles"][name]
             println("  [$name] status=", prof["status"])
-            for op in ("iterate!", "iterate_parallel!", "make_image", "rasterize_image_inversely")
+            for op in ("iterate!", "iterate_parallel!", "make_image", "iterate_image", "rasterize_image_inversely")
                 haskey(prof["ops"], op) || continue
                 opcmp = prof["ops"][op]
                 ts = opcmp["mean_s"]

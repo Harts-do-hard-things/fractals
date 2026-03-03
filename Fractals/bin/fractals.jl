@@ -23,7 +23,7 @@ Common options:
   --method <method>        Chaos|Parallel|PointDeterministic|ImageIterate|Inverse
   --npoints <int>          Number of points
   --iterations <int>       Iterations for deterministic/inverse methods
-  --backend <name>         cpu|gpu|auto (render + benchmark make_image backend)
+  --backend <name>         cpu|gpu|auto (render + benchmark GPU-capable backends)
   --image-source <name>    polygon|chaos|point_deterministic|inverse|file (ImageIterate only)
   --image-path <path>      Source image path when --image-source file
   --image-iterations <int> Number of iterate_image passes (ImageIterate only)
@@ -38,7 +38,7 @@ Common options:
   --repeats <int>          Benchmark repeat count
   --json <path>            Benchmark JSON output path
   --targets <path>         Benchmark target envelope TOML file
-  --include-gpu-bench      Also run make_image GPU benchmark (benchmark command)
+  --include-gpu-bench      Also run make_image/iterate_image GPU benchmarks (benchmark command)
   --strict                 Fail benchmark command when targets status is fail
 """
     )

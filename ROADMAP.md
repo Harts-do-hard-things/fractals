@@ -251,6 +251,15 @@ Note: milestone checks below are based on repository state; live CI pass/fail de
 
 ## Potential Improvement: GPU Acceleration for `iterate_image`
 
+### Status (2026-03-03)
+- [x] Step 1: backend abstraction (`backend=:cpu|:gpu|:auto`) added to `iterate_image` with default CPU behavior preserved.
+- [x] Step 2: CUDA extension path implemented with scatter/atomic accumulation (Option A).
+- [x] Step 3: grayscale and `colors=true` RGB GPU paths implemented.
+- [x] Step 4: render image-iterate call paths now propagate backend selection.
+- [x] Step 5: optional parity tests added behind `FRACTALS_RUN_GPU_TESTS=1`.
+- [x] Step 6: benchmark suite tracks `iterate_image` and optional `iterate_image_gpu`.
+- [ ] Step 7: optimization pass (contention reduction / launch tuning) remains open.
+
 ### Option A: Scatter/Atomic Kernel (Parity-first)
 
 Goal:

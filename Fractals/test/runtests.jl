@@ -234,6 +234,58 @@ end
     @test out1 == out2
 end
 
+@testset "Iterate Image Backends" begin
+    ifs = IFS(SMALL_EQ; npoints=2000)
+    iterate!(ifs; warmup=5, seed=321)
+    src = make_image(ifs; resolution=(24, 24), backend=:cpu)
+
+    out_default = iterate_image(ifs, src)
+    out_cpu = iterate_image(ifs, src; backend=:cpu)
+    @test out_default == out_cpu
+
+    out_auto = iterate_image(ifs, src; backend=:auto)
+    @test size(out_auto) == (24, 24)
+    @test eltype(out_auto) == Gray{Float32}
+
+    out_auto_color = iterate_image(ifs, src; colors=true, backend=:auto, seed=777)
+    @test size(out_auto_color) == (24, 24)
+    @test eltype(out_auto_color) == RGB{Float32}
+
+    if Fractals._gpu_backend_available(Val(:cuda))
+        out_gpu = iterate_image(ifs, src; backend=:gpu)
+        @test size(out_gpu) == (24, 24)
+        @test eltype(out_gpu) == Gray{Float32}
+
+        out_gpu_color = iterate_image(ifs, src; colors=true, backend=:gpu, seed=777)
+        @test size(out_gpu_color) == (24, 24)
+        @test eltype(out_gpu_color) == RGB{Float32}
+    else
+        @test_throws ArgumentError iterate_image(ifs, src; backend=:gpu)
+        @test_throws ArgumentError iterate_image(ifs, src; colors=true, backend=:gpu, seed=777)
+    end
+
+    @test_throws ArgumentError iterate_image(ifs, src; backend=:bad)
+end
+
+@testset "Iterate Image GPU Parity (Optional)" begin
+    if get(ENV, "FRACTALS_RUN_GPU_TESTS", "0") == "1"
+        @test Fractals._gpu_backend_available(Val(:cuda))
+        ifs = IFS(SMALL_EQ; npoints=2000)
+        iterate!(ifs; warmup=5, seed=4321)
+        src = make_image(ifs; resolution=(28, 28), backend=:cpu)
+
+        cpu_gray = iterate_image(ifs, src; backend=:cpu)
+        gpu_gray = iterate_image(ifs, src; backend=:gpu)
+        @test isapprox(Float32.(cpu_gray), Float32.(gpu_gray); atol=1e-5, rtol=1e-5)
+
+        cpu_rgb = iterate_image(ifs, src; colors=true, backend=:cpu, seed=99)
+        gpu_rgb = iterate_image(ifs, src; colors=true, backend=:gpu, seed=99)
+        @test isapprox(Float32.(Gray.(cpu_rgb)), Float32.(Gray.(gpu_rgb)); atol=1e-5, rtol=1e-5)
+    else
+        @test true
+    end
+end
+
 @testset "Inverse Rasterize" begin
     ifs = IFS(SMALL_EQ; npoints=100)
     lims = ifs.limits
@@ -926,7 +978,7 @@ end
             payload = JSON3.read(json_txt)
             @test haskey(payload.results, :small)
             small = payload.results.small
-            for k in (:iterate!, Symbol("iterate_parallel!"), :make_image, :rasterize_image_inversely)
+            for k in (:iterate!, Symbol("iterate_parallel!"), :make_image, :iterate_image, :rasterize_image_inversely)
                 @test haskey(small, k)
                 @test haskey(small[k], :min_s)
                 @test haskey(small[k], :mean_s)

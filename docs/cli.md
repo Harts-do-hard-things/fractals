@@ -57,5 +57,5 @@ julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --
     - Effective when `--image-source polygon`; otherwise ignored.
 - For multi-definition `.ifs`, select one using `--ifs-index` or `--ifs-name`.
 - For benchmark command:
-  - `--backend cpu|gpu|auto` controls `make_image` benchmark backend.
-  - `--include-gpu-bench` adds an explicit `make_image_gpu` timing line.
+  - `--backend cpu|gpu|auto` controls GPU-capable benchmark backends (`make_image`, `iterate_image`).
+  - `--include-gpu-bench` adds explicit `make_image_gpu` and `iterate_image_gpu` timing lines.
