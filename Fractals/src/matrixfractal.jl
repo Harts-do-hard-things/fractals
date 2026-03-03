@@ -791,6 +791,19 @@ function _make_image_gpu(ifs::IFS, ::Val; resolution::Tuple{Int,Int}=RESOLUTION)
     throw(ArgumentError("GPU backend is not available. Install CUDA.jl and ensure a functional CUDA runtime, or use backend=:cpu/:auto."))
 end
 
+function _rasterize_image_inversely_gpu(
+    ifs::IFS,
+    n::Integer,
+    limits::Tuple{Tuple{Float64,Float64},
+                  Tuple{Float64,Float64}},
+    ::Val;
+    resolution::Tuple{Int,Int}=RESOLUTION,
+    show_divergence_scale::Bool=true,
+    mode::Symbol=:exact
+)
+    throw(ArgumentError("GPU backend is not available. Install CUDA.jl and ensure a functional CUDA runtime, or use backend=:cpu/:auto."))
+end
+
 function make_image(ifs::IFS; resolution::Tuple{Int,Int}=RESOLUTION, backend::Symbol=:cpu)
     if backend == :cpu
         return _make_image_cpu(ifs; resolution=resolution)
@@ -953,7 +966,7 @@ end
 # Inverse rasterization
 # -------------------------------------------------
 
-function rasterize_image_inversely(
+function _rasterize_image_inversely_cpu(
     ifs::IFS,
     n::Integer,
     limits::Tuple{Tuple{Float64,Float64},
@@ -989,6 +1002,114 @@ function rasterize_image_inversely(
     end
 
     return img
+end
+
+@inline function _inverse_gpu_exact_capacity(nmaps::Int, n::Int)::Int
+    if n == 0
+        return 1
+    end
+    cap = 1
+    for _ in 1:n
+        cap = cap * nmaps
+    end
+    return max(1, cap)
+end
+
+@inline function _inverse_gpu_preview_capacity(nmaps::Int, n::Int)::Int
+    base = min(_inverse_gpu_exact_capacity(nmaps, n), 256)
+    return max(16, base)
+end
+
+@inline function _inverse_gpu_buffer_bytes(cap::Int, rows::Int, cols::Int)::Int
+    npix = rows * cols
+    # 2 ping-pong buffers * 6 Float64 lanes per triangle.
+    return 2 * 6 * sizeof(Float64) * cap * npix
+end
+
+function _inverse_gpu_capacity(
+    ifs::IFS,
+    n::Integer,
+    resolution::Tuple{Int,Int},
+    mode::Symbol
+)::Int
+    nmaps = length(ifs.maps)
+    nmaps > 0 || throw(ArgumentError("IFS must have at least one map"))
+    n >= 0 || throw(ArgumentError("n must be >= 0, got $n"))
+    n_int = Int(n)
+    if mode == :exact
+        return _inverse_gpu_exact_capacity(nmaps, n_int)
+    elseif mode == :preview
+        return _inverse_gpu_preview_capacity(nmaps, n_int)
+    end
+    throw(ArgumentError("Invalid mode '$mode'. Supported: :exact, :preview"))
+end
+
+function _rasterize_image_inversely_gpu_or_throw(
+    ifs::IFS,
+    n::Integer,
+    limits::Tuple{Tuple{Float64,Float64},
+                  Tuple{Float64,Float64}};
+    resolution::Tuple{Int,Int}=RESOLUTION,
+    show_divergence_scale::Bool=true,
+    mode::Symbol=:exact
+)
+    cap = _inverse_gpu_capacity(ifs, n, resolution, mode)
+    rows, cols = resolution
+    bytes = _inverse_gpu_buffer_bytes(cap, rows, cols)
+    max_bytes = 768 * 1024 * 1024
+    if bytes > max_bytes
+        throw(ArgumentError("Inverse GPU '$mode' buffers are too large for resolution=$resolution and n=$n (estimated $(round(bytes / 1024^2; digits=1)) MiB > $(round(max_bytes / 1024^2; digits=1)) MiB). Reduce resolution/iterations or use backend=:cpu."))
+    end
+
+    return _rasterize_image_inversely_gpu(ifs, n, limits, Val(:cuda);
+                                          resolution=resolution,
+                                          show_divergence_scale=show_divergence_scale,
+                                          mode=mode)
+end
+
+function rasterize_image_inversely(
+    ifs::IFS,
+    n::Integer,
+    limits::Tuple{Tuple{Float64,Float64},
+                  Tuple{Float64,Float64}};
+    resolution::Tuple{Int,Int}=RESOLUTION,
+    show_divergence_scale::Bool=true,
+    backend::Symbol=:cpu,
+    mode::Symbol=:exact
+    )
+    backend in (:cpu, :gpu, :auto) ||
+        throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
+    mode in (:exact, :preview) ||
+        throw(ArgumentError("Invalid mode '$mode'. Supported: :exact, :preview"))
+
+    if backend == :cpu
+        return _rasterize_image_inversely_cpu(ifs, n, limits;
+                                              resolution=resolution,
+                                              show_divergence_scale=show_divergence_scale)
+    elseif backend == :gpu
+        return _rasterize_image_inversely_gpu_or_throw(ifs, n, limits;
+                                                       resolution=resolution,
+                                                       show_divergence_scale=show_divergence_scale,
+                                                       mode=mode)
+    elseif _gpu_backend_available(Val(:cuda))
+        try
+            return _rasterize_image_inversely_gpu_or_throw(ifs, n, limits;
+                                                           resolution=resolution,
+                                                           show_divergence_scale=show_divergence_scale,
+                                                           mode=mode)
+        catch err
+            if err isa ArgumentError
+                return _rasterize_image_inversely_cpu(ifs, n, limits;
+                                                      resolution=resolution,
+                                                      show_divergence_scale=show_divergence_scale)
+            end
+            rethrow(err)
+        end
+    end
+
+    return _rasterize_image_inversely_cpu(ifs, n, limits;
+                                          resolution=resolution,
+                                          show_divergence_scale=show_divergence_scale)
 end
 
 # -------------------------------------------------
@@ -1099,7 +1220,8 @@ function _resolve_image_source(
     elseif image_source == :inverse
         return rasterize_image_inversely(ifs, inverse_iters, ifs.limits;
                                          resolution=resolution,
-                                         show_divergence_scale=show_divergence_scale)
+                                         show_divergence_scale=show_divergence_scale,
+                                         backend=backend)
     elseif image_source == :polygon
         limits_mode = if polygon_limits_mode == :ifs
             :ifs
@@ -1456,7 +1578,8 @@ function render(
     elseif render_method == Inverse
         img = rasterize_image_inversely(rendered_ifs, inverse_iters, rendered_ifs.limits;
                                         resolution=resolution,
-                                        show_divergence_scale=show_divergence_scale)
+                                        show_divergence_scale=show_divergence_scale,
+                                        backend=backend)
     else
         img = _resolve_image_source(rendered_ifs,
                                     image_source,

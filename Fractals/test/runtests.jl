@@ -249,6 +249,59 @@ end
     @test all(v -> v == 0.0f0 || v == 1.0f0, img_hide)
 end
 
+@testset "Inverse Rasterize Backends" begin
+    ifs = IFS(SMALL_EQ; npoints=100)
+    lims = ifs.limits
+
+    img_default = rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8))
+    img_cpu = rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:cpu, mode=:exact)
+    @test img_default == img_cpu
+
+    img_auto = rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:auto, mode=:exact)
+    @test size(img_auto) == (8, 8)
+    @test eltype(img_auto) == Float32
+    @test all(img_auto .>= 0f0)
+    @test maximum(img_auto) <= 1f0
+
+    if Fractals._gpu_backend_available(Val(:cuda))
+        img_gpu_exact = rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:gpu, mode=:exact)
+        @test size(img_gpu_exact) == (8, 8)
+        @test eltype(img_gpu_exact) == Float32
+        @test all(img_gpu_exact .>= 0f0)
+        @test maximum(img_gpu_exact) <= 1f0
+
+        img_gpu_preview = rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:gpu, mode=:preview)
+        @test size(img_gpu_preview) == (8, 8)
+        @test eltype(img_gpu_preview) == Float32
+        @test all(img_gpu_preview .>= 0f0)
+        @test maximum(img_gpu_preview) <= 1f0
+    else
+        @test_throws ArgumentError rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:gpu, mode=:exact)
+        @test_throws ArgumentError rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:gpu, mode=:preview)
+    end
+
+    @test_throws ArgumentError rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:bad)
+    @test_throws ArgumentError rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), mode=:bad)
+end
+
+@testset "Inverse Rasterize GPU Parity (Optional)" begin
+    if get(ENV, "FRACTALS_RUN_GPU_TESTS", "0") == "1"
+        @test Fractals._gpu_backend_available(Val(:cuda))
+        ifs = IFS(SMALL_EQ; npoints=100)
+        lims = ifs.limits
+
+        cpu_img = rasterize_image_inversely(ifs, 2, lims; resolution=(16, 16), backend=:cpu, mode=:exact)
+        gpu_img = rasterize_image_inversely(ifs, 2, lims; resolution=(16, 16), backend=:gpu, mode=:exact)
+        @test isapprox(cpu_img, gpu_img; atol=1e-5, rtol=1e-5)
+
+        gpu_preview_a = rasterize_image_inversely(ifs, 2, lims; resolution=(16, 16), backend=:gpu, mode=:preview)
+        gpu_preview_b = rasterize_image_inversely(ifs, 2, lims; resolution=(16, 16), backend=:gpu, mode=:preview)
+        @test gpu_preview_a == gpu_preview_b
+    else
+        @test true
+    end
+end
+
 @testset "IFS Parser" begin
     sample = """
     Test IFS {; Doc line 1

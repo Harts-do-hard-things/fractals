@@ -43,7 +43,7 @@ julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --
 ## Notes
 
 - Methods accepted by CLI are the same as the API (`Chaos`, `Parallel`, `PointDeterministic`, `ImageIterate`, `Inverse`, plus symbol/string forms).
-- `--backend cpu|gpu|auto` controls the `make_image` backend used by render paths.
+- `--backend cpu|gpu|auto` controls render backends (`make_image` and inverse rasterization paths).
   - `gpu` requires CUDA support and errors if unavailable.
   - `auto` silently falls back to CPU when GPU support is unavailable.
 - For point-deterministic/inverse methods, use `--iterations`.

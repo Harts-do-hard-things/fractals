@@ -203,7 +203,7 @@ Notes:
 - Input is converted to grayscale internally.
 - Safe to call repeatedly (`iterate_image(ifs, iterate_image(ifs, img))`).
 
-### `rasterize_image_inversely(ifs, n, limits; resolution=RESOLUTION, show_divergence_scale=true)`
+### `rasterize_image_inversely(ifs, n, limits; resolution=RESOLUTION, show_divergence_scale=true, backend=:cpu, mode=:exact)`
 
 Inverse method that samples coverage via inverse map recursion.
 
@@ -212,6 +212,8 @@ Inverse method that samples coverage via inverse map recursion.
   - white (`1.0`) for points that did not diverge by depth `n`
   - white (`1.0`) for points whose inverse triangles contain zero
   - black (`0.0`) for points that diverged.
+- `backend=:cpu|:gpu|:auto` selects execution backend (`:gpu` requires CUDA, `:auto` falls back to CPU when unavailable or infeasible).
+- `mode=:exact|:preview` controls branch tracking strategy (`:exact` preserves CPU semantics, `:preview` uses bounded approximate tracking for faster GPU rendering).
 
 ## Parser API
 

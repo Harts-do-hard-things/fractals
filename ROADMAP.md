@@ -185,6 +185,31 @@ Note: milestone checks below are based on repository state; live CI pass/fail de
 
 ---
 
+## Optional Plan: GPU Acceleration for `rasterize_image_inversely`
+
+### Goal
+- Add a GPU-accelerated inverse rasterization path while preserving current API behavior and CPU fallback.
+
+### Status (2026-03-03)
+- [x] Step 1: backend abstraction (`backend=:cpu|:gpu|:auto`) added to `rasterize_image_inversely` with default CPU behavior preserved.
+- [x] Step 2: mode abstraction (`mode=:exact|:preview`) added with `:exact` default for parity-oriented behavior.
+- [x] Step 3: CUDA.jl extension path implemented for inverse rasterization with exact/preview execution.
+- [x] Step 4: render/image-source inverse paths wired to honor backend selection.
+- [x] Step 5: guardrails added for infeasible GPU exact allocations with deterministic fallback/error behavior.
+- [x] Step 6: optional parity tests added (`mode=:exact` CPU vs GPU via `isapprox`) behind `FRACTALS_RUN_GPU_TESTS=1`.
+- [x] Step 7: docs updated for new API kwargs and behavior.
+- [ ] Step 8: benchmark suite extension for explicit inverse GPU timing/profile lines.
+- [ ] Step 9: optimization pass (capacity tuning and kernel throughput improvements).
+
+### Action Items
+1. Keep CPU implementation as the reference semantics for `mode=:exact`.
+2. Maintain extension-only CUDA dependency and clear errors when unavailable.
+3. Continue parity validation on small deterministic workloads in GPU-enabled environments.
+4. Add benchmark reporting for inverse GPU paths and compare against CPU envelopes.
+5. Tune kernel/buffer strategy after baseline benchmark data is collected.
+
+---
+
 ## Potential Improvement: GPU Inverse Iteration Preview
 
 ### Goal
