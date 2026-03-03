@@ -35,6 +35,7 @@ using Fractals
 
 result = render(HEIGHWAY_DRAGON;
                 method=Chaos,
+                backend=:cpu,
                 npoints=200_000,
                 resolution=(1024, 1024),
                 outpath="media/render.png")
@@ -62,6 +63,10 @@ Iteration control:
 - `deterministic_depth` and `inverse_depth` are compatibility aliases; prefer `iterations`.
 - `iterations` must be `>= 0`.
 - `warmup` is applied to chaos, point-deterministic, and image-source generation paths.
+- `backend=:cpu|:gpu|:auto` controls `make_image` backend in chaos/point-deterministic render paths (and image-source generation where `make_image` is used).
+  - `:cpu` always uses CPU implementation.
+  - `:gpu` requires CUDA support and errors if unavailable.
+  - `:auto` silently falls back to CPU when GPU support is unavailable.
 - `npoints` behavior:
   - For matrix/string/file inputs, omitted `npoints` defaults to `DEFAULT_SAMPLES`.
   - For `IFS` input, omitted `npoints` keeps the existing point count.

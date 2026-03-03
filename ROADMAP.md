@@ -127,6 +127,17 @@ Note: milestone checks below are based on repository state; live CI pass/fail de
 ### Goal
 - Add a GPU-accelerated `make_image` path while preserving current API behavior and CPU fallback.
 
+### Status (2026-03-03)
+- [x] Step 2: backend abstraction (`backend=:cpu|:gpu|:auto`) added to `make_image` and propagated through `render`/CLI.
+- [x] Step 3: CUDA.jl MVP stack selected with optional extension loading and clear fallback/errors.
+- [x] Step 4: GPU-friendly point layout implemented (`x`/`y` dense arrays).
+- [x] Step 5: GPU rasterization kernel implemented with atomic accumulation.
+- [x] Step 6: GPU normalization implemented on device (`maximum` + log normalization kernel).
+- [x] Step 7: Parity checks added (`isapprox`) behind optional GPU test gate.
+- [x] Step 8: `:auto` fallback behavior implemented; missing GPU produces deterministic behavior.
+- [x] Step 9: benchmark options added (`--backend`, `--include-gpu-bench`) and CI kept CPU-only by default.
+- [ ] Step 10: optimization pass (launch tuning/contention reduction) remains open.
+
 ### Step 1: Baseline CPU Performance
 1. Measure current `make_image` runtimes at representative resolutions and point counts.
 2. Capture where time is spent (mapping, accumulation, normalization).

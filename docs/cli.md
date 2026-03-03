@@ -43,6 +43,9 @@ julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --
 ## Notes
 
 - Methods accepted by CLI are the same as the API (`Chaos`, `Parallel`, `PointDeterministic`, `ImageIterate`, `Inverse`, plus symbol/string forms).
+- `--backend cpu|gpu|auto` controls the `make_image` backend used by render paths.
+  - `gpu` requires CUDA support and errors if unavailable.
+  - `auto` silently falls back to CPU when GPU support is unavailable.
 - For point-deterministic/inverse methods, use `--iterations`.
 - For image-iterate method, use:
   - `--image-source polygon|chaos|point_deterministic|inverse|file`
@@ -53,3 +56,6 @@ julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --
   - `--initial-polygon default|equilateral_triangle|line_arrow|line`
     - Effective when `--image-source polygon`; otherwise ignored.
 - For multi-definition `.ifs`, select one using `--ifs-index` or `--ifs-name`.
+- For benchmark command:
+  - `--backend cpu|gpu|auto` controls `make_image` benchmark backend.
+  - `--include-gpu-bench` adds an explicit `make_image_gpu` timing line.

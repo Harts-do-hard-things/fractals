@@ -145,6 +145,10 @@ end
     return max(nthreads(), Base.Threads.maxthreadid())
 end
 
+@inline function _gpu_backend_available(::Val{:cuda})
+    return false
+end
+
 function _map_colors(n::Integer)
     n <= 0 && return RGB{Float32}[]
     # Generate visually distinct, deterministic colors and exclude near-white/near-black colors.
@@ -753,7 +757,7 @@ function make_pixelate_map(limits;
     return AffineMap(A, b)
 end
 
-function make_image(ifs::IFS; resolution::Tuple{Int,Int}=RESOLUTION)
+function _make_image_cpu(ifs::IFS; resolution::Tuple{Int,Int}=RESOLUTION)
     map = make_pixelate_map(ifs.limits; resolution=resolution)
     rows, cols = resolution
     nthreads_local = _thread_buffer_slots()
@@ -781,6 +785,24 @@ function make_image(ifs::IFS; resolution::Tuple{Int,Int}=RESOLUTION)
         end
     end
     return img
+end
+
+function _make_image_gpu(ifs::IFS, ::Val; resolution::Tuple{Int,Int}=RESOLUTION)
+    throw(ArgumentError("GPU backend is not available. Install CUDA.jl and ensure a functional CUDA runtime, or use backend=:cpu/:auto."))
+end
+
+function make_image(ifs::IFS; resolution::Tuple{Int,Int}=RESOLUTION, backend::Symbol=:cpu)
+    if backend == :cpu
+        return _make_image_cpu(ifs; resolution=resolution)
+    elseif backend == :gpu
+        return _make_image_gpu(ifs, Val(:cuda); resolution=resolution)
+    elseif backend == :auto
+        if _gpu_backend_available(Val(:cuda))
+            return _make_image_gpu(ifs, Val(:cuda); resolution=resolution)
+        end
+        return _make_image_cpu(ifs; resolution=resolution)
+    end
+    throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
 end
 
 # -------------------------------------------------
@@ -1060,7 +1082,8 @@ function _resolve_image_source(
     inverse_iters::Integer,
     polygon_limits_mode::Symbol,
     show_divergence_scale::Bool,
-    initial_polygon::Symbol=:default
+    initial_polygon::Symbol=:default,
+    backend::Symbol=:cpu
 )
     if image_source == :file
         isnothing(image_path) && throw(ArgumentError("image_path is required when image_source=:file"))
@@ -1069,10 +1092,10 @@ function _resolve_image_source(
     elseif image_source == :chaos
         tifs = IFS(ifs.name, ifs.docs, copy(ifs.points), ifs.maps, ifs.weights, ifs.limits)
         iterate!(tifs; warmup=warmup)
-        return make_image(tifs; resolution=resolution)
+        return make_image(tifs; resolution=resolution, backend=backend)
     elseif image_source == :point_deterministic
         tifs = deterministic_iterate(ifs, deterministic_iters; warmup=warmup)
-        return make_image(tifs; resolution=resolution)
+        return make_image(tifs; resolution=resolution, backend=backend)
     elseif image_source == :inverse
         return rasterize_image_inversely(ifs, inverse_iters, ifs.limits;
                                          resolution=resolution,
@@ -1239,6 +1262,7 @@ function _validate_render_options(
     image_path::Union{Nothing,AbstractString},
     image_iterations::Integer,
     polygon_limits_mode::Symbol,
+    backend::Symbol,
     initial_polygon::Symbol,
     deterministic_depth::Integer,
     inverse_depth::Integer
@@ -1255,6 +1279,8 @@ function _validate_render_options(
         throw(ArgumentError("Invalid image_source '$image_source'. Supported: :polygon, :chaos, :point_deterministic, :inverse, :file"))
     polygon_limits_mode in (:ifs, :default) ||
         throw(ArgumentError("Invalid polygon_limits_mode '$polygon_limits_mode'. Supported: :ifs, :default"))
+    backend in (:cpu, :gpu, :auto) ||
+        throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
     _resolve_initial_polygon(initial_polygon)
     image_source == :file && isnothing(image_path) &&
         throw(ArgumentError("image_path is required when image_source=:file"))
@@ -1401,6 +1427,7 @@ function render(
     image_path::Union{Nothing,AbstractString}=nothing,
     image_iterations::Integer=1,
     polygon_limits_mode::Symbol=:ifs,
+    backend::Symbol=:cpu,
     initial_polygon::Symbol=:default,
     resolution::Tuple{Int,Int}=RESOLUTION,
     outpath::AbstractString="media/render.png",
@@ -1411,7 +1438,7 @@ function render(
     inverse_depth::Integer=8,
 )
     parsed_method = _parse_render_method(method)
-    _validate_render_options(parsed_method, npoints, warmup, color, resolution, ifs_index, ifs_name, image_source, image_path, image_iterations, polygon_limits_mode, initial_polygon, deterministic_depth, inverse_depth)
+    _validate_render_options(parsed_method, npoints, warmup, color, resolution, ifs_index, ifs_name, image_source, image_path, image_iterations, polygon_limits_mode, backend, initial_polygon, deterministic_depth, inverse_depth)
 
     ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index, ifs_name=ifs_name)
 
@@ -1422,10 +1449,10 @@ function render(
 
     if render_method == Chaos
         iterate!(rendered_ifs; warmup=warmup)
-        img = make_image(rendered_ifs; resolution=resolution)
+        img = make_image(rendered_ifs; resolution=resolution, backend=backend)
     elseif render_method == PointDeterministic
         rendered_ifs = deterministic_iterate(rendered_ifs, deterministic_iters; warmup=warmup)
-        img = make_image(rendered_ifs; resolution=resolution)
+        img = make_image(rendered_ifs; resolution=resolution, backend=backend)
     elseif render_method == Inverse
         img = rasterize_image_inversely(rendered_ifs, inverse_iters, rendered_ifs.limits;
                                         resolution=resolution,
@@ -1440,7 +1467,8 @@ function render(
                                     inverse_iters,
                                     polygon_limits_mode,
                                     show_divergence_scale,
-                                    initial_polygon)
+                                    initial_polygon,
+                                    backend)
         for _ in 1:image_iterations
             img = iterate_image(rendered_ifs, img; colors=false)
         end

@@ -36,6 +36,8 @@ julia --project=Fractals -e "using Fractals, FileIO; ifs = IFS(HEIGHWAY_DRAGON; 
 julia --startup-file=no --project=Fractals Fractals/test/runtests.jl
 ```
 
+Optional GPU parity tests can be enabled with `FRACTALS_RUN_GPU_TESTS=1` (requires CUDA support).
+
 ### 4. Run formatter check
 
 ```powershell
@@ -64,6 +66,7 @@ result = render(EISENSTEIN;
 ```
 
 `render` accepts method as enum (`Chaos`, `Parallel`, `PointDeterministic`, `ImageIterate`, `Inverse`), symbol, or lowercase string.
+`render` and `make_image` also support `backend=:cpu|:gpu|:auto` (`:gpu` requires CUDA support, `:auto` falls back to CPU).
 For `method=:point_deterministic` and `method=:inverse`, use `iterations=...` to control iteration depth.
 For `.ifs` files with multiple definitions, select one with `ifs_index=...` or `ifs_name=...`.
 

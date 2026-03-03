@@ -8,6 +8,18 @@ The benchmark suite provides standard workloads for performance tracking.
 julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile all --repeats 3
 ```
 
+Benchmark `make_image` with explicit backend:
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile small --repeats 3 --backend cpu
+```
+
+Include optional GPU benchmark line (when CUDA is available):
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile small --repeats 3 --backend auto --include-gpu-bench
+```
+
 Write JSON output:
 
 ```powershell
@@ -44,6 +56,9 @@ Each profile reports min/mean/max for:
 Both latency and memory allocation metrics are recorded:
 - `min_s`, `mean_s`, `max_s`
 - `min_alloc_bytes`, `mean_alloc_bytes`, `max_alloc_bytes`
+
+When `--include-gpu-bench` is enabled, report may include:
+- `make_image_gpu` (or a skipped reason if backend mode is incompatible)
 
 `iterate_parallel!` is tracked separately for historical/performance monitoring, even though it currently aliases auto-threaded `iterate!`.
 

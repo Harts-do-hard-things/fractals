@@ -171,6 +171,46 @@ end
     @test maximum(img) <= 1f0
 end
 
+@testset "Make Image Backends" begin
+    ifs = IFS(SMALL_EQ; npoints=2000)
+    iterate!(ifs; warmup=5, seed=123)
+
+    img_default = make_image(ifs; resolution=(32, 32))
+    img_cpu = make_image(ifs; resolution=(32, 32), backend=:cpu)
+    @test img_default == img_cpu
+
+    img_auto = make_image(ifs; resolution=(32, 32), backend=:auto)
+    @test size(img_auto) == (32, 32)
+    @test eltype(img_auto) == Float32
+    @test all(img_auto .>= 0f0)
+    @test maximum(img_auto) <= 1f0
+
+    if Fractals._gpu_backend_available(Val(:cuda))
+        img_gpu = make_image(ifs; resolution=(32, 32), backend=:gpu)
+        @test size(img_gpu) == (32, 32)
+        @test eltype(img_gpu) == Float32
+        @test all(img_gpu .>= 0f0)
+        @test maximum(img_gpu) <= 1f0
+    else
+        @test_throws ArgumentError make_image(ifs; resolution=(32, 32), backend=:gpu)
+    end
+
+    @test_throws ArgumentError make_image(ifs; resolution=(32, 32), backend=:bad)
+end
+
+@testset "GPU Parity (Optional)" begin
+    if get(ENV, "FRACTALS_RUN_GPU_TESTS", "0") == "1"
+        @test Fractals._gpu_backend_available(Val(:cuda))
+        ifs = IFS(SMALL_EQ; npoints=5000)
+        iterate!(ifs; warmup=5, seed=987)
+        cpu_img = make_image(ifs; resolution=(48, 48), backend=:cpu)
+        gpu_img = make_image(ifs; resolution=(48, 48), backend=:gpu)
+        @test isapprox(cpu_img, gpu_img; atol=1e-5, rtol=1e-5)
+    else
+        @test true
+    end
+end
+
 @testset "Iterate Image" begin
     ifs = IFS(SMALL_EQ; npoints=2000)
     iterate!(ifs; warmup=5)
@@ -697,6 +737,12 @@ end
     end
     @test err isa ArgumentError
     @test occursin("out of range", sprint(showerror, err))
+
+    @test_throws ArgumentError render(SMALL_EQ;
+                                      method=:chaos,
+                                      backend=:bad,
+                                      resolution=(24, 24),
+                                      outpath=joinpath("media", "never_write_backend_bad.png"))
 end
 
 @testset "Interactive And Main Entrypoints" begin

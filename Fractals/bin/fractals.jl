@@ -23,6 +23,7 @@ Common options:
   --method <method>        Chaos|Parallel|PointDeterministic|ImageIterate|Inverse
   --npoints <int>          Number of points
   --iterations <int>       Iterations for deterministic/inverse methods
+  --backend <name>         cpu|gpu|auto (render + benchmark make_image backend)
   --image-source <name>    polygon|chaos|point_deterministic|inverse|file (ImageIterate only)
   --image-path <path>      Source image path when --image-source file
   --image-iterations <int> Number of iterate_image passes (ImageIterate only)
@@ -37,6 +38,7 @@ Common options:
   --repeats <int>          Benchmark repeat count
   --json <path>            Benchmark JSON output path
   --targets <path>         Benchmark target envelope TOML file
+  --include-gpu-bench      Also run make_image GPU benchmark (benchmark command)
   --strict                 Fail benchmark command when targets status is fail
 """
     )
@@ -126,6 +128,7 @@ end
 
 function _render_from_input(input::String, opts::Dict{String,Any})
     method = _opt_str(opts, "method", "Chaos")
+    backend = Symbol(_opt_str(opts, "backend", "cpu"))
     npoints = _opt_int(opts, "npoints", nothing)
     iterations = _opt_int(opts, "iterations", nothing)
     image_source = Symbol(_opt_str(opts, "image-source", "polygon"))
@@ -145,6 +148,7 @@ function _render_from_input(input::String, opts::Dict{String,Any})
         return render(
             input;
             method=method,
+            backend=backend,
             npoints=npoints,
             iterations=iterations,
             image_source=image_source,
@@ -163,6 +167,7 @@ function _render_from_input(input::String, opts::Dict{String,Any})
     return render(
         eq;
         method=method,
+        backend=backend,
         npoints=npoints,
         iterations=iterations,
         image_source=image_source,
@@ -189,6 +194,7 @@ function _cmd_batch_render(opts::Dict{String,Any})
     endswith(lowercase(input), ".ifs") || throw(ArgumentError("batch-render currently supports only .ifs input"))
 
     method = _opt_str(opts, "method", "Chaos")
+    backend = Symbol(_opt_str(opts, "backend", "cpu"))
     npoints = _opt_int(opts, "npoints", nothing)
     iterations = _opt_int(opts, "iterations", nothing)
     image_source = Symbol(_opt_str(opts, "image-source", "polygon"))
@@ -213,6 +219,7 @@ function _cmd_batch_render(opts::Dict{String,Any})
         out = render(
             input;
             method=method,
+            backend=backend,
             npoints=npoints,
             iterations=iterations,
             image_source=image_source,
@@ -243,11 +250,19 @@ end
 
 function _cmd_benchmark(opts::Dict{String,Any})
     profile = _opt_str(opts, "profile", "small")
+    backend = Symbol(_opt_str(opts, "backend", "cpu"))
+    include_gpu_bench = get(opts, "include-gpu-bench", false) == true
     repeats = _opt_int(opts, "repeats", 3)
     json_path = _opt_str(opts, "json", nothing)
     targets_path = _opt_str(opts, "targets", nothing)
     strict = get(opts, "strict", false) == true
-    payload = BenchmarkSuite.run_suite(; profile=profile, repeats=repeats, json_path=json_path, targets_path=targets_path, strict=strict)
+    payload = BenchmarkSuite.run_suite(; profile=profile,
+                                         repeats=repeats,
+                                         backend=backend,
+                                         include_gpu_bench=include_gpu_bench,
+                                         json_path=json_path,
+                                         targets_path=targets_path,
+                                         strict=strict)
     BenchmarkSuite.print_report(payload)
     if !isnothing(json_path)
         println("Wrote benchmark JSON to $json_path")

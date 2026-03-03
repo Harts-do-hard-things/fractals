@@ -76,7 +76,15 @@ function _hardware_info()
     )
 end
 
-function _bench_one(label::String, npoints::Int, resolution::Tuple{Int,Int}, inverse_iterations::Int, repeats::Int)
+function _bench_one(
+    label::String,
+    npoints::Int,
+    resolution::Tuple{Int,Int},
+    inverse_iterations::Int,
+    repeats::Int;
+    backend::Symbol=:cpu,
+    include_gpu_bench::Bool=false
+)
     warmup = DEFAULT_WARMUP
     ifs = IFS(HEIGHWAY_DRAGON; npoints=npoints)
     # Warmup for JIT and method compilation.
@@ -99,14 +107,14 @@ function _bench_one(label::String, npoints::Int, resolution::Tuple{Int,Int}, inv
     # Build once for make_image benchmark.
     iterate!(ifs; warmup=warmup, seed=1234)
     image_stats = _time_repeats(repeats) do
-        make_image(ifs; resolution=resolution)
+        make_image(ifs; resolution=resolution, backend=backend)
     end
 
     inverse_stats = _time_repeats(repeats) do
         rasterize_image_inversely(ifs, inverse_iterations, ifs.limits; resolution=resolution)
     end
 
-    return Dict(
+    out = Dict(
         "profile" => label,
         "npoints" => npoints,
         "resolution" => [resolution[1], resolution[2]],
@@ -118,6 +126,21 @@ function _bench_one(label::String, npoints::Int, resolution::Tuple{Int,Int}, inv
         "make_image" => _metric_dict(image_stats),
         "rasterize_image_inversely" => _metric_dict(inverse_stats),
     )
+
+    if include_gpu_bench
+        if !(backend == :gpu || backend == :auto)
+            out["make_image_gpu"] = Dict("status" => "skipped", "reason" => "include_gpu_bench requires backend=:gpu|:auto")
+        elseif !Fractals._gpu_backend_available(Val(:cuda))
+            out["make_image_gpu"] = Dict("status" => "skipped", "reason" => "GPU backend unavailable on this machine")
+        else
+            gpu_stats = _time_repeats(repeats) do
+                make_image(ifs; resolution=resolution, backend=:gpu)
+            end
+            out["make_image_gpu"] = _metric_dict(gpu_stats)
+        end
+    end
+
+    return out
 end
 
 function _target_metric_status(actual::Float64, target::Float64, warn_ratio::Float64, fail_ratio::Float64)
@@ -195,22 +218,27 @@ end
 
 function run_suite(; profile::String="small",
                      repeats::Int=3,
+                     backend::Symbol=:cpu,
+                     include_gpu_bench::Bool=false,
                      json_path::Union{Nothing,String}=nothing,
                      targets_path::Union{Nothing,String}=nothing,
                      strict::Bool=false)
     repeats > 0 || throw(ArgumentError("repeats must be > 0, got $repeats"))
+    backend in (:cpu, :gpu, :auto) || throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
 
     specs = _profile_spec(profile)
     results = Dict{String,Any}()
 
     for (name, spec) in specs
-        results[name] = _bench_one(name, spec.npoints, spec.resolution, spec.inverse_iterations, repeats)
+        results[name] = _bench_one(name, spec.npoints, spec.resolution, spec.inverse_iterations, repeats; backend=backend, include_gpu_bench=include_gpu_bench)
     end
 
     payload = Dict(
         "timestamp" => string(now(UTC)),
         "julia_version" => string(VERSION),
         "threads" => Threads.nthreads(),
+        "backend" => String(backend),
+        "include_gpu_bench" => include_gpu_bench,
         "hardware" => _hardware_info(),
         "repeats" => repeats,
         "results" => results,
@@ -237,6 +265,8 @@ function print_report(payload::Dict{String,Any})
     println("  timestamp: ", payload["timestamp"])
     println("  julia:     ", payload["julia_version"])
     println("  threads:   ", payload["threads"])
+    println("  backend:   ", payload["backend"])
+    println("  gpu bench: ", payload["include_gpu_bench"])
     println("  repeats:   ", payload["repeats"])
     if haskey(payload, "hardware")
         hw = payload["hardware"]
@@ -253,6 +283,16 @@ function print_report(payload::Dict{String,Any})
             println("  ", rpad(key, 26),
                     " min=$(round(stats["min_s"], digits=4))s  mean=$(round(stats["mean_s"], digits=4))s  max=$(round(stats["max_s"], digits=4))s",
                     "  alloc_mean=$(round(stats["mean_alloc_bytes"] / 1024^2, digits=3)) MiB")
+        end
+        if haskey(item, "make_image_gpu")
+            gpu_stats = item["make_image_gpu"]
+            if haskey(gpu_stats, "status")
+                println("  ", rpad("make_image_gpu", 26), " ", gpu_stats["status"], " (", gpu_stats["reason"], ")")
+            else
+                println("  ", rpad("make_image_gpu", 26),
+                        " min=$(round(gpu_stats["min_s"], digits=4))s  mean=$(round(gpu_stats["mean_s"], digits=4))s  max=$(round(gpu_stats["max_s"], digits=4))s",
+                        "  alloc_mean=$(round(gpu_stats["mean_alloc_bytes"] / 1024^2, digits=3)) MiB")
+            end
         end
         println("")
     end
