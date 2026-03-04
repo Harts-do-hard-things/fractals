@@ -111,6 +111,8 @@ function _bench_one(
         make_image(ifs; resolution=resolution, backend=backend)
     end
 
+    # Warm once to avoid first-call compilation skew in timed repeats.
+    iterate_image(ifs, iterate_img_src; backend=backend)
     iterate_image_stats = _time_repeats(repeats) do
         iterate_image(ifs, iterate_img_src; backend=backend)
     end
