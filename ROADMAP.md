@@ -136,7 +136,7 @@ Note: milestone checks below are based on repository state; live CI pass/fail de
 - [x] Step 7: Parity checks added (`isapprox`) behind optional GPU test gate.
 - [x] Step 8: `:auto` fallback behavior implemented; missing GPU produces deterministic behavior.
 - [x] Step 9: benchmark options added (`--backend`, `--include-gpu-bench`) and CI kept CPU-only by default.
-- [ ] Step 10: optimization pass (launch tuning/contention reduction) remains open.
+- [x] Step 10: optimization pass (launch tuning/contention reduction) implemented for `make_image` GPU path (runtime launch tuning + multi-plane contention mitigation).
 
 ### Step 1: Baseline CPU Performance
 1. Measure current `make_image` runtimes at representative resolutions and point counts.

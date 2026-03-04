@@ -217,6 +217,7 @@ function _rasterize_points_kernel!(
     xs,
     ys,
     n::Int32,
+    nplanes::Int32,
     rows::Int32,
     cols::Int32,
     sx::Float32,
@@ -225,7 +226,8 @@ function _rasterize_points_kernel!(
     by::Float32
 )
     i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
-    if i <= n
+    stride = gridDim().x * blockDim().x
+    while i <= n
         fx = sx * xs[i] + bx
         fy = sy * ys[i] + by
         px = Int(round(fx))
@@ -240,8 +242,34 @@ function _rasterize_points_kernel!(
         elseif py > rows
             py = rows
         end
-        CUDA.@atomic img[py, px] += 1.0f0
+        plane = ((i - 1) % nplanes) + 1
+        CUDA.@atomic img[py, px, plane] += 1.0f0
+        i += stride
     end
+    return
+end
+
+function _reduce_planes_kernel!(
+    dst,
+    src,
+    nplanes::Int32,
+    rows::Int32,
+    npix::Int32
+)
+    i = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if i > npix
+        return
+    end
+
+    y = ((i - 1) % rows) + 1
+    x = ((i - 1) ÷ rows) + 1
+    acc = 0.0f0
+    p = Int32(1)
+    while p <= nplanes
+        acc += src[y, x, p]
+        p += 1
+    end
+    dst[y, x] = acc
     return
 end
 
@@ -356,6 +384,22 @@ function _normalize_rgb_image_kernel!(rimg, gimg, bimg, n::Int32, logmax::Float3
     return
 end
 
+@inline function _launch_threads(kernel, n::Integer)::Int
+    cfg = CUDA.launch_configuration(kernel.fun)
+    n <= 0 && return 1
+    return max(32, min(Int(cfg.threads), Int(n), 512))
+end
+
+@inline function _make_image_planes(npts::Int, rows::Int, cols::Int)::Int
+    density = npts / max(rows * cols, 1)
+    if npts >= 500_000 || density >= 8
+        return 4
+    elseif npts >= 100_000 || density >= 2
+        return 2
+    end
+    return 1
+end
+
 function _make_image_gpu(ifs::IFS, ::Val{:cuda}; resolution::Tuple{Int,Int}=RESOLUTION)
     _gpu_backend_available(Val(:cuda)) ||
         throw(ArgumentError("GPU backend is not available. Ensure CUDA.jl is installed and CUDA.functional() is true."))
@@ -382,15 +426,23 @@ function _make_image_gpu(ifs::IFS, ::Val{:cuda}; resolution::Tuple{Int,Int}=RESO
 
     xs = CuArray(xs_h)
     ys = CuArray(ys_h)
+    nplanes = _make_image_planes(npts, rows, cols)
+    # Keep temporary multi-plane buffer bounded and fall back to one plane if too large.
+    bytes = rows * cols * nplanes * sizeof(Float32)
+    max_bytes = 256 * 1024 * 1024
+    if bytes > max_bytes
+        nplanes = 1
+    end
+
+    img_planes_d = CUDA.zeros(Float32, rows, cols, nplanes)
     img_d = CUDA.zeros(Float32, rows, cols)
 
-    threads = 256
-    blocks_points = cld(npts, threads)
-    @cuda threads=threads blocks=blocks_points _rasterize_points_kernel!(
-        img_d,
+    raster_kernel = @cuda launch=false _rasterize_points_kernel!(
+        img_planes_d,
         xs,
         ys,
         Int32(npts),
+        Int32(nplanes),
         Int32(rows),
         Int32(cols),
         sx,
@@ -398,13 +450,51 @@ function _make_image_gpu(ifs::IFS, ::Val{:cuda}; resolution::Tuple{Int,Int}=RESO
         bx,
         by
     )
+    threads_points = _launch_threads(raster_kernel, npts)
+    blocks_points = cld(npts, threads_points)
+    raster_kernel(
+        img_planes_d,
+        xs,
+        ys,
+        Int32(npts),
+        Int32(nplanes),
+        Int32(rows),
+        Int32(cols),
+        sx,
+        sy,
+        bx,
+        by;
+        threads=threads_points,
+        blocks=blocks_points
+    )
+
+    npix = rows * cols
+    reduce_kernel = @cuda launch=false _reduce_planes_kernel!(
+        img_d,
+        img_planes_d,
+        Int32(nplanes),
+        Int32(rows),
+        Int32(npix)
+    )
+    threads_reduce = _launch_threads(reduce_kernel, npix)
+    blocks_reduce = cld(npix, threads_reduce)
+    reduce_kernel(
+        img_d,
+        img_planes_d,
+        Int32(nplanes),
+        Int32(rows),
+        Int32(npix);
+        threads=threads_reduce,
+        blocks=blocks_reduce
+    )
 
     maxv = CUDA.maximum(img_d)
     if maxv > 0f0
         logmax = log1p(maxv)
-        npix = length(img_d)
-        blocks_pixels = cld(npix, threads)
-        @cuda threads=threads blocks=blocks_pixels _normalize_image_kernel!(img_d, Int32(npix), logmax)
+        normalize_kernel = @cuda launch=false _normalize_image_kernel!(img_d, Int32(npix), logmax)
+        threads_norm = _launch_threads(normalize_kernel, npix)
+        blocks_norm = cld(npix, threads_norm)
+        normalize_kernel(img_d, Int32(npix), logmax; threads=threads_norm, blocks=blocks_norm)
     end
 
     return Array(img_d)
