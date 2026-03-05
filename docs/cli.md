@@ -129,4 +129,4 @@ julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl render --inp
 - For multi-definition `.ifs`, select one using `--ifs-index` or `--ifs-name`.
 - For benchmark command:
   - `--backend cpu|gpu|auto` controls GPU-capable benchmark backends (`make_image`, `iterate_image`).
-  - `--include-gpu-bench` adds explicit `make_image_gpu` and `iterate_image_gpu` timing lines.
+  - `--include-gpu-bench` adds explicit `make_image_gpu`, `iterate_image_gpu`, `rasterize_image_inversely_gpu_exact`, and `rasterize_image_inversely_gpu_preview` timing lines.

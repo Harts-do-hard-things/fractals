@@ -1067,9 +1067,19 @@ end
     return max(1, cap)
 end
 
-@inline function _inverse_gpu_preview_capacity(nmaps::Int, n::Int)::Int
+@inline function _inverse_gpu_preview_capacity(
+    nmaps::Int,
+    n::Int,
+    resolution::Tuple{Int,Int}
+)::Int
+    rows, cols = resolution
+    npix = max(rows * cols, 1)
+    # Keep preview mode bounded to reduce GPU memory pressure on larger frames.
+    preview_budget_bytes = 192 * 1024 * 1024
+    max_by_budget = Int(floor(preview_budget_bytes / (2 * 6 * sizeof(Float64) * npix)))
+    max_by_budget = clamp(max_by_budget, 16, 256)
     base = min(_inverse_gpu_exact_capacity(nmaps, n), 256)
-    return max(16, base)
+    return max(16, min(base, max_by_budget))
 end
 
 @inline function _inverse_gpu_buffer_bytes(cap::Int, rows::Int, cols::Int)::Int
@@ -1091,7 +1101,7 @@ function _inverse_gpu_capacity(
     if mode == :exact
         return _inverse_gpu_exact_capacity(nmaps, n_int)
     elseif mode == :preview
-        return _inverse_gpu_preview_capacity(nmaps, n_int)
+        return _inverse_gpu_preview_capacity(nmaps, n_int, resolution)
     end
     throw(ArgumentError("Invalid mode '$mode'. Supported: :exact, :preview"))
 end

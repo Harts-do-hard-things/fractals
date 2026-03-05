@@ -139,9 +139,13 @@ function _bench_one(
         if !(backend == :gpu || backend == :auto)
             out["make_image_gpu"] = Dict("status" => "skipped", "reason" => "include_gpu_bench requires backend=:gpu|:auto")
             out["iterate_image_gpu"] = Dict("status" => "skipped", "reason" => "include_gpu_bench requires backend=:gpu|:auto")
+            out["rasterize_image_inversely_gpu_exact"] = Dict("status" => "skipped", "reason" => "include_gpu_bench requires backend=:gpu|:auto")
+            out["rasterize_image_inversely_gpu_preview"] = Dict("status" => "skipped", "reason" => "include_gpu_bench requires backend=:gpu|:auto")
         elseif !Fractals._gpu_backend_available(Val(:cuda))
             out["make_image_gpu"] = Dict("status" => "skipped", "reason" => "GPU backend unavailable on this machine")
             out["iterate_image_gpu"] = Dict("status" => "skipped", "reason" => "GPU backend unavailable on this machine")
+            out["rasterize_image_inversely_gpu_exact"] = Dict("status" => "skipped", "reason" => "GPU backend unavailable on this machine")
+            out["rasterize_image_inversely_gpu_preview"] = Dict("status" => "skipped", "reason" => "GPU backend unavailable on this machine")
         else
             gpu_stats = _time_repeats(repeats) do
                 make_image(ifs; resolution=resolution, backend=:gpu)
@@ -152,6 +156,22 @@ function _bench_one(
                 iterate_image(ifs, iterate_img_src; backend=:gpu)
             end
             out["iterate_image_gpu"] = _metric_dict(iterate_gpu_stats)
+
+            inverse_gpu_exact_stats = _time_repeats(repeats) do
+                rasterize_image_inversely(ifs, inverse_iterations, ifs.limits;
+                                          resolution=resolution,
+                                          backend=:gpu,
+                                          mode=:exact)
+            end
+            out["rasterize_image_inversely_gpu_exact"] = _metric_dict(inverse_gpu_exact_stats)
+
+            inverse_gpu_preview_stats = _time_repeats(repeats) do
+                rasterize_image_inversely(ifs, inverse_iterations, ifs.limits;
+                                          resolution=resolution,
+                                          backend=:gpu,
+                                          mode=:preview)
+            end
+            out["rasterize_image_inversely_gpu_preview"] = _metric_dict(inverse_gpu_preview_stats)
         end
     end
 
@@ -315,6 +335,26 @@ function print_report(payload::Dict{String,Any})
                 println("  ", rpad("iterate_image_gpu", 26), " ", gpu_stats["status"], " (", gpu_stats["reason"], ")")
             else
                 println("  ", rpad("iterate_image_gpu", 26),
+                        " min=$(round(gpu_stats["min_s"], digits=4))s  mean=$(round(gpu_stats["mean_s"], digits=4))s  max=$(round(gpu_stats["max_s"], digits=4))s",
+                        "  alloc_mean=$(round(gpu_stats["mean_alloc_bytes"] / 1024^2, digits=3)) MiB")
+            end
+        end
+        if haskey(item, "rasterize_image_inversely_gpu_exact")
+            gpu_stats = item["rasterize_image_inversely_gpu_exact"]
+            if haskey(gpu_stats, "status")
+                println("  ", rpad("rasterize_image_inversely_gpu_exact", 26), " ", gpu_stats["status"], " (", gpu_stats["reason"], ")")
+            else
+                println("  ", rpad("rasterize_image_inversely_gpu_exact", 26),
+                        " min=$(round(gpu_stats["min_s"], digits=4))s  mean=$(round(gpu_stats["mean_s"], digits=4))s  max=$(round(gpu_stats["max_s"], digits=4))s",
+                        "  alloc_mean=$(round(gpu_stats["mean_alloc_bytes"] / 1024^2, digits=3)) MiB")
+            end
+        end
+        if haskey(item, "rasterize_image_inversely_gpu_preview")
+            gpu_stats = item["rasterize_image_inversely_gpu_preview"]
+            if haskey(gpu_stats, "status")
+                println("  ", rpad("rasterize_image_inversely_gpu_preview", 26), " ", gpu_stats["status"], " (", gpu_stats["reason"], ")")
+            else
+                println("  ", rpad("rasterize_image_inversely_gpu_preview", 26),
                         " min=$(round(gpu_stats["min_s"], digits=4))s  mean=$(round(gpu_stats["mean_s"], digits=4))s  max=$(round(gpu_stats["max_s"], digits=4))s",
                         "  alloc_mean=$(round(gpu_stats["mean_alloc_bytes"] / 1024^2, digits=3)) MiB")
             end

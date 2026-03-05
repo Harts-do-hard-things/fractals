@@ -994,6 +994,23 @@ end
                 @test small[k].mean_alloc_bytes >= 0
             end
 
+            bench_gpu_json = joinpath("benchmarks", "bench_small_gpu_lines.json")
+            bench_gpu_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1 --backend auto --include-gpu-bench --json $bench_gpu_json`, String)
+            @test occursin("Wrote benchmark JSON", bench_gpu_out)
+            gpu_payload = JSON3.read(read(bench_gpu_json, String))
+            gpu_small = gpu_payload.results.small
+            for k in (:make_image_gpu, :iterate_image_gpu, :rasterize_image_inversely_gpu_exact, :rasterize_image_inversely_gpu_preview)
+                @test haskey(gpu_small, k)
+                item = gpu_small[k]
+                if haskey(item, :status)
+                    @test item.status == "skipped"
+                    @test haskey(item, :reason)
+                else
+                    @test haskey(item, :mean_s)
+                    @test haskey(item, :mean_alloc_bytes)
+                end
+            end
+
             targets_path = abspath(joinpath(project, "bench", "perf_targets.toml"))
             bench_targets_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1 --targets $targets_path`, String)
             @test occursin("Target comparison", bench_targets_out)

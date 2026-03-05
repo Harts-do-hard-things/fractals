@@ -569,9 +569,7 @@ function _rasterize_image_inversely_gpu(
     xmin, xmax = limits[1]
     ymin, ymax = limits[2]
 
-    threads = 256
-    blocks = cld(npix, threads)
-    @cuda threads=threads blocks=blocks _inverse_rasterize_kernel!(
+    inverse_kernel = @cuda launch=false _inverse_rasterize_kernel!(
         img_vec,
         overflow,
         cur_p0x, cur_p0y, cur_p1x, cur_p1y, cur_p2x, cur_p2y,
@@ -584,10 +582,27 @@ function _rasterize_image_inversely_gpu(
         show_divergence_scale,
         mode == :exact
     )
+    threads = _launch_threads(inverse_kernel, npix)
+    blocks = cld(npix, threads)
+    inverse_kernel(
+        img_vec,
+        overflow,
+        cur_p0x, cur_p0y, cur_p1x, cur_p1y, cur_p2x, cur_p2y,
+        nxt_p0x, nxt_p0y, nxt_p1x, nxt_p1y, nxt_p2x, nxt_p2y,
+        ia11, ia12, ia21, ia22, ib1, ib2,
+        map_a11, map_a12, map_a21, map_a22, map_b1, map_b2,
+        Int32(n), Int32(nmaps), Int32(cap),
+        Int32(rows), Int32(npix),
+        Float64(xmin), Float64(xmax), Float64(ymin), Float64(ymax),
+        show_divergence_scale,
+        mode == :exact;
+        threads=threads,
+        blocks=blocks
+    )
 
     if mode == :exact
-        overflow_h = Array(overflow)
-        if any(!iszero, overflow_h)
+        overflow_count = Int(CUDA.sum(overflow))
+        if overflow_count > 0
             throw(ArgumentError("Inverse GPU exact mode overflowed internal triangle capacity; reduce iterations/resolution or use backend=:cpu."))
         end
     end

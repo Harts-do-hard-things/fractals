@@ -74,6 +74,8 @@ Both latency and memory allocation metrics are recorded:
 When `--include-gpu-bench` is enabled, report may include:
 - `make_image_gpu` (or a skipped reason if backend mode is incompatible)
 - `iterate_image_gpu` (or a skipped reason if backend mode is incompatible)
+- `rasterize_image_inversely_gpu_exact` (or a skipped reason if backend mode is incompatible)
+- `rasterize_image_inversely_gpu_preview` (or a skipped reason if backend mode is incompatible)
 
 `iterate_parallel!` is tracked separately for historical/performance monitoring, even though it currently aliases auto-threaded `iterate!`.
 

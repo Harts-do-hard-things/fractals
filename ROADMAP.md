@@ -198,8 +198,8 @@ Note: milestone checks below are based on repository state; live CI pass/fail de
 - [x] Step 5: guardrails added for infeasible GPU exact allocations with deterministic fallback/error behavior.
 - [x] Step 6: optional parity tests added (`mode=:exact` CPU vs GPU via `isapprox`) behind `FRACTALS_RUN_GPU_TESTS=1`.
 - [x] Step 7: docs updated for new API kwargs and behavior.
-- [ ] Step 8: benchmark suite extension for explicit inverse GPU timing/profile lines.
-- [ ] Step 9: optimization pass (capacity tuning and kernel throughput improvements).
+- [x] Step 8: benchmark suite extension completed with explicit inverse GPU timing/profile lines (`rasterize_image_inversely_gpu_exact`, `rasterize_image_inversely_gpu_preview`).
+- [x] Step 9: optimization pass completed (preview capacity tuned by resolution budget, inverse kernel launch tuned dynamically, and overflow check reduced to scalar device reduction).
 
 ### Action Items
 1. Keep CPU implementation as the reference semantics for `mode=:exact`.
