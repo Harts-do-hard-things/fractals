@@ -2,6 +2,19 @@
 
 The benchmark suite provides standard workloads for performance tracking.
 
+## Render Method Context
+
+Render methods are documented in canonical order: `Chaos`, `PointDeterministic`, `ImageIterate`, `Inverse`.
+`Parallel` is a compatibility alias for `Chaos` and may be deprecated in a future release.
+
+Method-specific render arguments:
+- `Chaos`: `npoints`, `backend`, `resolution`, `outpath`
+- `PointDeterministic`: `iterations`, `npoints`, `backend`, `resolution`, `outpath`
+- `ImageIterate`: `image_source`, `image_path`, `image_iterations`, `polygon_limits_mode`, `initial_polygon`, `backend`, `resolution`, `outpath`
+- `Inverse`: `iterations`, `show_divergence_scale`, `backend`, `resolution`, `outpath`
+
+These render arguments are separate from benchmark CLI flags on this page.
+
 ## Run via CLI
 
 ```powershell

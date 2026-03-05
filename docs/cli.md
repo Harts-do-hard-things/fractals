@@ -40,12 +40,83 @@ Run a standard benchmark set.
 julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --npoints 50000 --resolution 256x256 --inverse-iterations 2
 ```
 
+## Render Methods (CLI)
+
+Methods are listed in canonical order: `Chaos`, `PointDeterministic`, `ImageIterate`, `Inverse`.
+`Parallel` is a compatibility alias for `Chaos` and may be deprecated in a future release.
+
+### `Chaos`
+
+Arguments used by this method:
+- `--method Chaos`
+- `--npoints <int>`
+- `--backend cpu|gpu|auto`
+- `--resolution <HxW>`
+- `--out <path>`
+
+Example:
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl render --input Fractals/data/Default.ifs --ifs-index 1 --method Chaos --npoints 200000 --backend cpu --resolution 1024x1024 --out media/cli_chaos.png
+```
+
+### `PointDeterministic`
+
+Arguments used by this method:
+- `--method PointDeterministic`
+- `--iterations <int>`
+- `--npoints <int>`
+- `--backend cpu|gpu|auto`
+- `--resolution <HxW>`
+- `--out <path>`
+
+Example:
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl render --input Fractals/data/Default.ifs --ifs-index 1 --method PointDeterministic --iterations 3 --npoints 500 --backend cpu --resolution 1024x1024 --out media/cli_point_deterministic.png
+```
+
+### `ImageIterate`
+
+Arguments used by this method:
+- `--method ImageIterate`
+- `--image-source polygon|chaos|point_deterministic|inverse|file`
+- `--image-path <path>` (required when `--image-source file`)
+- `--image-iterations <int>`
+- `--polygon-limits-mode ifs|default`
+- `--initial-polygon default|equilateral_triangle|line_arrow|line`
+- `--backend cpu|gpu|auto`
+- `--resolution <HxW>`
+- `--out <path>`
+
+Example:
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl render --input Fractals/data/Default.ifs --ifs-index 1 --method ImageIterate --image-source polygon --image-iterations 3 --polygon-limits-mode ifs --initial-polygon equilateral_triangle --backend cpu --resolution 1024x1024 --out media/cli_image_iterate.png
+```
+
+### `Inverse`
+
+Arguments used by this method:
+- `--method Inverse`
+- `--iterations <int>`
+- `--backend cpu|gpu|auto`
+- `--resolution <HxW>`
+- `--out <path>`
+
+Example:
+
+```powershell
+julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl render --input Fractals/data/Default.ifs --ifs-index 1 --method Inverse --iterations 8 --backend cpu --resolution 1024x1024 --out media/cli_inverse.png
+```
+
 ## Notes
 
 - Methods accepted by CLI are the same as the API (`Chaos`, `Parallel`, `PointDeterministic`, `ImageIterate`, `Inverse`, plus symbol/string forms).
 - `--backend cpu|gpu|auto` controls render backends (`make_image` and inverse rasterization paths).
   - `gpu` requires CUDA support and errors if unavailable.
   - `auto` silently falls back to CPU when GPU support is unavailable.
+- `Parallel` currently maps to `Chaos` behavior and may be deprecated in a future release.
 - For point-deterministic/inverse methods, use `--iterations`.
 - For image-iterate method, use:
   - `--image-source polygon|chaos|point_deterministic|inverse|file`

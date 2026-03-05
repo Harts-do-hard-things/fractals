@@ -55,3 +55,63 @@ julia --startup-file=no --project=Fractals -e "using Pkg; Pkg.instantiate()"
 ```powershell
 julia --startup-file=no --project=Fractals -e "using Fractals; render(HEIGHWAY_DRAGON; method=Chaos, npoints=50_000, outpath=\"media/smoke.png\")"
 ```
+
+## Method-Specific Troubleshooting
+
+Methods are listed in canonical order: `Chaos`, `PointDeterministic`, `ImageIterate`, `Inverse`.
+`Parallel` is a compatibility alias for `Chaos` and may be deprecated in a future release.
+
+### `Chaos`
+
+Arguments commonly involved:
+- `npoints`
+- `backend`
+- `resolution`
+- `outpath`
+
+Common issues:
+- Very high `npoints` can increase runtime/memory pressure.
+- `backend=:gpu` fails when CUDA is unavailable; use `:cpu` or `:auto`.
+
+### `PointDeterministic`
+
+Arguments commonly involved:
+- `iterations`
+- `npoints`
+- `backend`
+- `resolution`
+- `outpath`
+
+Common issues:
+- Large `iterations` causes point growth and heavy allocation.
+- Keep `iterations` low for preview use.
+
+### `ImageIterate`
+
+Arguments commonly involved:
+- `image_source`
+- `image_path` (when `image_source=:file`)
+- `image_iterations`
+- `polygon_limits_mode`
+- `initial_polygon`
+- `backend`
+- `resolution`
+- `outpath`
+
+Common issues:
+- `image_source=:file` requires a valid `image_path`.
+- `polygon_limits_mode=:default` is treated as `:ifs` for polygon source.
+- `color=true` is not supported for `method=ImageIterate`.
+
+### `Inverse`
+
+Arguments commonly involved:
+- `iterations`
+- `show_divergence_scale`
+- `backend`
+- `resolution`
+- `outpath`
+
+Common issues:
+- Increasing `iterations` can significantly increase runtime.
+- If GPU path is unavailable or capacity-limited, use `backend=:cpu` or `:auto`.

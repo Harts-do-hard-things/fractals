@@ -50,6 +50,7 @@ Method options (all accepted by `render`):
 
 Dispatch behavior:
 - `Parallel`/`:parallel` is treated as `Chaos` because `iterate!` is auto-threaded.
+- `Parallel` is kept as a compatibility alias and may be deprecated in a future release.
 - For `method=Inverse`, `show_divergence_scale=false` switches inverse output to a binary mask
   where non-diverged and contains-zero regions are white.
 - `method=:deterministic` is removed; use `:point_deterministic`.
@@ -89,19 +90,104 @@ Selecting an IFS from `.ifs` files with multiple definitions:
 - If no selector is provided and the input has multiple definitions, `render(...)` prints available definitions and asks for confirmation to render index `1`.
 - If confirmation is declined (or unavailable), `render(...)` throws `ArgumentError` with the available list.
 
-Examples:
+Render methods are documented in canonical order: `Chaos`, `PointDeterministic`, `ImageIterate`, `Inverse`.
+
+### `Chaos`
+
+Arguments used by this method:
+- `method=Chaos`
+- `npoints=...`
+- `backend=:cpu|:gpu|:auto`
+- `resolution=(rows, cols)`
+- `outpath=...`
+
+Example:
 
 ```julia
 using Fractals
 
-# Point deterministic: apply maps for 2 rounds
-out1 = render(EISENSTEIN; method=:point_deterministic, iterations=2, npoints=500)
+out = render(EISENSTEIN;
+             method=Chaos,
+             npoints=250_000,
+             backend=:cpu,
+             resolution=(1024, 1024),
+             outpath="media/render_chaos.png")
+```
 
-# Inverse: run inverse rasterization for 6 rounds
-out2 = render(EISENSTEIN; method=:inverse, iterations=6, resolution=(800, 800))
+### `PointDeterministic`
 
-# Image iterate: iterate a grayscale source image through map-space transforms
-out3 = render(EISENSTEIN; method=:image_iterate, image_source=:polygon, image_iterations=3, resolution=(800, 800))
+Arguments used by this method:
+- `method=PointDeterministic`
+- `iterations=...`
+- `npoints=...`
+- `backend=:cpu|:gpu|:auto`
+- `resolution=(rows, cols)`
+- `outpath=...`
+
+Example:
+
+```julia
+using Fractals
+
+out = render(EISENSTEIN;
+             method=PointDeterministic,
+             iterations=2,
+             npoints=500,
+             backend=:cpu,
+             resolution=(800, 800),
+             outpath="media/render_point_deterministic.png")
+```
+
+### `ImageIterate`
+
+Arguments used by this method:
+- `method=ImageIterate`
+- `image_source=:polygon|:chaos|:point_deterministic|:inverse|:file`
+- `image_path=...` (required when `image_source=:file`)
+- `image_iterations=...`
+- `polygon_limits_mode=:ifs|:default`
+- `initial_polygon=:default|:equilateral_triangle|:line_arrow|:line`
+- `backend=:cpu|:gpu|:auto`
+- `resolution=(rows, cols)`
+- `outpath=...`
+
+Example:
+
+```julia
+using Fractals
+
+out = render(EISENSTEIN;
+             method=ImageIterate,
+             image_source=:polygon,
+             image_iterations=3,
+             polygon_limits_mode=:ifs,
+             initial_polygon=:equilateral_triangle,
+             backend=:cpu,
+             resolution=(800, 800),
+             outpath="media/render_image_iterate.png")
+```
+
+### `Inverse`
+
+Arguments used by this method:
+- `method=Inverse`
+- `iterations=...`
+- `show_divergence_scale=true|false` (optional)
+- `backend=:cpu|:gpu|:auto`
+- `resolution=(rows, cols)`
+- `outpath=...`
+
+Example:
+
+```julia
+using Fractals
+
+out = render(EISENSTEIN;
+             method=Inverse,
+             iterations=6,
+             backend=:cpu,
+             resolution=(800, 800),
+             outpath="media/render_inverse.png")
 ```
 
 ### Basic render

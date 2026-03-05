@@ -6,28 +6,9 @@
 julia --project=Fractals -e "using Pkg; Pkg.instantiate()"
 ```
 
-## Recipe 1: Render From Matrix
+## Input Selection
 
-```julia
-using Fractals
-
-eq = [
-    0.5  -0.5   0.5   0.5   0.0   0.0;
-   -0.5  -0.5   0.5  -0.5   1.0   0.0
-]
-
-result = render(eq;
-                method=Chaos,
-                npoints=200_000,
-                resolution=(1024, 1024),
-                outpath="media/recipe_matrix.png")
-
-println(result.outpath)
-```
-
-## Recipe 2: Render From `.ifs` File
-
-Use index selection:
+Use index selection from `.ifs`:
 
 ```julia
 using Fractals
@@ -39,7 +20,7 @@ result = render("my_fractals.ifs";
                 outpath="media/recipe_file_index.png")
 ```
 
-Use name selection:
+Use name selection from `.ifs`:
 
 ```julia
 using Fractals
@@ -53,7 +34,47 @@ result = render("my_fractals.ifs";
 
 If no `ifs_index`/`ifs_name` is provided and the file contains multiple definitions, `render(...)` prints available options and asks for confirmation before selecting index `1`.
 
-## Recipe 3: Point Deterministic Preview
+## Render Methods
+
+Methods are listed in canonical order: `Chaos`, `PointDeterministic`, `ImageIterate`, `Inverse`.
+`Parallel` is a compatibility alias for `Chaos` and may be deprecated in a future release.
+
+## Recipe: Chaos
+
+Arguments used by this method:
+- `method=Chaos`
+- `npoints=...`
+- `backend=:cpu|:gpu|:auto`
+- `resolution=(rows, cols)`
+- `outpath=...`
+
+```julia
+using Fractals
+
+eq = [
+    0.5  -0.5   0.5   0.5   0.0   0.0;
+   -0.5  -0.5   0.5  -0.5   1.0   0.0
+]
+
+result = render(eq;
+                method=Chaos,
+                backend=:cpu,
+                npoints=200_000,
+                resolution=(1024, 1024),
+                outpath="media/recipe_chaos.png")
+
+println(result.outpath)
+```
+
+## Recipe: PointDeterministic
+
+Arguments used by this method:
+- `method=PointDeterministic`
+- `iterations=...`
+- `npoints=...`
+- `backend=:cpu|:gpu|:auto`
+- `resolution=(rows, cols)`
+- `outpath=...`
 
 ```julia
 using Fractals
@@ -62,11 +83,23 @@ result = render(EISENSTEIN;
                 method=PointDeterministic,
                 npoints=300,
                 iterations=2,
+                backend=:cpu,
                 resolution=(900, 900),
-                outpath="media/recipe_deterministic.png")
+                outpath="media/recipe_point_deterministic.png")
 ```
 
-## Recipe 4: Image Iterate From Polygon
+## Recipe: ImageIterate
+
+Arguments used by this method:
+- `method=ImageIterate`
+- `image_source=:polygon|:chaos|:point_deterministic|:inverse|:file`
+- `image_path=...` (required when `image_source=:file`)
+- `image_iterations=...`
+- `polygon_limits_mode=:ifs|:default`
+- `initial_polygon=:default|:equilateral_triangle|:line_arrow|:line`
+- `backend=:cpu|:gpu|:auto`
+- `resolution=(rows, cols)`
+- `outpath=...`
 
 ```julia
 using Fractals
@@ -75,17 +108,25 @@ result = render(EISENSTEIN;
                 method=ImageIterate,
                 image_source=:polygon,
                 image_iterations=3,
-                initial_polygon=:equilateral_triangle,
                 polygon_limits_mode=:ifs,
+                initial_polygon=:equilateral_triangle,
+                backend=:cpu,
                 resolution=(900, 900),
                 outpath="media/recipe_image_iterate.png")
 ```
 
 The `:polygon` seed is produced via `render_transformations_png(...; show_base=false, limits_mode=:ifs, initial_polygon=...)` and then read as grayscale.
-Built-in presets: `:default`, `:equilateral_triangle`, `:line_arrow`, `:line`.
 For `image_source=:polygon`, `polygon_limits_mode=:default` is treated as `:ifs` (compatibility alias).
 
-## Optional: Inverse Render
+## Recipe: Inverse
+
+Arguments used by this method:
+- `method=Inverse`
+- `iterations=...`
+- `show_divergence_scale=true|false` (optional)
+- `backend=:cpu|:gpu|:auto`
+- `resolution=(rows, cols)`
+- `outpath=...`
 
 ```julia
 using Fractals
@@ -93,6 +134,7 @@ using Fractals
 result = render(EISENSTEIN;
                 method=Inverse,
                 iterations=6,
+                backend=:cpu,
                 resolution=(900, 900),
                 outpath="media/recipe_inverse.png")
 ```
