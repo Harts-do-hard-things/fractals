@@ -315,6 +315,10 @@ end
     @test all(img_auto .>= 0f0)
     @test maximum(img_auto) <= 1f0
 
+    img_cpu_preview_a = rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:cpu, mode=:preview)
+    img_cpu_preview_b = rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:cpu, mode=:preview)
+    @test img_cpu_preview_a == img_cpu_preview_b
+
     if Fractals._gpu_backend_available(Val(:cuda))
         img_gpu_exact = rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:gpu, mode=:exact)
         @test size(img_gpu_exact) == (8, 8)

@@ -760,8 +760,10 @@ end
 function _make_image_cpu(ifs::IFS; resolution::Tuple{Int,Int}=RESOLUTION)
     map = make_pixelate_map(ifs.limits; resolution=resolution)
     rows, cols = resolution
+    npts = length(ifs.points)
     nthreads_local = _thread_buffer_slots()
-    buffers = [zeros(Float32, rows, cols) for _ in 1:nthreads_local]
+    nstripes = _make_image_cpu_stripes(npts, rows, cols)
+    buffers = [[zeros(Float32, rows, cols) for _ in 1:nstripes] for _ in 1:nthreads_local]
 
     @threads for idx in eachindex(ifs.points)
         tid = threadid()
@@ -769,13 +771,21 @@ function _make_image_cpu(ifs::IFS; resolution::Tuple{Int,Int}=RESOLUTION)
         pixels = map(pt)
         pixelx = clamp(round(Int, pixels[1]), 1, cols)
         pixely = clamp(round(Int, pixels[2]), 1, rows)
+        stripe = ((idx - 1) % nstripes) + 1
 
-        @inbounds buffers[tid][pixely, pixelx] += 1.0f0
+        @inbounds buffers[tid][stripe][pixely, pixelx] += 1.0f0
     end
 
-    img = buffers[1]
+    img = buffers[1][1]
+    for s in 2:nstripes
+        img .+= buffers[1][s]
+    end
     for t in 2:nthreads_local
-        img .+= buffers[t]
+        thread_img = buffers[t][1]
+        for s in 2:nstripes
+            thread_img .+= buffers[t][s]
+        end
+        img .+= thread_img
     end
     maxv = maximum(img)
     if maxv > 0f0
@@ -785,6 +795,16 @@ function _make_image_cpu(ifs::IFS; resolution::Tuple{Int,Int}=RESOLUTION)
         end
     end
     return img
+end
+
+@inline function _make_image_cpu_stripes(npts::Int, rows::Int, cols::Int)::Int
+    density = npts / max(rows * cols, 1)
+    if npts >= 500_000 || density >= 8
+        return 4
+    elseif npts >= 100_000 || density >= 2
+        return 2
+    end
+    return 1
 end
 
 function _make_image_gpu(ifs::IFS, ::Val; resolution::Tuple{Int,Int}=RESOLUTION)
@@ -923,7 +943,8 @@ function _inverse_iterate!(
     n::Integer,
     p0::SVector{2,Float64},
     p1::SVector{2,Float64},
-    p2::SVector{2,Float64}
+    p2::SVector{2,Float64};
+    max_frontier::Int=typemax(Int)
 )::Float32
     empty!(current)
     empty!(next)
@@ -940,7 +961,9 @@ function _inverse_iterate!(
             end
 
             for imap in inverse_maps
-                push!(next, (imap(tri[1]), imap(tri[2]), imap(tri[3])))
+                if length(next) < max_frontier
+                    push!(next, (imap(tri[1]), imap(tri[2]), imap(tri[3])))
+                end
             end
         end
 
@@ -981,7 +1004,8 @@ function _rasterize_image_inversely_cpu(
     limits::Tuple{Tuple{Float64,Float64},
                   Tuple{Float64,Float64}};
     resolution::Tuple{Int,Int}=RESOLUTION,
-    show_divergence_scale::Bool=true
+    show_divergence_scale::Bool=true,
+    mode::Symbol=:exact
     )
 
     pixel_map = make_pixelate_map(limits;
@@ -993,6 +1017,7 @@ function _rasterize_image_inversely_cpu(
     rows, cols = resolution
     img = zeros(Float32, rows, cols)
     nthreads_local = _thread_buffer_slots()
+    max_frontier = _inverse_cpu_capacity(ifs, n, mode)
     current_buffers = [Vector{NTuple{3,SVector{2,Float64}}}() for _ in 1:nthreads_local]
     next_buffers = [Vector{NTuple{3,SVector{2,Float64}}}() for _ in 1:nthreads_local]
 
@@ -1005,12 +1030,30 @@ function _rasterize_image_inversely_cpu(
             p1 = inv_pixel_map(SVector{2,Float64}(x + 1, y))
             p2 = inv_pixel_map(SVector{2,Float64}(x,     y + 1))
 
-            v = _inverse_iterate!(current, next, inverse_maps, ifs.limits, n, p0, p1, p2)
+            v = _inverse_iterate!(current, next, inverse_maps, ifs.limits, n, p0, p1, p2; max_frontier=max_frontier)
             img[y, x] = show_divergence_scale ? v : _inverse_hide_scale_value(v)
         end
     end
 
     return img
+end
+
+@inline function _inverse_cpu_capacity(ifs::IFS, n::Integer, mode::Symbol)::Int
+    nmaps = length(ifs.maps)
+    nmaps > 0 || throw(ArgumentError("IFS must have at least one map"))
+    n >= 0 || throw(ArgumentError("n must be >= 0, got $n"))
+    mode in (:exact, :preview) ||
+        throw(ArgumentError("Invalid mode '$mode'. Supported: :exact, :preview"))
+    if mode == :exact
+        return typemax(Int)
+    end
+
+    cap = 1
+    for _ in 1:Int(n)
+        cap *= nmaps
+        cap = min(cap, 256)
+    end
+    return max(16, cap)
 end
 
 @inline function _inverse_gpu_exact_capacity(nmaps::Int, n::Int)::Int
@@ -1094,7 +1137,8 @@ function rasterize_image_inversely(
     if backend == :cpu
         return _rasterize_image_inversely_cpu(ifs, n, limits;
                                               resolution=resolution,
-                                              show_divergence_scale=show_divergence_scale)
+                                              show_divergence_scale=show_divergence_scale,
+                                              mode=mode)
     elseif backend == :gpu
         return _rasterize_image_inversely_gpu_or_throw(ifs, n, limits;
                                                        resolution=resolution,
@@ -1110,7 +1154,8 @@ function rasterize_image_inversely(
             if err isa ArgumentError
                 return _rasterize_image_inversely_cpu(ifs, n, limits;
                                                       resolution=resolution,
-                                                      show_divergence_scale=show_divergence_scale)
+                                                      show_divergence_scale=show_divergence_scale,
+                                                      mode=mode)
             end
             rethrow(err)
         end
@@ -1118,7 +1163,8 @@ function rasterize_image_inversely(
 
     return _rasterize_image_inversely_cpu(ifs, n, limits;
                                           resolution=resolution,
-                                          show_divergence_scale=show_divergence_scale)
+                                          show_divergence_scale=show_divergence_scale,
+                                          mode=mode)
 end
 
 # -------------------------------------------------
