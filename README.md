@@ -1,5 +1,5 @@
 # Fractals (Julia)
-[![CI](https://github.com/Harts-do-hard-things/fractals/actions/workflows/ci.yml/badge.svg)](https://github.com/Harts-do-hard-things/fractals/actions/workflows/ci.yml)
+[![CI](https://github.com/Harts-do-hard-things/Fractals.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/Harts-do-hard-things/Fractals.jl/actions/workflows/ci.yml)
 
 `Fractals` is a Julia package for generating and rasterizing 2D iterated function system (IFS) fractals.
 
@@ -13,7 +13,7 @@ The package includes:
 
 ## Repository Layout
 
-- `fractals/`: Julia package (`src/`, `test/`, `Project.toml`)
+- `Fractals.jl/`: Julia package (`src/`, `test/`, `Project.toml`)
 - `site/`: generated static docs site artifacts
 
 ## Quick Start
@@ -21,19 +21,19 @@ The package includes:
 ### 1. Activate and install dependencies
 
 ```powershell
-julia --project=fractals -e "using Pkg; Pkg.instantiate()"
+julia --project=Fractals.jl -e "using Pkg; Pkg.instantiate()"
 ```
 
 ### 2. Generate a fractal image
 
 ```powershell
-julia --project=fractals -e "using Fractals, FileIO; ifs = IFS(HEIGHWAY_DRAGON; npoints=200_000); iterate!(ifs); img = make_image(ifs; resolution=(1024, 1024)); save(\"media/heighway.png\", img)"
+julia --project=Fractals.jl -e "using Fractals, FileIO; ifs = IFS(HEIGHWAY_DRAGON; npoints=200_000); iterate!(ifs); img = make_image(ifs; resolution=(1024, 1024)); save(\"media/heighway.png\", img)"
 ```
 
 ### 3. Run tests
 
 ```powershell
-julia --startup-file=no --project=fractals fractals/test/runtests.jl
+julia --startup-file=no --project=Fractals.jl Fractals.jl/test/runtests.jl
 ```
 
 Optional GPU parity tests can be enabled with `FRACTALS_RUN_GPU_TESTS=1` (requires CUDA support).
@@ -41,13 +41,13 @@ Optional GPU parity tests can be enabled with `FRACTALS_RUN_GPU_TESTS=1` (requir
 ### 4. Run formatter check
 
 ```powershell
-julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1\"); using JuliaFormatter; ok = format([\"fractals/src\", \"fractals/test\"]; overwrite=false, verbose=true); ok || error(\"Formatting check failed\")"
+julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1\"); using JuliaFormatter; ok = format([\"Fractals.jl/src\", \"Fractals.jl/test\"]; overwrite=false, verbose=true); ok || error(\"Formatting check failed\")"
 ```
 
 To apply formatting locally:
 
 ```powershell
-julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1\"); using JuliaFormatter; format([\"fractals/src\", \"fractals/test\"]; overwrite=true, verbose=true)"
+julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1\"); using JuliaFormatter; format([\"Fractals.jl/src\", \"Fractals.jl/test\"]; overwrite=true, verbose=true)"
 ```
 
 ## Minimal Julia Example
@@ -104,7 +104,7 @@ Quick recipes page: `docs/quick-recipes.md`.
 CLI usage page: `docs/cli.md`.
 Benchmark usage page: `docs/benchmarks.md`.
 Troubleshooting notes: `docs/troubleshooting.md`.
-Detailed package reference is in `fractals/DOCUMENTATION.md`.
-Benchmark target envelopes are versioned in `fractals/bench/perf_targets.toml` (latency + allocation thresholds).
+Detailed package reference is in `Fractals.jl/DOCUMENTATION.md`.
+Benchmark target envelopes are versioned in `Fractals.jl/bench/perf_targets.toml` (latency + allocation thresholds).
 
 Generated images should be saved under `media/`.

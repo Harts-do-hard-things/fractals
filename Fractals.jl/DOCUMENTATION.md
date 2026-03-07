@@ -5,8 +5,8 @@
 `Fractals` provides tools to define, iterate, and rasterize 2D affine IFS fractals.
 
 Core source files:
-- `fractals/src/matrixfractal.jl`: main types and rendering functions
-- `fractals/src/ifsparser.jl`: parser for text-based IFS definitions
+- `Fractals.jl/src/matrixfractal.jl`: main types and rendering functions
+- `Fractals.jl/src/ifsparser.jl`: parser for text-based IFS definitions
 
 Docs-site sources:
 - `mkdocs.yml`
@@ -23,7 +23,7 @@ Supported Julia versions: `1.11` and `1.12`.
 From repository root:
 
 ```powershell
-julia --project=fractals -e "using Pkg; Pkg.instantiate()"
+julia --project=Fractals.jl -e "using Pkg; Pkg.instantiate()"
 ```
 
 ## Common Workflows
@@ -366,7 +366,7 @@ Render selection errors for multi-definition `.ifs` files include available inde
 Run from repository root:
 
 ```powershell
-julia --startup-file=no --project=fractals fractals/test/runtests.jl
+julia --startup-file=no --project=Fractals.jl Fractals.jl/test/runtests.jl
 ```
 
 Test suite includes seeded property tests for affine inverse round-trip:
@@ -376,7 +376,7 @@ Test suite includes seeded property tests for affine inverse round-trip:
 ## Performance Targets
 
 Target latency and allocation envelopes are versioned in:
-- `fractals/bench/perf_targets.toml`
+- `Fractals.jl/bench/perf_targets.toml`
 
 Profiles:
 - `small`: `npoints=20_000`, `resolution=(128,128)`, `inverse_iterations=2`
@@ -393,7 +393,7 @@ Per operation, benchmarks track:
 - `min_s`, `mean_s`, `max_s`
 - `min_alloc_bytes`, `mean_alloc_bytes`, `max_alloc_bytes`
 
-Comparison thresholds are set in `fractals/bench/perf_targets.toml`:
+Comparison thresholds are set in `Fractals.jl/bench/perf_targets.toml`:
 - `warn_ratio = 1.15`
 - `fail_ratio = 1.30`
 
@@ -405,13 +405,13 @@ Interpretation:
 Run benchmark with target comparison:
 
 ```powershell
-julia --startup-file=no --project=fractals fractals/bin/fractals.jl benchmark --profile all --repeats 3 --targets fractals/bench/perf_targets.toml
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile all --repeats 3 --targets Fractals.jl/bench/perf_targets.toml
 ```
 
 Strict mode (non-zero exit when status is `fail`):
 
 ```powershell
-julia --startup-file=no --project=fractals fractals/bin/fractals.jl benchmark --profile all --repeats 3 --targets fractals/bench/perf_targets.toml --strict
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile all --repeats 3 --targets Fractals.jl/bench/perf_targets.toml --strict
 ```
 
 CI policy:

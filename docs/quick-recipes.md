@@ -3,7 +3,7 @@
 ## Prerequisites
 
 ```powershell
-julia --project=fractals -e "using Pkg; Pkg.instantiate()"
+julia --project=Fractals.jl -e "using Pkg; Pkg.instantiate()"
 ```
 
 ## Input Selection

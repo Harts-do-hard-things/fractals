@@ -18,37 +18,37 @@ These render arguments are separate from benchmark CLI flags on this page.
 ## Run via CLI
 
 ```powershell
-julia --startup-file=no --project=fractals fractals/bin/fractals.jl benchmark --profile all --repeats 3
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile all --repeats 3
 ```
 
 Benchmark GPU-capable image operations with explicit backend:
 
 ```powershell
-julia --startup-file=no --project=fractals fractals/bin/fractals.jl benchmark --profile small --repeats 3 --backend cpu
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile small --repeats 3 --backend cpu
 ```
 
 Include optional GPU benchmark lines (when CUDA is available):
 
 ```powershell
-julia --startup-file=no --project=fractals fractals/bin/fractals.jl benchmark --profile small --repeats 3 --backend auto --include-gpu-bench
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile small --repeats 3 --backend auto --include-gpu-bench
 ```
 
 Write JSON output:
 
 ```powershell
-julia --startup-file=no --project=fractals fractals/bin/fractals.jl benchmark --profile small --repeats 1 --json benchmarks/bench_small.json
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile small --repeats 1 --json benchmarks/bench_small.json
 ```
 
 Compare against target envelopes:
 
 ```powershell
-julia --startup-file=no --project=fractals fractals/bin/fractals.jl benchmark --profile all --repeats 3 --targets fractals/bench/perf_targets.toml
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile all --repeats 3 --targets Fractals.jl/bench/perf_targets.toml
 ```
 
 Strict mode (fails command on target status `fail`):
 
 ```powershell
-julia --startup-file=no --project=fractals fractals/bin/fractals.jl benchmark --profile all --repeats 3 --targets fractals/bench/perf_targets.toml --strict
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile all --repeats 3 --targets Fractals.jl/bench/perf_targets.toml --strict
 ```
 
 ## Profiles
@@ -91,7 +91,7 @@ When `--include-gpu-bench` is enabled, report may include:
 CI runs benchmark comparison using:
 
 ```powershell
-julia --startup-file=no --project=fractals fractals/bin/fractals.jl benchmark --profile small --repeats 3 --targets fractals/bench/perf_targets.toml --json benchmarks/bench_ci.json
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile small --repeats 3 --targets Fractals.jl/bench/perf_targets.toml --json benchmarks/bench_ci.json
 ```
 
 Behavior:

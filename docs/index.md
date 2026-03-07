@@ -33,11 +33,11 @@ Fractals.jl provides fast tools for rendering 2D iterated function system fracta
 - [CLI](cli.md)
 - [Benchmarks](benchmarks.md)
 - [Troubleshooting](troubleshooting.md)
-- Package reference: `fractals/DOCUMENTATION.md`
+- Package reference: `Fractals.jl/DOCUMENTATION.md`
 
 ## Local Build
 
 ```powershell
-julia --project=fractals -e "using Pkg; Pkg.instantiate()"
+julia --project=Fractals.jl -e "using Pkg; Pkg.instantiate()"
 mkdocs serve
 ```
