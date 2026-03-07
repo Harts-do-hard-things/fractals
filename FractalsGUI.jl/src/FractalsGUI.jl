@@ -12,8 +12,10 @@ export GUIState,
        list_data_ifs,
        parse_matrix_text,
        matrix_to_text,
+       parse_ifs_definition_for_gui,
        load_ifs_definition,
        load_ifs_definition!,
+       load_ifs_definition_gui!,
        apply_eq_matrix!
 
 const _DEFAULT_ROW = [1.0 0.0 0.0 1.0 0.0 0.0 1.0]
@@ -125,7 +127,7 @@ function _refresh_svg!(state::GUIState; width::Int=520, height::Int=520)
     return actual
 end
 
-function make_default_state(; data_dir::AbstractString=joinpath("Fractals", "data"))::GUIState
+function make_default_state(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))::GUIState
     eq = copy(_DEFAULT_ROW)
     ifs = IFS(eq; npoints=20_000, name="Template", docs="FractalsGUI template")
     state = GUIState(
@@ -183,6 +185,45 @@ function _load_definition(path::AbstractString; definition_index::Int=1)
     return (eq=eq, docs=String(selected.docs), name=String(selected.name), names=names)
 end
 
+function _resolve_definition_index(defs;
+                                   definition_index::Union{Nothing,Int}=nothing,
+                                   definition_name::Union{Nothing,AbstractString}=nothing)::Int
+    if !isnothing(definition_index) && !isnothing(definition_name)
+        throw(ArgumentError("provide only one of definition_index or definition_name"))
+    end
+
+    if !isnothing(definition_name)
+        idx = findfirst(d -> String(d.name) == String(definition_name), defs)
+        isnothing(idx) && throw(ArgumentError("definition name '$(definition_name)' not found"))
+        return idx
+    end
+
+    if !isnothing(definition_index)
+        (1 <= definition_index <= length(defs)) || throw(ArgumentError("definition index $definition_index out of range 1:$(length(defs))"))
+        return definition_index
+    end
+
+    return 1
+end
+
+function parse_ifs_definition_for_gui(path::AbstractString;
+                                      definition_index::Union{Nothing,Int}=nothing,
+                                      definition_name::Union{Nothing,AbstractString}=nothing)
+    defs = Fractals.parse_ifs_definitions_file(path)
+    isempty(defs) && throw(ArgumentError("no definitions found in $path"))
+    idx = _resolve_definition_index(defs;
+                                    definition_index=definition_index,
+                                    definition_name=definition_name)
+    selected = defs[idx]
+    eq = normalize_eq_matrix(selected.eq)
+    names = [String(d.name) for d in defs]
+    return (eq=eq,
+            docs=String(selected.docs),
+            name=String(selected.name),
+            names=names,
+            definition_index=idx)
+end
+
 function load_ifs_definition(path::AbstractString; definition_index::Int=1)
     return _load_definition(path; definition_index=definition_index)
 end
@@ -198,21 +239,19 @@ function load_ifs_definition!(state::GUIState, path::AbstractString; definition_
     return apply_eq_matrix!(state, loaded.eq)
 end
 
-function _choose_definition_terminal(path::AbstractString)::Int
-    defs = Fractals.parse_ifs_definitions_file(path)
-    isempty(defs) && throw(ArgumentError("no definitions found in $path"))
-    length(defs) == 1 && return 1
-
-    println("\nSelect definition from: $path")
-    for (i, d) in enumerate(defs)
-        println("  [$i] ", d.name)
-    end
-    print("Definition index: ")
-    idx_text = readline()
-    idx = tryparse(Int, strip(idx_text))
-    idx === nothing && throw(ArgumentError("invalid definition index '$idx_text'"))
-    (1 <= idx <= length(defs)) || throw(ArgumentError("definition index $idx out of range 1:$(length(defs))"))
-    return idx
+function load_ifs_definition_gui!(state::GUIState, path::AbstractString;
+                                  definition_index::Union{Nothing,Int}=nothing,
+                                  definition_name::Union{Nothing,AbstractString}=nothing)::Bool
+    loaded = parse_ifs_definition_for_gui(path;
+                                          definition_index=definition_index,
+                                          definition_name=definition_name)
+    state.source_file = abspath(path)
+    state.definition_index = loaded.definition_index
+    state.definition_name = loaded.name
+    state.docs = loaded.docs
+    state.eq_matrix = loaded.eq
+    state.loaded_eq_matrix = copy(loaded.eq)
+    return apply_eq_matrix!(state, loaded.eq)
 end
 
 function _make_numeric_entry(v::Real; width_chars::Int=7)
@@ -295,7 +334,7 @@ function _build_function_row(eq::AbstractMatrix{<:Real}, i::Int)
     return (widget=row_box, entries=entries, color_btn=color_btn)
 end
 
-function launch_gui(; data_dir::AbstractString=joinpath("Fractals", "data"))
+function launch_gui(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))
     state = make_default_state(; data_dir=data_dir)
 
     window = Gtk.GtkWindow("FractalsGUI", 1580, 860)
@@ -359,10 +398,14 @@ function launch_gui(; data_dir::AbstractString=joinpath("Fractals", "data"))
     Gtk.push!(panel_matrix, matrix_scroll)
 
     ui_rows_ref = Ref(Vector{Any}())
+    load_data_items_ref = Ref(Vector{Any}())
 
     function _clear_rows!()
-        for child in Gtk.GAccessor.children(rows_box)
-            Gtk.destroy(child)
+        # Destroy only tracked row widgets to avoid walking mutable Gtk child lists.
+        for row_ui in ui_rows_ref[]
+            widget = get(row_ui, :widget, nothing)
+            isnothing(widget) && continue
+            Gtk.destroy(widget)
         end
         empty!(ui_rows_ref[])
     end
@@ -460,38 +503,46 @@ function launch_gui(; data_dir::AbstractString=joinpath("Fractals", "data"))
     end
 
     function reload_data_menu!()
-        for child in Gtk.GAccessor.children(load_data_menu)
-            Gtk.destroy(child)
+        for item in load_data_items_ref[]
+            isnothing(item) && continue
+            Gtk.destroy(item)
         end
+        empty!(load_data_items_ref[])
         files = list_data_ifs(data_dir)
         if isempty(files)
             empty_item = Gtk.GtkMenuItem("(no .ifs files found)")
             Gtk.push!(load_data_menu, empty_item)
+            push!(load_data_items_ref[], empty_item)
             return
         end
 
         for file in files
             item = Gtk.GtkMenuItem(basename(file))
             Gtk.signal_connect(item, "activate") do _
-                idx = _choose_definition_terminal(file)
-                ok = load_ifs_definition!(state, file; definition_index=idx)
+                ok = load_ifs_definition_gui!(state, file)
                 if ok
                     _rebuild_rows!(state.eq_matrix)
                 end
                 set_status!()
             end
             Gtk.push!(load_data_menu, item)
+            push!(load_data_items_ref[], item)
         end
     end
 
     Gtk.signal_connect(add_row_btn, "clicked") do _
-        current = try
-            _collect_eq_from_rows()
-        catch
-            state.eq_matrix
+        try
+            current = try
+                _collect_eq_from_rows()
+            catch
+                state.eq_matrix
+            end
+            next = vcat(current, _DEFAULT_ROW)
+            _rebuild_rows!(next)
+            Gtk.set_gtk_property!(status_label, :label, "Ready")
+        catch err
+            Gtk.set_gtk_property!(status_label, :label, "Error: " * sprint(showerror, err))
         end
-        next = vcat(current, _DEFAULT_ROW)
-        _rebuild_rows!(next)
     end
 
     Gtk.signal_connect(remove_row_btn, "clicked") do _
@@ -543,14 +594,13 @@ function launch_gui(; data_dir::AbstractString=joinpath("Fractals", "data"))
     Gtk.signal_connect(open_item, "activate") do _
         chosen = try
             Gtk.open_dialog("Open .ifs file", window, ("IFS files", "*.ifs"))
-        catch
-            print("Path to .ifs file: ")
-            readline()
+        catch err
+            Gtk.set_gtk_property!(status_label, :label, "Error: " * sprint(showerror, err))
+            return
         end
         isnothing(chosen) && return
         isempty(strip(chosen)) && return
-        idx = _choose_definition_terminal(chosen)
-        ok = load_ifs_definition!(state, chosen; definition_index=idx)
+        ok = load_ifs_definition_gui!(state, chosen)
         if ok
             _rebuild_rows!(state.eq_matrix)
         end

@@ -45,6 +45,42 @@ end
     end
 end
 
+@testset "GUI Definition Loader (Non-Interactive)" begin
+    sample = """
+    First {
+      0.5 0.0 0.0 0.5 0.0 0.0
+      0.5 0.0 0.0 0.5 0.5 0.0
+    }
+    Second {
+      0.5 -0.5 0.5 0.5 0.0 0.0 0.5
+      -0.5 -0.5 0.5 -0.5 1.0 0.0 0.5
+    }
+    """
+
+    mktemp() do path, io
+        write(io, sample)
+        close(io)
+
+        loaded_default = parse_ifs_definition_for_gui(path)
+        @test loaded_default.definition_index == 1
+        @test loaded_default.name == "First"
+        @test length(loaded_default.names) == 2
+
+        loaded_name = parse_ifs_definition_for_gui(path; definition_name="Second")
+        @test loaded_name.definition_index == 2
+        @test loaded_name.name == "Second"
+
+        state = make_default_state()
+        @test load_ifs_definition_gui!(state, path)
+        @test state.definition_index == 1
+        @test state.definition_name == "First"
+
+        @test load_ifs_definition_gui!(state, path; definition_name="Second")
+        @test state.definition_index == 2
+        @test state.definition_name == "Second"
+    end
+end
+
 @testset "State Apply + SVG Refresh" begin
     state = make_default_state()
     old_svg_path = state.svg_temp_path
@@ -89,4 +125,25 @@ end
     @test !occursin("GAccessor.text(", src)
     @test occursin("import Gtk", src)
     @test !occursin("@eval import Gtk", src)
+end
+
+@testset "Gtk Callback Safety Guard" begin
+    src_path = normpath(joinpath(@__DIR__, "..", "src", "FractalsGUI.jl"))
+    src = read(src_path, String)
+
+    # Guard against mutating/walking Gtk child iterators during teardown.
+    @test !occursin("Gtk.GAccessor.children(rows_box)", src)
+    @test !occursin("Gtk.GAccessor.children(load_data_menu)", src)
+    @test occursin("load_data_items_ref = Ref(Vector{Any}())", src)
+    @test occursin("widget = get(row_ui, :widget, nothing)", src)
+
+    # Guard against uncaught exceptions bubbling through the Add Row callback.
+    @test occursin("Gtk.signal_connect(add_row_btn, \"clicked\")", src)
+    @test occursin("catch err", src)
+    @test occursin("Error: \" * sprint(showerror, err)", src)
+
+    # GUI workflow must not depend on terminal prompts/readline.
+    @test !occursin("readline()", src)
+    @test occursin("load_ifs_definition_gui!(state, file)", src)
+    @test occursin("load_ifs_definition_gui!(state, chosen)", src)
 end
