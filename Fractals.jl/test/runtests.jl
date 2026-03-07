@@ -12,6 +12,11 @@ const SMALL_EQ = [
    -0.5  0.0  0.0 -0.5  1.0  0.0  0.4
 ]
 
+function _skip_optional_gpu_parity!(name::AbstractString)
+    @warn "$name skipped: FRACTALS_RUN_GPU_TESTS=1 but no CUDA GPU is available."
+    @test_skip Fractals._gpu_backend_available(Val(:cuda))
+end
+
 @testset "AffineMap" begin
     A = [0.5 0.0; 0.0 0.5]
     b = [1.0, -2.0]
@@ -200,12 +205,15 @@ end
 
 @testset "GPU Parity (Optional)" begin
     if get(ENV, "FRACTALS_RUN_GPU_TESTS", "0") == "1"
-        @test Fractals._gpu_backend_available(Val(:cuda))
-        ifs = IFS(SMALL_EQ; npoints=5000)
-        iterate!(ifs; warmup=5, seed=987)
-        cpu_img = make_image(ifs; resolution=(48, 48), backend=:cpu)
-        gpu_img = make_image(ifs; resolution=(48, 48), backend=:gpu)
-        @test isapprox(cpu_img, gpu_img; atol=1e-5, rtol=1e-5)
+        if Fractals._gpu_backend_available(Val(:cuda))
+            ifs = IFS(SMALL_EQ; npoints=5000)
+            iterate!(ifs; warmup=5, seed=987)
+            cpu_img = make_image(ifs; resolution=(48, 48), backend=:cpu)
+            gpu_img = make_image(ifs; resolution=(48, 48), backend=:gpu)
+            @test isapprox(cpu_img, gpu_img; atol=1e-5, rtol=1e-5)
+        else
+            _skip_optional_gpu_parity!("GPU Parity (Optional)")
+        end
     else
         @test true
     end
@@ -269,18 +277,21 @@ end
 
 @testset "Iterate Image GPU Parity (Optional)" begin
     if get(ENV, "FRACTALS_RUN_GPU_TESTS", "0") == "1"
-        @test Fractals._gpu_backend_available(Val(:cuda))
-        ifs = IFS(SMALL_EQ; npoints=2000)
-        iterate!(ifs; warmup=5, seed=4321)
-        src = make_image(ifs; resolution=(28, 28), backend=:cpu)
+        if Fractals._gpu_backend_available(Val(:cuda))
+            ifs = IFS(SMALL_EQ; npoints=2000)
+            iterate!(ifs; warmup=5, seed=4321)
+            src = make_image(ifs; resolution=(28, 28), backend=:cpu)
 
-        cpu_gray = iterate_image(ifs, src; backend=:cpu)
-        gpu_gray = iterate_image(ifs, src; backend=:gpu)
-        @test isapprox(Float32.(cpu_gray), Float32.(gpu_gray); atol=1e-5, rtol=1e-5)
+            cpu_gray = iterate_image(ifs, src; backend=:cpu)
+            gpu_gray = iterate_image(ifs, src; backend=:gpu)
+            @test isapprox(Float32.(cpu_gray), Float32.(gpu_gray); atol=1e-5, rtol=1e-5)
 
-        cpu_rgb = iterate_image(ifs, src; colors=true, backend=:cpu, seed=99)
-        gpu_rgb = iterate_image(ifs, src; colors=true, backend=:gpu, seed=99)
-        @test isapprox(Float32.(Gray.(cpu_rgb)), Float32.(Gray.(gpu_rgb)); atol=1e-5, rtol=1e-5)
+            cpu_rgb = iterate_image(ifs, src; colors=true, backend=:cpu, seed=99)
+            gpu_rgb = iterate_image(ifs, src; colors=true, backend=:gpu, seed=99)
+            @test isapprox(Float32.(Gray.(cpu_rgb)), Float32.(Gray.(gpu_rgb)); atol=1e-5, rtol=1e-5)
+        else
+            _skip_optional_gpu_parity!("Iterate Image GPU Parity (Optional)")
+        end
     else
         @test true
     end
@@ -342,17 +353,20 @@ end
 
 @testset "Inverse Rasterize GPU Parity (Optional)" begin
     if get(ENV, "FRACTALS_RUN_GPU_TESTS", "0") == "1"
-        @test Fractals._gpu_backend_available(Val(:cuda))
-        ifs = IFS(SMALL_EQ; npoints=100)
-        lims = ifs.limits
+        if Fractals._gpu_backend_available(Val(:cuda))
+            ifs = IFS(SMALL_EQ; npoints=100)
+            lims = ifs.limits
 
-        cpu_img = rasterize_image_inversely(ifs, 2, lims; resolution=(16, 16), backend=:cpu, mode=:exact)
-        gpu_img = rasterize_image_inversely(ifs, 2, lims; resolution=(16, 16), backend=:gpu, mode=:exact)
-        @test isapprox(cpu_img, gpu_img; atol=1e-5, rtol=1e-5)
+            cpu_img = rasterize_image_inversely(ifs, 2, lims; resolution=(16, 16), backend=:cpu, mode=:exact)
+            gpu_img = rasterize_image_inversely(ifs, 2, lims; resolution=(16, 16), backend=:gpu, mode=:exact)
+            @test isapprox(cpu_img, gpu_img; atol=1e-5, rtol=1e-5)
 
-        gpu_preview_a = rasterize_image_inversely(ifs, 2, lims; resolution=(16, 16), backend=:gpu, mode=:preview)
-        gpu_preview_b = rasterize_image_inversely(ifs, 2, lims; resolution=(16, 16), backend=:gpu, mode=:preview)
-        @test gpu_preview_a == gpu_preview_b
+            gpu_preview_a = rasterize_image_inversely(ifs, 2, lims; resolution=(16, 16), backend=:gpu, mode=:preview)
+            gpu_preview_b = rasterize_image_inversely(ifs, 2, lims; resolution=(16, 16), backend=:gpu, mode=:preview)
+            @test gpu_preview_a == gpu_preview_b
+        else
+            _skip_optional_gpu_parity!("Inverse Rasterize GPU Parity (Optional)")
+        end
     else
         @test true
     end
