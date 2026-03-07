@@ -1,0 +1,595 @@
+module FractalsGUI
+
+using Fractals
+using LinearAlgebra
+using Printf
+import Gtk
+
+export GUIState,
+       launch_gui,
+       make_default_state,
+       normalize_eq_matrix,
+       list_data_ifs,
+       parse_matrix_text,
+       matrix_to_text,
+       load_ifs_definition,
+       load_ifs_definition!,
+       apply_eq_matrix!
+
+const _DEFAULT_ROW = [1.0 0.0 0.0 1.0 0.0 0.0 1.0]
+
+mutable struct GUIState
+    source_file::Union{Nothing,String}
+    definition_index::Int
+    definition_name::String
+    eq_matrix::Matrix{Float64}
+    loaded_eq_matrix::Matrix{Float64}
+    docs::String
+    ifs::IFS
+    svg_string::String
+    svg_temp_path::String
+    fractal_placeholder_text::String
+    last_error::Union{Nothing,String}
+    is_valid::Bool
+end
+
+function normalize_eq_matrix(eq::AbstractMatrix{<:Real})::Matrix{Float64}
+    nrows, ncols = size(eq)
+    nrows > 0 || throw(ArgumentError("matrix must have at least one row"))
+    (ncols == 6 || ncols == 7) || throw(ArgumentError("matrix must have 6 or 7 columns, got $ncols"))
+
+    out = Matrix{Float64}(undef, nrows, 7)
+    out[:, 1:6] .= Float64.(eq[:, 1:6])
+    all(isfinite, out[:, 1:6]) || throw(ArgumentError("matrix contains non-finite values"))
+
+    if ncols == 7
+        out[:, 7] .= Float64.(eq[:, 7])
+    else
+        for i in 1:nrows
+            a11, a12, a21, a22 = out[i, 1], out[i, 2], out[i, 3], out[i, 4]
+            out[i, 7] = abs(det([a11 a12; a21 a22]))
+        end
+    end
+
+    all(isfinite, out[:, 7]) || throw(ArgumentError("probability column contains non-finite values"))
+    all(p -> p >= 0.0, out[:, 7]) || throw(ArgumentError("probability column must be nonnegative"))
+    sum(out[:, 7]) > 0.0 || throw(ArgumentError("probability column must have positive total weight"))
+    return out
+end
+
+function list_data_ifs(data_dir::AbstractString)::Vector{String}
+    isdir(data_dir) || return String[]
+    paths = filter(p -> endswith(lowercase(p), ".ifs"), readdir(data_dir; join=true))
+    sort!(paths)
+    return paths
+end
+
+function matrix_to_text(eq::AbstractMatrix{<:Real})::String
+    nrows, ncols = size(eq)
+    ncols == 7 || throw(ArgumentError("matrix_to_text expects exactly 7 columns"))
+    lines = Vector{String}(undef, nrows)
+    for i in 1:nrows
+        lines[i] = @sprintf("%.10g %.10g %.10g %.10g %.10g %.10g %.10g",
+                            eq[i, 1], eq[i, 2], eq[i, 3], eq[i, 4], eq[i, 5], eq[i, 6], eq[i, 7])
+    end
+    return join(lines, '\n')
+end
+
+function parse_matrix_text(text::AbstractString)::Matrix{Float64}
+    rows = Vector{Vector{Float64}}()
+    for raw in split(text, '\n')
+        line = strip(raw)
+        isempty(line) && continue
+        parts = split(line)
+        length(parts) == 7 || throw(ArgumentError("each row must have exactly 7 columns"))
+        row = Vector{Float64}(undef, 7)
+        for i in 1:7
+            parsed = tryparse(Float64, parts[i])
+            parsed === nothing && throw(ArgumentError("invalid numeric token '$(parts[i])'"))
+            row[i] = parsed
+        end
+        push!(rows, row)
+    end
+    isempty(rows) && throw(ArgumentError("matrix text is empty"))
+
+    out = Matrix{Float64}(undef, length(rows), 7)
+    for i in eachindex(rows)
+        out[i, :] .= rows[i]
+    end
+    return out
+end
+
+function _normalize_probability_column(eq::AbstractMatrix{<:Real})::Matrix{Float64}
+    size(eq, 2) == 7 || throw(ArgumentError("matrix must have exactly 7 columns"))
+    out = Matrix{Float64}(eq)
+    probs = out[:, 7]
+    all(isfinite, probs) || throw(ArgumentError("probability column contains non-finite values"))
+    all(p -> p >= 0.0, probs) || throw(ArgumentError("probability column must be nonnegative"))
+    total = sum(probs)
+    total > 0.0 || throw(ArgumentError("probability column must have positive total weight"))
+    out[:, 7] ./= total
+    return out
+end
+
+function _refresh_placeholder!(state::GUIState)
+    source = isnothing(state.source_file) ? "unsaved template" : basename(state.source_file)
+    status = state.is_valid ? "ready to render" : "invalid matrix"
+    state.fractal_placeholder_text = "Fractal preview not yet implemented\nsource: $source\ndefinition: $(state.definition_name)\nstatus: $status"
+end
+
+function _refresh_svg!(state::GUIState; width::Int=520, height::Int=520)
+    requested = tempname() * ".svg"
+    actual = Fractals.render_transformations_svg(state.ifs; outpath=requested, width=width, height=height)
+    state.svg_temp_path = actual
+    state.svg_string = read(actual, String)
+    return actual
+end
+
+function make_default_state(; data_dir::AbstractString=joinpath("Fractals", "data"))::GUIState
+    eq = copy(_DEFAULT_ROW)
+    ifs = IFS(eq; npoints=20_000, name="Template", docs="FractalsGUI template")
+    state = GUIState(
+        nothing,
+        1,
+        "Template",
+        eq,
+        copy(eq),
+        "FractalsGUI template",
+        ifs,
+        "",
+        "",
+        "",
+        nothing,
+        true,
+    )
+    _refresh_svg!(state)
+    _refresh_placeholder!(state)
+    return state
+end
+
+function apply_eq_matrix!(state::GUIState, eq::AbstractMatrix{<:Real})::Bool
+    normalized = try
+        normalize_eq_matrix(eq)
+    catch err
+        state.is_valid = false
+        state.last_error = sprint(showerror, err)
+        _refresh_placeholder!(state)
+        return false
+    end
+
+    try
+        state.eq_matrix = normalized
+        state.ifs = IFS(normalized; npoints=20_000, name=state.definition_name, docs=state.docs)
+        state.last_error = nothing
+        state.is_valid = true
+        _refresh_svg!(state)
+        _refresh_placeholder!(state)
+        return true
+    catch err
+        state.is_valid = false
+        state.last_error = sprint(showerror, err)
+        _refresh_placeholder!(state)
+        return false
+    end
+end
+
+function _load_definition(path::AbstractString; definition_index::Int=1)
+    defs = Fractals.parse_ifs_definitions_file(path)
+    isempty(defs) && throw(ArgumentError("no definitions found in $path"))
+    (1 <= definition_index <= length(defs)) || throw(ArgumentError("definition index $definition_index out of range 1:$(length(defs))"))
+    selected = defs[definition_index]
+    eq = normalize_eq_matrix(selected.eq)
+    names = [String(d.name) for d in defs]
+    return (eq=eq, docs=String(selected.docs), name=String(selected.name), names=names)
+end
+
+function load_ifs_definition(path::AbstractString; definition_index::Int=1)
+    return _load_definition(path; definition_index=definition_index)
+end
+
+function load_ifs_definition!(state::GUIState, path::AbstractString; definition_index::Int=1)::Bool
+    loaded = _load_definition(path; definition_index=definition_index)
+    state.source_file = abspath(path)
+    state.definition_index = definition_index
+    state.definition_name = loaded.name
+    state.docs = loaded.docs
+    state.eq_matrix = loaded.eq
+    state.loaded_eq_matrix = copy(loaded.eq)
+    return apply_eq_matrix!(state, loaded.eq)
+end
+
+function _choose_definition_terminal(path::AbstractString)::Int
+    defs = Fractals.parse_ifs_definitions_file(path)
+    isempty(defs) && throw(ArgumentError("no definitions found in $path"))
+    length(defs) == 1 && return 1
+
+    println("\nSelect definition from: $path")
+    for (i, d) in enumerate(defs)
+        println("  [$i] ", d.name)
+    end
+    print("Definition index: ")
+    idx_text = readline()
+    idx = tryparse(Int, strip(idx_text))
+    idx === nothing && throw(ArgumentError("invalid definition index '$idx_text'"))
+    (1 <= idx <= length(defs)) || throw(ArgumentError("definition index $idx out of range 1:$(length(defs))"))
+    return idx
+end
+
+function _make_numeric_entry(v::Real; width_chars::Int=7)
+    e = Gtk.GtkEntry()
+    Gtk.set_gtk_property!(e, :width_chars, width_chars)
+    Gtk.set_gtk_property!(e, :text, @sprintf("%.10g", Float64(v)))
+    return e
+end
+
+function _entry_float(e)::Float64
+    txt = strip(Gtk.get_gtk_property(e, :text, String))
+    val = tryparse(Float64, txt)
+    val === nothing && throw(ArgumentError("invalid numeric token '$txt'"))
+    return val
+end
+
+function _set_entry_float!(e, v::Real)
+    Gtk.set_gtk_property!(e, :text, @sprintf("%.10g", Float64(v)))
+end
+
+function _build_function_row(eq::AbstractMatrix{<:Real}, i::Int)
+    a11 = _make_numeric_entry(eq[i, 1])
+    a12 = _make_numeric_entry(eq[i, 2])
+    a21 = _make_numeric_entry(eq[i, 3])
+    a22 = _make_numeric_entry(eq[i, 4])
+    b1 = _make_numeric_entry(eq[i, 5])
+    b2 = _make_numeric_entry(eq[i, 6])
+    p = _make_numeric_entry(eq[i, 7]; width_chars=8)
+
+    color_btn = Gtk.GtkColorButton()
+    idx_lbl = Gtk.GtkLabel("$(i)")
+
+    row_box = Gtk.GtkBox(:h)
+    eq_box = Gtk.GtkBox(:v)
+    l1 = Gtk.GtkBox(:h)
+    l2 = Gtk.GtkBox(:h)
+
+    Gtk.push!(l1, Gtk.GtkLabel("A_i"))
+    Gtk.push!(l1, Gtk.GtkLabel("⎡"))
+    Gtk.push!(l1, a11)
+    Gtk.push!(l1, a12)
+    Gtk.push!(l1, Gtk.GtkLabel("⎤"))
+
+    Gtk.push!(l2, Gtk.GtkLabel("   "))
+    Gtk.push!(l2, Gtk.GtkLabel("⎣"))
+    Gtk.push!(l2, a21)
+    Gtk.push!(l2, a22)
+    Gtk.push!(l2, Gtk.GtkLabel("⎦"))
+
+    Gtk.push!(l1, Gtk.GtkLabel("  "))
+    Gtk.push!(l1, Gtk.GtkLabel("⎡"))
+    Gtk.push!(l1, Gtk.GtkLabel("x"))
+    Gtk.push!(l1, Gtk.GtkLabel("⎤"))
+    Gtk.push!(l2, Gtk.GtkLabel("  "))
+    Gtk.push!(l2, Gtk.GtkLabel("⎣"))
+    Gtk.push!(l2, Gtk.GtkLabel("y"))
+    Gtk.push!(l2, Gtk.GtkLabel("⎦"))
+
+    Gtk.push!(l1, Gtk.GtkLabel(" + b_i "))
+    Gtk.push!(l1, Gtk.GtkLabel("⎡"))
+    Gtk.push!(l1, b1)
+    Gtk.push!(l1, Gtk.GtkLabel("⎤"))
+    Gtk.push!(l2, Gtk.GtkLabel("      "))
+    Gtk.push!(l2, Gtk.GtkLabel("⎣"))
+    Gtk.push!(l2, b2)
+    Gtk.push!(l2, Gtk.GtkLabel("⎦"))
+
+    Gtk.push!(l1, Gtk.GtkLabel("   p_i"))
+    Gtk.push!(l1, p)
+
+    Gtk.push!(eq_box, l1)
+    Gtk.push!(eq_box, l2)
+
+    Gtk.push!(row_box, color_btn)
+    Gtk.push!(row_box, idx_lbl)
+    Gtk.push!(row_box, Gtk.GtkLabel("  "))
+    Gtk.push!(row_box, eq_box)
+
+    entries = [a11, a12, a21, a22, b1, b2, p]
+    return (widget=row_box, entries=entries, color_btn=color_btn)
+end
+
+function launch_gui(; data_dir::AbstractString=joinpath("Fractals", "data"))
+    state = make_default_state(; data_dir=data_dir)
+
+    window = Gtk.GtkWindow("FractalsGUI", 1580, 860)
+    root = Gtk.GtkBox(:v)
+    Gtk.set_gtk_property!(root, :hexpand, true)
+    Gtk.set_gtk_property!(root, :vexpand, true)
+    Gtk.push!(window, root)
+
+    # Menu bar
+    menubar = Gtk.GtkMenuBar()
+    Gtk.push!(root, menubar)
+
+    file_item = Gtk.GtkMenuItem("File")
+    file_menu = Gtk.GtkMenu()
+    Gtk.set_gtk_property!(file_item, :submenu, file_menu)
+    Gtk.push!(menubar, file_item)
+
+    load_data_item = Gtk.GtkMenuItem("Load from data/")
+    load_data_menu = Gtk.GtkMenu()
+    Gtk.set_gtk_property!(load_data_item, :submenu, load_data_menu)
+    Gtk.push!(file_menu, load_data_item)
+
+    open_item = Gtk.GtkMenuItem("Open .ifs...")
+    reload_item = Gtk.GtkMenuItem("Reload current source")
+    clear_item = Gtk.GtkMenuItem("Clear to empty template")
+    Gtk.push!(file_menu, open_item)
+    Gtk.push!(file_menu, reload_item)
+    Gtk.push!(file_menu, clear_item)
+
+    # Main 3-panel row
+    row = Gtk.GtkBox(:h)
+    Gtk.set_gtk_property!(row, :hexpand, true)
+    Gtk.set_gtk_property!(row, :vexpand, true)
+    Gtk.set_gtk_property!(row, :homogeneous, true)
+    Gtk.push!(root, row)
+
+    panel_matrix = Gtk.GtkBox(:v)
+    panel_svg = Gtk.GtkBox(:v)
+    panel_fractal = Gtk.GtkBox(:v)
+    Gtk.set_gtk_property!(panel_matrix, :hexpand, true)
+    Gtk.set_gtk_property!(panel_matrix, :vexpand, true)
+    Gtk.set_gtk_property!(panel_svg, :hexpand, true)
+    Gtk.set_gtk_property!(panel_svg, :vexpand, true)
+    Gtk.set_gtk_property!(panel_fractal, :hexpand, true)
+    Gtk.set_gtk_property!(panel_fractal, :vexpand, true)
+
+    Gtk.push!(row, panel_matrix)
+    Gtk.push!(row, panel_svg)
+    Gtk.push!(row, panel_fractal)
+
+    Gtk.push!(panel_matrix, Gtk.GtkLabel("Functions as affine transforms: f_i([x;y]) = A_i*[x;y] + b_i"))
+    Gtk.push!(panel_matrix, Gtk.GtkLabel("Left color swatch sets function color. Edit each numeric field directly."))
+    Gtk.push!(panel_svg, Gtk.GtkLabel("Transformation SVG Preview"))
+    Gtk.push!(panel_fractal, Gtk.GtkLabel("Fractal Panel (placeholder)"))
+
+    rows_box = Gtk.GtkBox(:v)
+    matrix_scroll = Gtk.GtkScrolledWindow()
+    Gtk.set_gtk_property!(matrix_scroll, :hexpand, true)
+    Gtk.set_gtk_property!(matrix_scroll, :vexpand, true)
+    Gtk.push!(matrix_scroll, rows_box)
+    Gtk.push!(panel_matrix, matrix_scroll)
+
+    ui_rows_ref = Ref(Vector{Any}())
+
+    function _clear_rows!()
+        for child in Gtk.GAccessor.children(rows_box)
+            Gtk.destroy(child)
+        end
+        empty!(ui_rows_ref[])
+    end
+
+    function _rebuild_rows!(eq::AbstractMatrix{<:Real})
+        _clear_rows!()
+        for i in 1:size(eq, 1)
+            row_ui = _build_function_row(eq, i)
+            push!(ui_rows_ref[], row_ui)
+            Gtk.push!(rows_box, row_ui.widget)
+        end
+        Gtk.showall(rows_box)
+    end
+
+    function _collect_eq_from_rows()::Matrix{Float64}
+        nrows = length(ui_rows_ref[])
+        nrows > 0 || throw(ArgumentError("matrix must have at least one row"))
+        eq = Matrix{Float64}(undef, nrows, 7)
+        for i in 1:nrows
+            entries = ui_rows_ref[][i].entries
+            for j in 1:7
+                eq[i, j] = _entry_float(entries[j])
+            end
+        end
+        return eq
+    end
+
+    function _write_eq_to_rows!(eq::AbstractMatrix{<:Real})
+        if length(ui_rows_ref[]) != size(eq, 1)
+            _rebuild_rows!(eq)
+            return
+        end
+        for i in 1:size(eq, 1)
+            entries = ui_rows_ref[][i].entries
+            for j in 1:7
+                _set_entry_float!(entries[j], eq[i, j])
+            end
+        end
+    end
+
+    _rebuild_rows!(state.eq_matrix)
+
+    matrix_buttons = Gtk.GtkBox(:h)
+    add_row_btn = Gtk.GtkButton("Add Row")
+    remove_row_btn = Gtk.GtkButton("Remove Last Row")
+    normalize_p_btn = Gtk.GtkButton("Normalize p")
+    apply_btn = Gtk.GtkButton("Apply")
+    reset_btn = Gtk.GtkButton("Reset to Loaded")
+    Gtk.push!(matrix_buttons, add_row_btn)
+    Gtk.push!(matrix_buttons, remove_row_btn)
+    Gtk.push!(matrix_buttons, normalize_p_btn)
+    Gtk.push!(matrix_buttons, apply_btn)
+    Gtk.push!(matrix_buttons, reset_btn)
+    Gtk.push!(panel_matrix, matrix_buttons)
+
+    status_label = Gtk.GtkLabel("Ready")
+    Gtk.push!(panel_matrix, status_label)
+
+    svg_image = Gtk.GtkImage()
+    Gtk.set_gtk_property!(svg_image, :file, state.svg_temp_path)
+    svg_scroll = Gtk.GtkScrolledWindow()
+    Gtk.set_gtk_property!(svg_scroll, :hexpand, true)
+    Gtk.set_gtk_property!(svg_scroll, :vexpand, true)
+    Gtk.push!(svg_scroll, svg_image)
+    Gtk.push!(panel_svg, svg_scroll)
+
+    placeholder_label = Gtk.GtkLabel(state.fractal_placeholder_text)
+    Gtk.push!(panel_fractal, placeholder_label)
+
+    function set_status!()
+        if state.is_valid
+            Gtk.set_gtk_property!(status_label, :label, "Ready")
+        else
+            Gtk.set_gtk_property!(status_label, :label, "Error: " * something(state.last_error, "unknown error"))
+        end
+        Gtk.set_gtk_property!(placeholder_label, :label, state.fractal_placeholder_text)
+        Gtk.set_gtk_property!(svg_image, :file, state.svg_temp_path)
+    end
+
+    function apply_editor_values!()
+        parsed = try
+            _collect_eq_from_rows()
+        catch err
+            state.is_valid = false
+            state.last_error = sprint(showerror, err)
+            _refresh_placeholder!(state)
+            set_status!()
+            return
+        end
+        if apply_eq_matrix!(state, parsed)
+            state.loaded_eq_matrix = copy(state.eq_matrix)
+            _write_eq_to_rows!(state.eq_matrix)
+        end
+        set_status!()
+    end
+
+    function reload_data_menu!()
+        for child in Gtk.GAccessor.children(load_data_menu)
+            Gtk.destroy(child)
+        end
+        files = list_data_ifs(data_dir)
+        if isempty(files)
+            empty_item = Gtk.GtkMenuItem("(no .ifs files found)")
+            Gtk.push!(load_data_menu, empty_item)
+            return
+        end
+
+        for file in files
+            item = Gtk.GtkMenuItem(basename(file))
+            Gtk.signal_connect(item, "activate") do _
+                idx = _choose_definition_terminal(file)
+                ok = load_ifs_definition!(state, file; definition_index=idx)
+                if ok
+                    _rebuild_rows!(state.eq_matrix)
+                end
+                set_status!()
+            end
+            Gtk.push!(load_data_menu, item)
+        end
+    end
+
+    Gtk.signal_connect(add_row_btn, "clicked") do _
+        current = try
+            _collect_eq_from_rows()
+        catch
+            state.eq_matrix
+        end
+        next = vcat(current, _DEFAULT_ROW)
+        _rebuild_rows!(next)
+    end
+
+    Gtk.signal_connect(remove_row_btn, "clicked") do _
+        current = try
+            _collect_eq_from_rows()
+        catch
+            state.eq_matrix
+        end
+        if size(current, 1) <= 1
+            Gtk.set_gtk_property!(status_label, :label, "Error: matrix must keep at least one row")
+            return
+        end
+        _rebuild_rows!(current[1:end-1, :])
+    end
+
+    Gtk.signal_connect(apply_btn, "clicked") do _
+        apply_editor_values!()
+    end
+
+    Gtk.signal_connect(normalize_p_btn, "clicked") do _
+        parsed = try
+            _collect_eq_from_rows()
+        catch err
+            state.is_valid = false
+            state.last_error = sprint(showerror, err)
+            _refresh_placeholder!(state)
+            set_status!()
+            return
+        end
+        normalized = try
+            _normalize_probability_column(parsed)
+        catch err
+            state.is_valid = false
+            state.last_error = sprint(showerror, err)
+            _refresh_placeholder!(state)
+            set_status!()
+            return
+        end
+        _write_eq_to_rows!(normalized)
+        apply_editor_values!()
+    end
+
+    Gtk.signal_connect(reset_btn, "clicked") do _
+        _rebuild_rows!(state.loaded_eq_matrix)
+        _ = apply_eq_matrix!(state, state.loaded_eq_matrix)
+        set_status!()
+    end
+
+    Gtk.signal_connect(open_item, "activate") do _
+        chosen = try
+            Gtk.open_dialog("Open .ifs file", window, ("IFS files", "*.ifs"))
+        catch
+            print("Path to .ifs file: ")
+            readline()
+        end
+        isnothing(chosen) && return
+        isempty(strip(chosen)) && return
+        idx = _choose_definition_terminal(chosen)
+        ok = load_ifs_definition!(state, chosen; definition_index=idx)
+        if ok
+            _rebuild_rows!(state.eq_matrix)
+        end
+        set_status!()
+    end
+
+    Gtk.signal_connect(reload_item, "activate") do _
+        if isnothing(state.source_file)
+            Gtk.set_gtk_property!(status_label, :label, "No source file loaded")
+            return
+        end
+        ok = load_ifs_definition!(state, state.source_file; definition_index=state.definition_index)
+        if ok
+            _rebuild_rows!(state.eq_matrix)
+        end
+        set_status!()
+    end
+
+    Gtk.signal_connect(clear_item, "activate") do _
+        state.source_file = nothing
+        state.definition_index = 1
+        state.definition_name = "Template"
+        state.docs = "FractalsGUI template"
+        state.loaded_eq_matrix = copy(_DEFAULT_ROW)
+        _ = apply_eq_matrix!(state, state.loaded_eq_matrix)
+        _rebuild_rows!(state.eq_matrix)
+        set_status!()
+    end
+
+    Gtk.signal_connect(window, "destroy") do _
+        Gtk.gtk_quit()
+    end
+
+    reload_data_menu!()
+    set_status!()
+    Gtk.showall(window)
+    Gtk.maximize(window)
+    Gtk.gtk_main()
+    return nothing
+end
+
+end

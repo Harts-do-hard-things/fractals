@@ -1,0 +1,19 @@
+name = "FractalsGUI"
+uuid = "bac4833a-be30-43b9-93b9-4e34d6f4c5d7"
+version = "0.1.0"
+
+[deps]
+Fractals = "c711514a-ad55-41be-9602-f6ed5533a69e"
+Gtk = "4c0ca9eb-093a-5379-98c5-f87ac0bbbf44"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Rsvg = "c4c386cf-5103-5370-be45-f3a111cca3b8"
+
+[compat]
+julia = "1.11, 1.12"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

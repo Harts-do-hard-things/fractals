@@ -14,6 +14,7 @@ The package includes:
 ## Repository Layout
 
 - `Fractals/`: Julia package (`src/`, `test/`, `Project.toml`)
+- `FractalsGUI.jl/`: separate Julia package for the desktop GUI (depends on `Fractals`)
 - `site/`: generated static docs site artifacts
 
 ## Quick Start
@@ -37,6 +38,20 @@ julia --startup-file=no --project=Fractals Fractals/test/runtests.jl
 ```
 
 Optional GPU parity tests can be enabled with `FRACTALS_RUN_GPU_TESTS=1` (requires CUDA support).
+
+### GUI package (local tests only, not in CI)
+
+Launch GUI:
+
+```powershell
+julia --startup-file=no --project=FractalsGUI.jl FractalsGUI.jl/bin/gui.jl
+```
+
+Run GUI package tests:
+
+```powershell
+julia --startup-file=no --project=FractalsGUI.jl -e "using Pkg; Pkg.test()"
+```
 
 ### 4. Run formatter check
 

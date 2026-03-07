@@ -303,7 +303,7 @@ Cons:
 ## Planned GUI Milestone: Iteractable 3-Panel Desktop GUI
 
 ### Summary
-- Build a new Gtk.jl desktop GUI (`Fractals/bin/gui.jl`) with three synchronized panels:
+- Build a new Gtk.jl desktop GUI (`FractalsGUI`) with three synchronized panels:
 1. Editable transformation matrix panel (always 7 columns).
 2. True SVG preview panel of current transformations.
 3. Placeholder fractal panel with wiring hooks for future rendering.
@@ -317,14 +317,13 @@ Cons:
 
 ### Architecture and File Layout
 1. New launcher script:
-  - `Fractals/bin/gui.jl`
   - Responsibilities:
     - Start Gtk app/window
     - Construct all panels and menu actions
     - Wire state updates and refresh pipeline
 
 2. New GUI module source:
-  - `Fractals/src/gui.jl`
+  - `FractalsGUI` package
   - Responsibilities:
     - App state model
     - Widget construction helpers
@@ -342,6 +341,7 @@ Cons:
     - How to launch GUI
     - `.ifs` load behavior
     - Panel behavior and current limitations (fractal pane placeholder)
+    - Seperate documentation for FractalsGUI
 
 ### Public API / Interface Additions
 1. New API entrypoint:
@@ -350,7 +350,7 @@ Cons:
   - Optional `data_dir` for testing/custom datasets.
 
 2. New CLI-style launcher script:
-  - `julia --startup-file=no --project=Fractals Fractals/bin/gui.jl`
+  - `julia --startup-file=no --project=Fractals FractalsGUI/bin/gui.jl`
 
 - No breaking changes to existing render/CLI APIs.
 
