@@ -7,8 +7,8 @@ This page covers common local issues and the fastest recovery paths.
 Run local commands the same way CI runs them:
 
 ```powershell
-julia --startup-file=no --project=Fractals -e "using Pkg; Pkg.instantiate()"
-julia --startup-file=no --project=Fractals Fractals/test/runtests.jl
+julia --startup-file=no --project=fractals -e "using Pkg; Pkg.instantiate()"
+julia --startup-file=no --project=fractals fractals/test/runtests.jl
 ```
 
 ## Startup File Issues (`startup.jl`)
@@ -21,7 +21,7 @@ Fix:
 - Disable startup file for project commands:
 
 ```powershell
-julia --startup-file=no --project=Fractals Fractals/test/runtests.jl
+julia --startup-file=no --project=fractals fractals/test/runtests.jl
 ```
 
 ## Cache/Permission Lock Issues
@@ -44,16 +44,16 @@ Recommended recovery flow:
 ## Environment Sanity Checks
 
 ```powershell
-julia --startup-file=no --project=Fractals -e "using InteractiveUtils; versioninfo()"
-julia --startup-file=no --project=Fractals -e "println(Base.active_project())"
-julia --startup-file=no --project=Fractals -e "using Base.Threads; println(nthreads())"
-julia --startup-file=no --project=Fractals -e "using Pkg; Pkg.instantiate()"
+julia --startup-file=no --project=fractals -e "using InteractiveUtils; versioninfo()"
+julia --startup-file=no --project=fractals -e "println(Base.active_project())"
+julia --startup-file=no --project=fractals -e "using Base.Threads; println(nthreads())"
+julia --startup-file=no --project=fractals -e "using Pkg; Pkg.instantiate()"
 ```
 
 ## Quick Render Smoke Test
 
 ```powershell
-julia --startup-file=no --project=Fractals -e "using Fractals; render(HEIGHWAY_DRAGON; method=Chaos, npoints=50_000, outpath=\"media/smoke.png\")"
+julia --startup-file=no --project=fractals -e "using Fractals; render(HEIGHWAY_DRAGON; method=Chaos, npoints=50_000, outpath=\"media/smoke.png\")"
 ```
 
 ## Method-Specific Troubleshooting

@@ -5,7 +5,7 @@
 
 ## Current Status
 - [x] README updated for Julia workflows
-- [x] Core documentation added (`Fractals/DOCUMENTATION.md`)
+- [x] Core documentation added (`fractals/DOCUMENTATION.md`)
 - [x] Tests fixed and expanded
 - [x] Image output defaults routed to `media/`
 
@@ -37,7 +37,7 @@
 ## 31-60 Days: Tooling and Performance
 
 ### CLI
-- [x] Add `Fractals/bin/fractals.jl` CLI with commands:
+- [x] Add `fractals/bin/fractals.jl` CLI with commands:
 - [x] `render` (single render from matrix/IFS file)
 - [x] `batch-render` (all definitions in a file)
 - [x] `validate-ifs` (syntax/shape checks without rendering)
@@ -58,7 +58,7 @@
 ## 61-90 Days: Visual Quality and Distribution
 
 ### Ecosystem/Release
-- [x] Add curated `Fractals/data/*.ifs` library with metadata.
+- [x] Add curated `fractals/data/*.ifs` library with metadata.
 - [x] Add release checklist (version bump, changelog, benchmarks, docs updates).
 - [ ] Tag stable `v1.0.0` when API/CLI contracts are locked.
 
@@ -67,12 +67,12 @@
 - [x] Bump project version in package metadata as needed for the release.
 - [x] Update changelog/release notes text to summarize user-visible API/CLI/docs changes.
 - [x] Run full test suite:
-  - `julia --startup-file=no --project=Fractals Fractals/test/runtests.jl`
+  - `julia --startup-file=no --project=fractals fractals/test/runtests.jl`
 - [x] Run benchmark suite and review target envelope status:
-  - `julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile medium --repeats 3`
+  - `julia --startup-file=no --project=fractals fractals/bin/fractals.jl benchmark --profile medium --repeats 3`
 - [x] If target envelopes are configured, run strict benchmark validation:
-  - `julia --startup-file=no --project=Fractals Fractals/bin/fractals.jl benchmark --profile medium --repeats 3 --targets <path-to-targets.toml> --strict`
-- [x] Verify docs impacted by the release are updated (`Fractals/DOCUMENTATION.md`, `docs/quick-recipes.md`, `docs/cli.md`, troubleshooting as needed).
+  - `julia --startup-file=no --project=fractals fractals/bin/fractals.jl benchmark --profile medium --repeats 3 --targets <path-to-targets.toml> --strict`
+- [x] Verify docs impacted by the release are updated (`fractals/DOCUMENTATION.md`, `docs/quick-recipes.md`, `docs/cli.md`, troubleshooting as needed).
 - [x] Verify CLI help output matches docs for newly added or changed flags/options.
 - [ ] Commit release-prep changes with clear message.
 - [ ] Create and push release tag:
@@ -303,13 +303,13 @@ Cons:
 ## Planned GUI Milestone: Iteractable 3-Panel Desktop GUI
 
 ### Summary
-- Build a new Gtk.jl desktop GUI (`Fractals/bin/gui.jl`) with three synchronized panels:
+- Build a new Gtk.jl desktop GUI (`fractals/bin/gui.jl`) with three synchronized panels:
 1. Editable transformation matrix panel (always 7 columns).
 2. True SVG preview panel of current transformations.
 3. Placeholder fractal panel with wiring hooks for future rendering.
 
 - Add context-menu-driven loading that supports:
-  - Quick-load from `./Fractals/data/*.ifs`
+  - Quick-load from `./fractals/data/*.ifs`
   - External `.ifs` file picker
   - Two-step definition selection for multi-definition files
 
@@ -317,14 +317,14 @@ Cons:
 
 ### Architecture and File Layout
 1. New launcher script:
-  - `Fractals/bin/gui.jl`
+  - `fractals/bin/gui.jl`
   - Responsibilities:
     - Start Gtk app/window
     - Construct all panels and menu actions
     - Wire state updates and refresh pipeline
 
 2. New GUI module source:
-  - `Fractals/src/gui.jl`
+  - `fractals/src/gui.jl`
   - Responsibilities:
     - App state model
     - Widget construction helpers
@@ -334,23 +334,23 @@ Cons:
     - Placeholder fractal panel update hook
 
 3. Package export wiring:
-  - `Fractals/src/Fractals.jl`
+  - `fractals/src/Fractals.jl`
   - Add `include("gui.jl")` and export GUI entrypoint (e.g. `launch_gui`).
 
 4. Documentation updates:
-  - `README.md` and `Fractals/DOCUMENTATION.md`:
+  - `README.md` and `fractals/DOCUMENTATION.md`:
     - How to launch GUI
     - `.ifs` load behavior
     - Panel behavior and current limitations (fractal pane placeholder)
 
 ### Public API / Interface Additions
 1. New API entrypoint:
-  - `launch_gui(; data_dir::AbstractString="Fractals/data")`
+  - `launch_gui(; data_dir::AbstractString="fractals/data")`
   - Opens main GUI window.
   - Optional `data_dir` for testing/custom datasets.
 
 2. New CLI-style launcher script:
-  - `julia --startup-file=no --project=Fractals Fractals/bin/gui.jl`
+  - `julia --startup-file=no --project=fractals fractals/bin/gui.jl`
 
 - No breaking changes to existing render/CLI APIs.
 
@@ -422,7 +422,7 @@ Cons:
 - Right-click context menu on main window (and mirrored in menu bar if desired):
 
 1. `Load from data/`
-  - Dynamically lists `./Fractals/data/*.ifs`.
+  - Dynamically lists `./fractals/data/*.ifs`.
   - Selecting a file triggers definition picker dialog if multiple definitions found.
   - Two-step selection:
     - file selection
@@ -466,7 +466,7 @@ Cons:
   - Defensive parsing with clear error propagation.
 
 ### Tests and Scenarios
-- Add `Fractals/test/gui_smoke.jl` (or integrated guarded tests) with non-interactive coverage:
+- Add `fractals/test/gui_smoke.jl` (or integrated guarded tests) with non-interactive coverage:
 
 1. State/model tests:
   - 6-col source normalization to 7-col UI matrix.
@@ -474,7 +474,7 @@ Cons:
   - Validation rejects invalid numeric/probability inputs.
 
 2. Load workflow tests:
-  - Enumerate `Fractals/data/*.ifs` list.
+  - Enumerate `fractals/data/*.ifs` list.
   - Parse selected file and choose definition by index.
   - External path load behavior.
 
@@ -492,7 +492,7 @@ Cons:
   - Placeholder panel reflects state changes.
 
 ### Dependencies and Build Notes
-1. Add GUI dependencies to `Fractals/Project.toml`:
+1. Add GUI dependencies to `fractals/Project.toml`:
   - `Gtk` (or `Gtk4`) and SVG rendering dependency (Rsvg-capable path).
 
 2. Keep startup recommendations:
@@ -502,12 +502,12 @@ Cons:
   - Document native library requirements if Gtk/Rsvg backends require them.
 
 ### Acceptance Criteria
-1. Launching `Fractals/bin/gui.jl` opens a 3-panel window.
+1. Launching `fractals/bin/gui.jl` opens a 3-panel window.
 2. Matrix panel is editable and always 7 columns.
 3. SVG panel shows true SVG and refreshes after edits/loads.
 4. Fractal panel exists as placeholder with active state wiring.
 5. Context menu supports:
-  - `.ifs` selection from `./Fractals/data`
+  - `.ifs` selection from `./fractals/data`
   - external `.ifs` via file picker
   - multi-definition selection flow
 6. Existing package APIs and CLI remain backward-compatible.

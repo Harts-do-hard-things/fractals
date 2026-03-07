@@ -13,9 +13,9 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
 
 ### Added
 - High-level `render(...)` API covering chaos, point-deterministic, image-iterate, and inverse workflows.
-- CLI entrypoint (`Fractals/bin/fractals.jl`) with `render`, `batch-render`, `validate-ifs`, and `benchmark`.
+- CLI entrypoint (`fractals/bin/fractals.jl`) with `render`, `batch-render`, `validate-ifs`, and `benchmark`.
 - Benchmark suite and regression target checking support.
-- Curated `Fractals/data/*.ifs` dataset.
+- Curated `fractals/data/*.ifs` dataset.
 - Polygon seed preset selection (`initial_polygon`) for transformation renders and image-iterate polygon source.
 - Expanded parser negative tests and affine inverse property tests.
 
