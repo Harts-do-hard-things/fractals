@@ -10,6 +10,7 @@ export GUIState,
        make_default_state,
        normalize_eq_matrix,
        list_data_ifs,
+       list_ifs_definition_names,
        parse_matrix_text,
        matrix_to_text,
        parse_ifs_definition_for_gui,
@@ -64,6 +65,12 @@ function list_data_ifs(data_dir::AbstractString)::Vector{String}
     paths = filter(p -> endswith(lowercase(p), ".ifs"), readdir(data_dir; join=true))
     sort!(paths)
     return paths
+end
+
+function list_ifs_definition_names(path::AbstractString)::Vector{String}
+    defs = Fractals.parse_ifs_definitions_file(path)
+    isempty(defs) && throw(ArgumentError("no definitions found in $path"))
+    return [String(d.name) for d in defs]
 end
 
 function matrix_to_text(eq::AbstractMatrix{<:Real})::String
@@ -357,6 +364,11 @@ function launch_gui(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))
     Gtk.set_gtk_property!(load_data_item, :submenu, load_data_menu)
     Gtk.push!(file_menu, load_data_item)
 
+    definitions_item = Gtk.GtkMenuItem("IFS definitions")
+    definitions_menu = Gtk.GtkMenu()
+    Gtk.set_gtk_property!(definitions_item, :submenu, definitions_menu)
+    Gtk.push!(file_menu, definitions_item)
+
     open_item = Gtk.GtkMenuItem("Open .ifs...")
     reload_item = Gtk.GtkMenuItem("Reload current source")
     clear_item = Gtk.GtkMenuItem("Clear to empty template")
@@ -399,6 +411,7 @@ function launch_gui(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))
 
     ui_rows_ref = Ref(Vector{Any}())
     load_data_items_ref = Ref(Vector{Any}())
+    definition_items_ref = Ref(Vector{Any}())
 
     function _clear_rows!()
         # Destroy only tracked row widgets to avoid walking mutable Gtk child lists.
@@ -519,15 +532,70 @@ function launch_gui(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))
         for file in files
             item = Gtk.GtkMenuItem(basename(file))
             Gtk.signal_connect(item, "activate") do _
-                ok = load_ifs_definition_gui!(state, file)
-                if ok
-                    _rebuild_rows!(state.eq_matrix)
+                try
+                    ok = load_ifs_definition_gui!(state, file)
+                    if ok
+                        _rebuild_rows!(state.eq_matrix)
+                    end
+                    reload_definitions_menu!()
+                    set_status!()
+                catch err
+                    Gtk.set_gtk_property!(status_label, :label, "Error: " * sprint(showerror, err))
                 end
-                set_status!()
             end
             Gtk.push!(load_data_menu, item)
             push!(load_data_items_ref[], item)
         end
+    end
+
+    function reload_definitions_menu!()
+        for item in definition_items_ref[]
+            isnothing(item) && continue
+            Gtk.destroy(item)
+        end
+        empty!(definition_items_ref[])
+
+        if isnothing(state.source_file)
+            empty_item = Gtk.GtkMenuItem("(load a file first)")
+            Gtk.set_gtk_property!(empty_item, :sensitive, false)
+            Gtk.push!(definitions_menu, empty_item)
+            push!(definition_items_ref[], empty_item)
+            Gtk.showall(definitions_menu)
+            return
+        end
+
+        names = try
+            list_ifs_definition_names(state.source_file)
+        catch err
+            empty_item = Gtk.GtkMenuItem("(failed to parse definitions)")
+            Gtk.set_gtk_property!(empty_item, :sensitive, false)
+            Gtk.push!(definitions_menu, empty_item)
+            push!(definition_items_ref[], empty_item)
+            Gtk.set_gtk_property!(status_label, :label, "Error: " * sprint(showerror, err))
+            Gtk.showall(definitions_menu)
+            return
+        end
+
+        for (i, name) in enumerate(names)
+            label = "[$i] $name"
+            item = Gtk.GtkMenuItem(label)
+            Gtk.set_gtk_property!(item, :sensitive, i != state.definition_index)
+            Gtk.signal_connect(item, "activate") do _
+                try
+                    ok = load_ifs_definition_gui!(state, state.source_file; definition_index=i)
+                    if ok
+                        _rebuild_rows!(state.eq_matrix)
+                    end
+                    reload_definitions_menu!()
+                    set_status!()
+                catch err
+                    Gtk.set_gtk_property!(status_label, :label, "Error: " * sprint(showerror, err))
+                end
+            end
+            Gtk.push!(definitions_menu, item)
+            push!(definition_items_ref[], item)
+        end
+        Gtk.showall(definitions_menu)
     end
 
     Gtk.signal_connect(add_row_btn, "clicked") do _
@@ -604,6 +672,7 @@ function launch_gui(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))
         if ok
             _rebuild_rows!(state.eq_matrix)
         end
+        reload_definitions_menu!()
         set_status!()
     end
 
@@ -612,10 +681,11 @@ function launch_gui(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))
             Gtk.set_gtk_property!(status_label, :label, "No source file loaded")
             return
         end
-        ok = load_ifs_definition!(state, state.source_file; definition_index=state.definition_index)
+        ok = load_ifs_definition_gui!(state, state.source_file; definition_index=state.definition_index)
         if ok
             _rebuild_rows!(state.eq_matrix)
         end
+        reload_definitions_menu!()
         set_status!()
     end
 
@@ -627,6 +697,7 @@ function launch_gui(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))
         state.loaded_eq_matrix = copy(_DEFAULT_ROW)
         _ = apply_eq_matrix!(state, state.loaded_eq_matrix)
         _rebuild_rows!(state.eq_matrix)
+        reload_definitions_menu!()
         set_status!()
     end
 
@@ -635,6 +706,7 @@ function launch_gui(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))
     end
 
     reload_data_menu!()
+    reload_definitions_menu!()
     set_status!()
     Gtk.showall(window)
     Gtk.maximize(window)

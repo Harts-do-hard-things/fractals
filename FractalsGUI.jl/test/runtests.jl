@@ -81,6 +81,37 @@ end
     end
 end
 
+@testset "GUI Definition Listing And Switching" begin
+    sample = """
+    One {
+      0.5 0.0 0.0 0.5 0.0 0.0
+    }
+    Two {
+      0.3 0.0 0.0 0.3 0.4 0.0
+    }
+    Three {
+      0.2 0.0 0.0 0.2 0.8 0.0
+    }
+    """
+
+    mktemp() do path, io
+        write(io, sample)
+        close(io)
+
+        names = list_ifs_definition_names(path)
+        @test names == ["One", "Two", "Three"]
+
+        state = make_default_state()
+        @test load_ifs_definition_gui!(state, path; definition_index=3)
+        @test state.definition_index == 3
+        @test state.definition_name == "Three"
+
+        @test load_ifs_definition_gui!(state, path; definition_index=2)
+        @test state.definition_index == 2
+        @test state.definition_name == "Two"
+    end
+end
+
 @testset "State Apply + SVG Refresh" begin
     state = make_default_state()
     old_svg_path = state.svg_temp_path
@@ -146,4 +177,9 @@ end
     @test !occursin("readline()", src)
     @test occursin("load_ifs_definition_gui!(state, file)", src)
     @test occursin("load_ifs_definition_gui!(state, chosen)", src)
+    @test occursin("Gtk.GtkMenuItem(\"IFS definitions\")", src)
+    @test occursin("function reload_definitions_menu!()", src)
+    @test occursin("load_ifs_definition_gui!(state, state.source_file; definition_index=i)", src)
+    @test !occursin("load_ifs_definition!(state, state.source_file", src)
+    @test occursin("Gtk.showall(definitions_menu)", src)
 end

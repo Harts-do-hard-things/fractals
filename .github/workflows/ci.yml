@@ -35,7 +35,7 @@ jobs:
           Pkg.activate(temp=true);
           Pkg.add(name="JuliaFormatter", version="1");
           using JuliaFormatter;
-          ok = format(["Fractals/src", "Fractals/test"]; overwrite=false, verbose=true);
+          ok = format(["Fractals.jl/src", "Fractals.jl/test"]; overwrite=false, verbose=true);
           ok || @warn("Formatting check reported changes. Run JuliaFormatter locally.");
           '
 
@@ -63,13 +63,13 @@ jobs:
 
       - name: Instantiate dependencies
         shell: bash
-        run: julia --startup-file=no --project=Fractals -e 'using Pkg; Pkg.instantiate()'
+        run: julia --startup-file=no --project=Fractals.jl -e 'using Pkg; Pkg.instantiate()'
 
       - name: Run tests
         shell: bash
         env:
           FRACTALS_RUN_GPU_TESTS: "0"
-        run: julia --startup-file=no --project=Fractals Fractals/test/runtests.jl
+        run: julia --startup-file=no --project=Fractals.jl Fractals.jl/test/runtests.jl
 
   benchmark-regression:
     name: Benchmark Regression
@@ -91,22 +91,22 @@ jobs:
 
       - name: Instantiate dependencies
         shell: bash
-        run: julia --startup-file=no --project=Fractals -e 'using Pkg; Pkg.instantiate()'
+        run: julia --startup-file=no --project=Fractals.jl -e 'using Pkg; Pkg.instantiate()'
 
       - name: Run benchmark with targets
         shell: bash
         run: >
-          julia --startup-file=no --project=Fractals
-          Fractals/bin/fractals.jl benchmark
+          julia --startup-file=no --project=Fractals.jl
+          Fractals.jl/bin/fractals.jl benchmark
           --profile small
           --repeats 3
-          --targets Fractals/bench/perf_targets.toml
+          --targets Fractals.jl/bench/perf_targets.toml
           --json benchmarks/bench_ci.json
 
       - name: Evaluate regression status (warn/fail)
         shell: bash
         run: |
-          julia --startup-file=no --project=Fractals -e '
+          julia --startup-file=no --project=Fractals.jl -e '
           using JSON3;
           payload = JSON3.read(read("benchmarks/bench_ci.json", String));
           cmp = payload[:comparison];
