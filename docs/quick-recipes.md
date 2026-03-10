@@ -115,7 +115,7 @@ result = render(EISENSTEIN;
                 outpath="media/recipe_image_iterate.png")
 ```
 
-The `:polygon` seed is produced via `render_transformations_png(...; show_base=false, limits_mode=:ifs, initial_polygon=...)` and then read as grayscale.
+The `:polygon` seed is produced via `render_transformations_png(...; show_base=false, initial_polygon=...)` and then read as grayscale.
 For `image_source=:polygon`, `polygon_limits_mode=:default` is treated as `:ifs` (compatibility alias).
 
 ## Recipe: Inverse

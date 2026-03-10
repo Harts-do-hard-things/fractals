@@ -20,15 +20,19 @@ Commands:
 
 Common options:
   --input <path>           Input file path
-  --method <method>        Chaos|Parallel|PointDeterministic|ImageIterate|Inverse
+  --method <method>        Chaos|Parallel|PointDeterministic|ImageIterate|Inverse|RenderTransformations
   --npoints <int>          Number of points
   --iterations <int>       Iterations for deterministic/inverse methods
+  --color <bool>           true|false, colorize supported render methods
+  --show-divergence-scale  true|false for inverse rendering
   --backend <name>         cpu|gpu|auto (render + benchmark GPU-capable backends)
   --image-source <name>    polygon|chaos|point_deterministic|inverse|file (ImageIterate only)
   --image-path <path>      Source image path when --image-source file
   --image-iterations <int> Number of iterate_image passes (ImageIterate only)
   --polygon-limits-mode    ifs|default (ImageIterate polygon source)
   --initial-polygon <name> default|equilateral_triangle|line_arrow|line
+  --show-base <bool>       true|false for RenderTransformations
+  --axis <bool>            true|false for RenderTransformations
   --resolution <HxW>       Image resolution (e.g. 1024x1024)
   --ifs-index <int>        Select IFS by index from an .ifs file
   --ifs-name <name>        Select IFS by name from an .ifs file
@@ -76,6 +80,17 @@ end
 function _opt_int(opts::Dict{String,Any}, key::String, default::Union{Nothing,Int}=nothing)
     haskey(opts, key) || return default
     return parse(Int, string(opts[key]))
+end
+
+function _opt_bool(opts::Dict{String,Any}, key::String, default::Bool)
+    haskey(opts, key) || return default
+    v = lowercase(strip(string(opts[key])))
+    if v in ("true", "1", "yes", "y", "on")
+        return true
+    elseif v in ("false", "0", "no", "n", "off")
+        return false
+    end
+    throw(ArgumentError("Invalid boolean for --$key: '$(opts[key])'. Expected true|false"))
 end
 
 function _parse_resolution(raw::String)
@@ -131,11 +146,15 @@ function _render_from_input(input::String, opts::Dict{String,Any})
     backend = Symbol(_opt_str(opts, "backend", "cpu"))
     npoints = _opt_int(opts, "npoints", nothing)
     iterations = _opt_int(opts, "iterations", nothing)
+    color = _opt_bool(opts, "color", false)
+    show_divergence_scale = _opt_bool(opts, "show-divergence-scale", true)
     image_source = Symbol(_opt_str(opts, "image-source", "polygon"))
     image_path = _opt_str(opts, "image-path", nothing)
     image_iterations = _opt_int(opts, "image-iterations", 1)
     polygon_limits_mode = Symbol(_opt_str(opts, "polygon-limits-mode", "ifs"))
     initial_polygon = Symbol(_opt_str(opts, "initial-polygon", "default"))
+    show_base = _opt_bool(opts, "show-base", false)
+    axis = _opt_bool(opts, "axis", false)
     ifs_index = _opt_int(opts, "ifs-index", nothing)
     ifs_name = _opt_str(opts, "ifs-name", nothing)
     outpath = _opt_str(opts, "out", "media/cli_render.png")
@@ -151,11 +170,15 @@ function _render_from_input(input::String, opts::Dict{String,Any})
             backend=backend,
             npoints=npoints,
             iterations=iterations,
+            color=color,
+            show_divergence_scale=show_divergence_scale,
             image_source=image_source,
             image_path=image_path,
             image_iterations=image_iterations,
             polygon_limits_mode=polygon_limits_mode,
             initial_polygon=initial_polygon,
+            show_base=show_base,
+            axis=axis,
             ifs_index=ifs_index,
             ifs_name=ifs_name,
             resolution=resolution,
@@ -170,11 +193,15 @@ function _render_from_input(input::String, opts::Dict{String,Any})
         backend=backend,
         npoints=npoints,
         iterations=iterations,
+        color=color,
+        show_divergence_scale=show_divergence_scale,
         image_source=image_source,
         image_path=image_path,
         image_iterations=image_iterations,
         polygon_limits_mode=polygon_limits_mode,
         initial_polygon=initial_polygon,
+        show_base=show_base,
+        axis=axis,
         resolution=resolution,
         outpath=outpath,
     )
@@ -197,11 +224,15 @@ function _cmd_batch_render(opts::Dict{String,Any})
     backend = Symbol(_opt_str(opts, "backend", "cpu"))
     npoints = _opt_int(opts, "npoints", nothing)
     iterations = _opt_int(opts, "iterations", nothing)
+    color = _opt_bool(opts, "color", false)
+    show_divergence_scale = _opt_bool(opts, "show-divergence-scale", true)
     image_source = Symbol(_opt_str(opts, "image-source", "polygon"))
     image_path = _opt_str(opts, "image-path", nothing)
     image_iterations = _opt_int(opts, "image-iterations", 1)
     polygon_limits_mode = Symbol(_opt_str(opts, "polygon-limits-mode", "ifs"))
     initial_polygon = Symbol(_opt_str(opts, "initial-polygon", "default"))
+    show_base = _opt_bool(opts, "show-base", false)
+    axis = _opt_bool(opts, "axis", false)
     outdir = _opt_str(opts, "out-dir", "media/batch")
     resolution = haskey(opts, "resolution") ? _parse_resolution(string(opts["resolution"])) : RESOLUTION
     mkpath(outdir)
@@ -222,11 +253,15 @@ function _cmd_batch_render(opts::Dict{String,Any})
             backend=backend,
             npoints=npoints,
             iterations=iterations,
+            color=color,
+            show_divergence_scale=show_divergence_scale,
             image_source=image_source,
             image_path=image_path,
             image_iterations=image_iterations,
             polygon_limits_mode=polygon_limits_mode,
             initial_polygon=initial_polygon,
+            show_base=show_base,
+            axis=axis,
             ifs_index=i,
             resolution=resolution,
             outpath=outpath,

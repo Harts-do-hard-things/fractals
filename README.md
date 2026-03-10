@@ -38,6 +38,7 @@ julia --startup-file=no --project=Fractals.jl Fractals.jl/test/runtests.jl
 ```
 
 Optional GPU parity tests can be enabled with `FRACTALS_RUN_GPU_TESTS=1` (requires CUDA support).
+Optional CLI/benchmark integration tests can be enabled with `FRACTALS_RUN_CLI_BENCH_TESTS=1`.
 
 ### GUI package (local tests only, not in CI)
 
@@ -64,6 +65,19 @@ To apply formatting locally:
 ```powershell
 julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1\"); using JuliaFormatter; format([\"Fractals.jl/src\", \"Fractals.jl/test\"]; overwrite=true, verbose=true)"
 ```
+
+### 5. Generate Rotation Transformation Examples
+
+This writes 30deg/45deg clockwise and counterclockwise SVG/PNG transformation examples to `media/`:
+
+```powershell
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/generate_rotation_examples.jl
+```
+
+Rotation convention for transformation examples/tests is canonical math-space:
+positive angles are counterclockwise in model coordinates (`+x` right, `+y` up).
+Transformation renders also use a shared anchored model origin, so `(0,0)` maps to
+the same pixel across all `initial_polygon` presets.
 
 ## Minimal Julia Example
 

@@ -9,6 +9,10 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
 ### Added
 - Placeholder section for upcoming changes after `1.0.0`.
 
+### Changed
+- Breaking API change: `render_transformations_svg` and `render_transformations_png` now always project using `ifs.limits`; `render_transformations_png(...; limits_mode=...)` is no longer supported.
+- Transformation axis overlays now render within the existing `ifs.limits` projection instead of affecting the visible framing.
+
 ## [1.0.0] - 2026-03-02
 
 ### Added
