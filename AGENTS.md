@@ -60,10 +60,10 @@
 ### Ecosystem/Release
 - [x] Add curated `Fractals.jl/data/*.ifs` library with metadata.
 - [x] Add release checklist (version bump, changelog, benchmarks, docs updates).
-- [ ] Tag stable `v1.0.0` when API/CLI contracts are locked.
+- [ ] Reconcile release roadmap with actual version/tag history (`Fractals.jl` is at `1.0.0`; local git tag list currently includes `v1.0.1`, not `v1.0.0`).
 
 ### Release Checklist
-- [x] Confirm working tree is clean and branch is up to date with target base branch.
+- [ ] Confirm working tree is clean and branch is up to date with target base branch.
 - [x] Bump project version in package metadata as needed for the release.
 - [x] Update changelog/release notes text to summarize user-visible API/CLI/docs changes.
 - [x] Run full test suite:
@@ -300,7 +300,14 @@ Cons:
 
 ---
 
-## Planned GUI Milestone: Iteractable 3-Panel Desktop GUI
+## GUI Milestone: Iteractable 3-Panel Desktop GUI
+
+### Current Status
+- [x] Separate `FractalsGUI.jl` package added with launcher script (`FractalsGUI.jl/bin/gui.jl`).
+- [x] Three-panel Gtk desktop GUI implemented with editable matrix panel, SVG preview, and placeholder fractal panel.
+- [x] GUI state normalization, `.ifs` loading, definition switching, and apply/reset flows implemented.
+- [x] Local GUI docs and automated non-interactive tests added.
+- [ ] GUI package tests are wired into repository CI.
 
 ### Summary
 - Build a new Gtk.jl desktop GUI (`FractalsGUI`) with three synchronized panels:
@@ -333,16 +340,15 @@ Cons:
     - SVG refresh/render pipeline
     - Placeholder fractal panel update hook
 
-3. Package export wiring:
-  - `Fractals.jl/src/Fractals.jl`
-  - Add `include("gui.jl")` and export GUI entrypoint (e.g. `launch_gui`).
+3. Package boundary:
+  - Keep GUI code in the separate `FractalsGUI.jl` package rather than exporting GUI entrypoints from `Fractals.jl`.
 
 4. Documentation updates:
-  - `README.md` and `Fractals.jl/DOCUMENTATION.md`:
+  - `README.md` and `FractalsGUI.jl/README.md`:
     - How to launch GUI
     - `.ifs` load behavior
     - Panel behavior and current limitations (fractal pane placeholder)
-    - Seperate documentation for FractalsGUI
+    - Separate documentation for `FractalsGUI.jl`
 
 ### Public API / Interface Additions
 1. New API entrypoint:
@@ -467,7 +473,7 @@ Cons:
   - Defensive parsing with clear error propagation.
 
 ### Tests and Scenarios
-- Add `Fractals.jl/test/gui_smoke.jl` (or integrated guarded tests) with non-interactive coverage:
+- Add `FractalsGUI.jl/test/runtests.jl` with non-interactive coverage:
 
 1. State/model tests:
   - 6-col source normalization to 7-col UI matrix.
@@ -493,7 +499,7 @@ Cons:
   - Placeholder panel reflects state changes.
 
 ### Dependencies and Build Notes
-1. Add GUI dependencies to `Fractals.jl/Project.toml`:
+1. Add GUI dependencies to `FractalsGUI.jl/Project.toml`:
   - `Gtk` (or `Gtk4`) and SVG rendering dependency (Rsvg-capable path).
 
 2. Keep startup recommendations:
@@ -503,7 +509,7 @@ Cons:
   - Document native library requirements if Gtk/Rsvg backends require them.
 
 ### Acceptance Criteria
-1. Launching `Fractals.jl/bin/gui.jl` opens a 3-panel window.
+1. Launching `FractalsGUI.jl/bin/gui.jl` opens a 3-panel window.
 2. Matrix panel is editable and always 7 columns.
 3. SVG panel shows true SVG and refreshes after edits/loads.
 4. Fractal panel exists as placeholder with active state wiring.
@@ -511,8 +517,8 @@ Cons:
   - `.ifs` selection from `./Fractals.jl/data`
   - external `.ifs` via file picker
   - multi-definition selection flow
-6. Existing package APIs and CLI remain backward-compatible.
-7. Basic automated smoke/model tests pass.
+6. Existing `Fractals.jl` package APIs and CLI remain backward-compatible.
+7. Basic automated smoke/model tests pass locally via `FractalsGUI.jl/test/runtests.jl`.
 
 ### Assumptions and Defaults
 1. First milestone is desktop Gtk.jl (not web UI).
