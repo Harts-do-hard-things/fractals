@@ -69,14 +69,41 @@ jobs:
         shell: bash
         env:
           FRACTALS_RUN_GPU_TESTS: "0"
-          FRACTALS_RUN_CLI_BENCH_TESTS: "1"
+          FRACTALS_RUN_CLI_BENCH_TESTS: "0"
         run: julia --startup-file=no --project=Fractals.jl Fractals.jl/test/runtests.jl
+
+  gui-test:
+    name: GUI Tests / ubuntu-latest / Julia 1.11
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.11'
+
+      - name: Cache Julia packages
+        uses: julia-actions/cache@v2
+
+      - name: Instantiate GUI dependencies
+        shell: bash
+        run: julia --startup-file=no --project=FractalsGUI.jl -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Run GUI tests
+        shell: bash
+        run: julia --startup-file=no --project=FractalsGUI.jl FractalsGUI.jl/test/runtests.jl
 
   benchmark-regression:
     name: Benchmark Regression
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: test
+    needs:
+      - test
+      - gui-test
 
     steps:
       - name: Checkout

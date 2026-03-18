@@ -27,6 +27,7 @@
 - [x] Add CI workflow for Windows + Linux with Julia matrix.
 - [x] Run tests with `--startup-file=no` in CI.
 - [x] Add lint/format check (`JuliaFormatter`) gate.
+- [x] Wire `FractalsGUI.jl` non-interactive tests into repository CI (Ubuntu job).
 
 ### Docs
 - [x] Add "Quick Recipes" page: render from matrix, render from `.ifs`, deterministic preview.
@@ -94,7 +95,7 @@ Note: milestone checks below are based on repository state; live CI pass/fail de
 ### M1 (Day 30)
 - [x] `render(...)` API merged and documented
 - [x] Seeded reproducibility in place
-- [ ] CI passing on supported platforms
+- [ ] CI passing on supported platforms (core matrix plus GUI job are configured locally; live GitHub pass/fail still requires remote verification)
 
 ### M2 (Day 60)
 - [x] CLI commands usable end-to-end
@@ -307,7 +308,7 @@ Cons:
 - [x] Three-panel Gtk desktop GUI implemented with editable matrix panel, SVG preview, and placeholder fractal panel.
 - [x] GUI state normalization, `.ifs` loading, definition switching, and apply/reset flows implemented.
 - [x] Local GUI docs and automated non-interactive tests added.
-- [ ] GUI package tests are wired into repository CI.
+- [x] GUI package tests are wired into repository CI.
 
 ### Summary
 - Build a new Gtk.jl desktop GUI (`FractalsGUI`) with three synchronized panels:

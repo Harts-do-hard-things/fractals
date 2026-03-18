@@ -41,7 +41,7 @@ Optional GPU parity tests can be enabled with `FRACTALS_RUN_GPU_TESTS=1` (requir
 Optional CLI/benchmark integration tests can be enabled with `FRACTALS_RUN_CLI_BENCH_TESTS=1`.
 Committed PNG snapshot fixtures for deterministic render paths live under `Fractals.jl/test/snapshots/`; regenerate them with `julia --startup-file=no --project=Fractals.jl Fractals.jl/test/generate_snapshots.jl` when render output intentionally changes.
 
-### GUI package (local tests only, not in CI)
+### GUI package
 
 Launch GUI:
 
@@ -54,6 +54,8 @@ Run GUI package tests:
 ```powershell
 julia --startup-file=no --project=FractalsGUI.jl -e "using Pkg; Pkg.test()"
 ```
+
+Repository CI now runs the non-interactive `FractalsGUI.jl` test suite on Ubuntu. The GUI launcher itself still remains a local/manual workflow.
 
 ### 4. Run formatter check
 
