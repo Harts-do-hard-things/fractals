@@ -61,10 +61,11 @@
 ### Ecosystem/Release
 - [x] Add curated `Fractals.jl/data/*.ifs` library with metadata.
 - [x] Add release checklist (version bump, changelog, benchmarks, docs updates).
-- [ ] Reconcile release roadmap with actual version/tag history (`Fractals.jl` is at `1.0.0`; local git tag list currently includes `v1.0.1`, not `v1.0.0`).
+- [x] Reconcile release roadmap with actual version/tag history (`Fractals.jl/Project.toml` and `CHANGELOG.md` still describe `1.0.0` dated 2026-03-02, while local git history already contains tag `v1.0.1` dated 2026-03-05 pointing to `Complete inverse GPU benchmark lines and optimization pass`).
 
 ### Release Checklist
 - [ ] Confirm working tree is clean and branch is up to date with target base branch.
+  Local status on 2026-03-18: working tree is clean, but `HEAD` is 3 commits ahead of `origin/julia-fractals`, so this is not yet a release-ready synced branch state.
 - [x] Bump project version in package metadata as needed for the release.
 - [x] Update changelog/release notes text to summarize user-visible API/CLI/docs changes.
 - [x] Run full test suite:
@@ -80,6 +81,9 @@
   - `git tag vX.Y.Z`
   - `git push origin vX.Y.Z`
 - [ ] Draft and publish release notes (GitHub release entry or equivalent).
+
+Release-state note:
+- The repository already has a historical `v1.0.1` tag, but the checked-in package metadata/changelog still present `1.0.0` as the latest documented release. Treat future release-prep work as a reconciliation/normalization task first, not as a first-time `v1.0.0` release.
 
 ### Animation
 - [ ] Add transform interpolation for animated sequences.
@@ -106,7 +110,7 @@ Note: milestone checks below are based on repository state; live CI pass/fail de
 ### M3 (Day 90)
 - [ ] Enhanced rendering controls shipped
 - [ ] Animation workflow documented and tested
-- [ ] Release process established for regular tagged versions
+- [ ] Release process established for regular tagged versions (tag history exists, but package metadata/changelog/tagging flow are not yet aligned)
 
 ---
 
