@@ -16,10 +16,51 @@ const SMALL_EQ = [
     0.5  0.0  0.0  0.5  0.0  0.0  0.6;
    -0.5  0.0  0.0 -0.5  1.0  0.0  0.4
 ]
+const SNAPSHOT_DIR = joinpath(@__DIR__, "snapshots")
 
 function _skip_optional_gpu_parity!(name::AbstractString)
     @warn "$name skipped: FRACTALS_RUN_GPU_TESTS=1 but no CUDA GPU is available."
     @test_skip Fractals._gpu_backend_available(Val(:cuda))
+end
+
+_snapshot_path(name::AbstractString) = joinpath(SNAPSHOT_DIR, name * ".png")
+
+function _snapshot_diff_pixel(expected::Gray, actual::Gray)
+    return Gray{Float32}(abs(Float32(expected) - Float32(actual)))
+end
+
+function _snapshot_diff_pixel(expected, actual)
+    return RGBA{Float32}(abs(Float32(red(expected)) - Float32(red(actual))),
+                         abs(Float32(green(expected)) - Float32(green(actual))),
+                         abs(Float32(blue(expected)) - Float32(blue(actual))),
+                         1.0f0)
+end
+
+function _write_snapshot_debug(name::AbstractString, expected, actual)
+    debug_dir = mktempdir(prefix="fractals_snapshot_")
+    actual_path = joinpath(debug_dir, name * "_actual.png")
+    diff_path = joinpath(debug_dir, name * "_diff.png")
+    save(actual_path, actual)
+    diff = [_snapshot_diff_pixel(expected[i], actual[i]) for i in eachindex(expected)]
+    save(diff_path, reshape(diff, size(expected)))
+    return debug_dir, actual_path, diff_path
+end
+
+function _assert_matches_snapshot(name::AbstractString, actual)
+    path = _snapshot_path(name)
+    isfile(path) || error("Missing snapshot fixture: $path")
+    expected = load(path)
+    encoded_actual = mktempdir(prefix="fractals_snapshot_actual_") do tmp
+        actual_path = joinpath(tmp, name * ".png")
+        save(actual_path, actual)
+        load(actual_path)
+    end
+    size(expected) == size(encoded_actual) || error("Snapshot '$name' size mismatch: expected $(size(expected)), got $(size(encoded_actual))")
+    if expected != encoded_actual
+        debug_dir, actual_path, diff_path = _write_snapshot_debug(name, expected, encoded_actual)
+        error("Snapshot '$name' mismatch. Debug artifacts written to $debug_dir (actual: $actual_path, diff: $diff_path)")
+    end
+    return nothing
 end
 
 @testset "AffineMap" begin
@@ -1003,6 +1044,35 @@ end
 
 end
 
+@testset "Snapshot Image Tests" begin
+    transform_ifs = IFS(SMALL_EQ; npoints=50)
+    transform_img = Fractals._render_transformations_image(transform_ifs;
+                                                           width=96,
+                                                           height=96,
+                                                           initial_polygon=:line_arrow,
+                                                           color=true,
+                                                           axis=true)
+    _assert_matches_snapshot("transformations-line-arrow-color-axis", transform_img)
+
+    inverse = render(SMALL_EQ;
+                     method=Inverse,
+                     iterations=2,
+                     show_divergence_scale=false,
+                     backend=:cpu,
+                     resolution=(32, 32),
+                     outpath=joinpath("media", "snapshot_inverse.png"))
+    _assert_matches_snapshot("inverse-mask-small", inverse.image)
+
+    image_iter = render(SMALL_EQ;
+                        method=ImageIterate,
+                        image_source=:polygon,
+                        image_iterations=2,
+                        backend=:cpu,
+                        resolution=(48, 48),
+                        outpath=joinpath("media", "snapshot_image_iterate.png"))
+    _assert_matches_snapshot("image-iterate-polygon-small", image_iter.image)
+end
+
 @testset "Render IFS Selection By Index Or Name" begin
     text = """
     FirstIFS {
@@ -1193,12 +1263,8 @@ end
     end
 end
 
+if _env_flag("FRACTALS_RUN_CLI_BENCH_TESTS")
 @testset "CLI Commands" begin
-    if !_env_flag("FRACTALS_RUN_CLI_BENCH_TESTS")
-        @test_skip "Set FRACTALS_RUN_CLI_BENCH_TESTS=1 to run CLI/benchmark tests."
-        return
-    end
-
     script = abspath(joinpath(@__DIR__, "..", "bin", "fractals.jl"))
     project = abspath(joinpath(@__DIR__, ".."))
     jcmd = Base.julia_cmd()
@@ -1310,4 +1376,7 @@ end
             cd(old)
         end
     end
+end
+else
+    @info "Skipping CLI Commands testset; set FRACTALS_RUN_CLI_BENCH_TESTS=1 to enable it."
 end

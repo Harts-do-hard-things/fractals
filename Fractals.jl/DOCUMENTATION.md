@@ -379,6 +379,17 @@ Test suite includes seeded property tests for affine inverse round-trip:
 - Random invertible affine maps are generated with a fixed seed.
 - Both `inv(m)(m(x)) ≈ x` and `m(inv(m)(x)) ≈ x` are asserted over randomized points.
 
+Test suite also includes committed PNG snapshot fixtures for deterministic CPU render paths:
+- transformation render output
+- inverse mask rendering with `show_divergence_scale=false`
+- polygon-seeded image-iterate rendering
+
+Regenerate snapshots intentionally with:
+
+```powershell
+julia --startup-file=no --project=Fractals.jl Fractals.jl/test/generate_snapshots.jl
+```
+
 ## Performance Targets
 
 Target latency and allocation envelopes are versioned in:

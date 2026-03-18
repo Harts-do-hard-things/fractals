@@ -100,7 +100,7 @@ Note: milestone checks below are based on repository state; live CI pass/fail de
 - [x] CLI commands usable end-to-end
 - [x] Benchmarks and regression checks live
 - [x] Parser negative/validation test coverage increased
-- [ ] Snapshot image tests added
+- [x] Snapshot image tests added
 
 ### M3 (Day 90)
 - [ ] Enhanced rendering controls shipped
@@ -116,7 +116,7 @@ Note: milestone checks below are based on repository state; live CI pass/fail de
 - [x] CLI `render`
 - [x] Parser validation + negative tests
 - [x] Benchmark harness
-- [ ] Snapshot image tests
+- [x] Snapshot image tests
 - [x] Batch rendering CLI
 - [x] Curated `.ifs` dataset
 

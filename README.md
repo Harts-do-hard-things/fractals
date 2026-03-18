@@ -39,6 +39,7 @@ julia --startup-file=no --project=Fractals.jl Fractals.jl/test/runtests.jl
 
 Optional GPU parity tests can be enabled with `FRACTALS_RUN_GPU_TESTS=1` (requires CUDA support).
 Optional CLI/benchmark integration tests can be enabled with `FRACTALS_RUN_CLI_BENCH_TESTS=1`.
+Committed PNG snapshot fixtures for deterministic render paths live under `Fractals.jl/test/snapshots/`; regenerate them with `julia --startup-file=no --project=Fractals.jl Fractals.jl/test/generate_snapshots.jl` when render output intentionally changes.
 
 ### GUI package (local tests only, not in CI)
 
