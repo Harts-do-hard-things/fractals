@@ -86,7 +86,7 @@ Release-state note:
 - The repository already has a historical `v1.0.1` tag, but the checked-in package metadata/changelog still present `1.0.0` as the latest documented release. Treat future release-prep work as a reconciliation/normalization task first, not as a first-time `v1.0.0` release.
 
 ### Animation
-- [ ] Add transform interpolation for animated sequences.
+- [x] Add transform interpolation for animated sequences.
 - [ ] Add frame renderer (`media/frames/...`) with deterministic naming.
 - [ ] Add GIF/MP4 export helper scripts.
 

@@ -218,6 +218,33 @@ img = make_image(expanded; resolution=(800, 800))
 save("media/expanded.png", img)
 ```
 
+### Transform interpolation for animation prep
+
+```julia
+using Fractals
+
+start_eq = [
+    0.5  -0.5   0.5   0.5   0.0   0.0
+   -0.5  -0.5   0.5  -0.5   1.0   0.0
+]
+
+finish_eq = [
+    0.5   0.0   0.0   0.5   0.0   0.0   0.3
+    0.0   0.5  -0.5   0.0   1.0   0.0   0.7
+]
+
+mid_eq = interpolate_eq_matrix(start_eq, finish_eq, 0.5)
+mid_ifs = interpolate_ifs(IFS(start_eq; npoints=2_000),
+                          IFS(finish_eq; npoints=2_000),
+                          0.5)
+```
+
+Interpolation behavior:
+- `interpolate_eq_matrix(left, right, t)` accepts compatible 6- or 7-column equation matrices and returns a normalized 7-column matrix.
+- 6-column inputs derive normalized weights from affine determinants before interpolation.
+- `interpolate_ifs(left, right, t)` blends map coefficients, translations, normalized weights, and by default also blends `ifs.limits` with `limits_mode=:interpolate`.
+- `limits_mode=:left|:right|:recompute` is available when a fixed or freshly sampled camera box is preferred.
+
 ### Parse from file and render interactively
 
 ```julia

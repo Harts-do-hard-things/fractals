@@ -97,9 +97,10 @@ result = render(EISENSTEIN;
 @show result.outpath
 ```
 
-`render` accepts method as enum (`Chaos`, `Parallel`, `PointDeterministic`, `ImageIterate`, `Inverse`), symbol, or lowercase string.
+`render` accepts method as enum (`Chaos`, `Parallel`, `PointDeterministic`, `ImageIterate`, `Inverse`, `RenderTransformations`), symbol, or lowercase string.
 `render`, `make_image`, `iterate_image`, and `rasterize_image_inversely` support `backend=:cpu|:gpu|:auto` (`:gpu` requires CUDA support, `:auto` falls back to CPU when unavailable).
 `rasterize_image_inversely` also supports `mode=:exact|:preview` (`:exact` is default and parity-oriented).
+`interpolate_eq_matrix(...)` and `interpolate_ifs(...)` provide transform interpolation primitives for animation-oriented workflows.
 For `method=:point_deterministic` and `method=:inverse`, use `iterations=...` to control iteration depth.
 For `.ifs` files with multiple definitions, select one with `ifs_index=...` or `ifs_name=...`.
 

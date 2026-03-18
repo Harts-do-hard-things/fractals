@@ -7,7 +7,7 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
 ## [Unreleased]
 
 ### Added
-- Placeholder section for upcoming changes after `1.0.0`.
+- `interpolate_eq_matrix(...)` and `interpolate_ifs(...)` helpers for animation-oriented transform interpolation.
 
 ### Changed
 - Breaking API change: `render_transformations_svg` and `render_transformations_png` now always project using `ifs.limits`; `render_transformations_png(...; limits_mode=...)` is no longer supported.

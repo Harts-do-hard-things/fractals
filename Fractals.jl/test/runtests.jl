@@ -123,6 +123,50 @@ end
     @test length(ifs.maps) == size(SMALL_EQ, 1)
 end
 
+@testset "Interpolation Helpers" begin
+    left6 = [
+        1.0  0.0  0.0  1.0  0.0  0.0
+        0.5  0.0  0.0  0.5  1.0  0.0
+    ]
+    right7 = [
+        0.0  1.0  -1.0  0.0  0.0  1.0  0.2
+        1.0  0.0   0.0  1.0  2.0  0.0  0.8
+    ]
+
+    midpoint = interpolate_eq_matrix(left6, right7, 0.5)
+    @test size(midpoint) == (2, 7)
+    @test midpoint[:, 1:6] ≈ [
+        0.5  0.5  -0.5  0.5  0.0  0.5
+        0.75 0.0   0.0  0.75 1.5  0.0
+    ]
+    @test midpoint[:, 7] ≈ [0.5, 0.5]
+    @test isapprox(sum(midpoint[:, 7]), 1.0; atol=1e-12)
+
+    @test interpolate_eq_matrix(left6, right7, 0.0) ≈ Fractals._eq_matrix_for_interpolation(left6)
+    @test interpolate_eq_matrix(left6, right7, 1.0) ≈ Fractals._eq_matrix_for_interpolation(right7)
+
+    left_ifs = IFS(left6; npoints=12, name="Left", docs="left docs")
+    right_ifs = IFS(right7; npoints=20, name="Right", docs="right docs")
+    blended = interpolate_ifs(left_ifs, right_ifs, 0.25)
+
+    @test length(blended.points) == 12
+    @test blended.name == "Interpolated(Left -> Right)"
+    @test occursin("Interpolated IFS at t=0.25", blended.docs)
+    @test Fractals._eq_matrix_for_interpolation(blended) ≈ interpolate_eq_matrix(left6, right7, 0.25)
+    @test blended.limits == Fractals._interpolate_limits(left_ifs.limits, right_ifs.limits, 0.25)
+
+    right_locked = interpolate_ifs(left_ifs, right_ifs, 0.5; limits_mode=:right, npoints=3, name="Blend", docs="manual docs")
+    @test length(right_locked.points) == 3
+    @test right_locked.name == "Blend"
+    @test right_locked.docs == "manual docs"
+    @test right_locked.limits == right_ifs.limits
+
+    @test_throws ArgumentError interpolate_eq_matrix(left6, right7[:, 1:6], -0.1)
+    @test_throws ArgumentError interpolate_eq_matrix(left6, ones(3, 6), 0.5)
+    @test_throws ArgumentError interpolate_ifs(left_ifs, right_ifs, 0.5; limits_mode=:bad)
+    @test_throws ArgumentError interpolate_ifs(left_ifs, right_ifs, 0.5; npoints=-1)
+end
+
 @testset "Iterate" begin
     ifs = IFS(SMALL_EQ; npoints=5000)
     iterate!(ifs; warmup=5)

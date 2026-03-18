@@ -138,3 +138,32 @@ result = render(EISENSTEIN;
                 resolution=(900, 900),
                 outpath="media/recipe_inverse.png")
 ```
+
+## Recipe: Interpolate Between Two IFS States
+
+```julia
+using Fractals
+
+start_eq = [
+    0.5  -0.5   0.5   0.5   0.0   0.0
+   -0.5  -0.5   0.5  -0.5   1.0   0.0
+]
+
+finish_eq = [
+    0.5   0.0   0.0   0.5   0.0   0.0   0.3
+    0.0   0.5  -0.5   0.0   1.0   0.0   0.7
+]
+
+# For animation work, keep the same transform count/order on both sides.
+mid = interpolate_ifs(IFS(start_eq; npoints=5_000, name="start"),
+                      IFS(finish_eq; npoints=5_000, name="finish"),
+                      0.5;
+                      limits_mode=:interpolate)
+
+render(mid;
+       method=RenderTransformations,
+       resolution=(900, 900),
+       outpath="media/recipe_interpolated_transforms.png")
+```
+
+Use `interpolate_eq_matrix(...)` when you want the blended 7-column equation matrix directly.
