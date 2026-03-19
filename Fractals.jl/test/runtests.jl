@@ -167,6 +167,55 @@ end
     @test_throws ArgumentError interpolate_ifs(left_ifs, right_ifs, 0.5; npoints=-1)
 end
 
+@testset "Interpolation Frame Renderer" begin
+    left = IFS([
+        0.5  -0.5   0.5   0.5   0.0   0.0
+       -0.5  -0.5   0.5  -0.5   1.0   0.0
+    ]; npoints=40, name="left")
+    right = IFS([
+        0.5   0.0   0.0   0.5   0.0   0.0   0.3
+        0.0   0.5  -0.5   0.0   1.0   0.0   0.7
+    ]; npoints=60, name="right")
+
+    mktempdir() do tmp
+        result = render_interpolation_frames(left, right;
+                                             frames=3,
+                                             outdir=tmp,
+                                             basename="anim",
+                                             render_method=RenderTransformations,
+                                             resolution=(24, 24),
+                                             color=true,
+                                             initial_polygon=:line_arrow,
+                                             axis=true)
+
+        @test result.outdir == tmp
+        @test result.render_method == :render_transformations
+        @test result.paths == [
+            joinpath(tmp, "anim_0001.png"),
+            joinpath(tmp, "anim_0002.png"),
+            joinpath(tmp, "anim_0003.png"),
+        ]
+        @test result.ts ≈ [0.0, 0.5, 1.0]
+        @test all(isfile, result.paths)
+
+        imgs = load.(result.paths)
+        @test all(size(img) == (24, 24) for img in imgs)
+    end
+
+    mismatch = IFS([
+        0.5  0.0  0.0  0.5  0.0  0.0
+        0.5  0.0  0.0  0.5  0.5  0.0
+        0.0  0.5 -0.5  0.0  1.0  0.0
+    ]; npoints=10, name="mismatch")
+
+    mktempdir() do tmp
+        @test_throws ArgumentError render_interpolation_frames(left, right; frames=0, outdir=tmp)
+        @test_throws ArgumentError render_interpolation_frames(left, right; frames=2, outdir=tmp, basename=" ")
+        @test_throws ArgumentError render_interpolation_frames(left, right; frames=2, outdir=tmp, render_method=Chaos)
+        @test_throws ArgumentError render_interpolation_frames(left, mismatch; frames=2, outdir=tmp)
+    end
+end
+
 @testset "Iterate" begin
     ifs = IFS(SMALL_EQ; npoints=5000)
     iterate!(ifs; warmup=5)

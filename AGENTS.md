@@ -87,7 +87,7 @@ Release-state note:
 
 ### Animation
 - [x] Add transform interpolation for animated sequences.
-- [ ] Add frame renderer (`media/frames/...`) with deterministic naming.
+- [x] Add frame renderer (`media/frames/...`) with deterministic naming.
 - [ ] Add GIF/MP4 export helper scripts.
 
 ---

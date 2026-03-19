@@ -818,6 +818,61 @@ function interpolate_ifs(
     return IFS(maps, weights; npoints=npoints, name=resolved_name, docs=resolved_docs, limits=limits)
 end
 
+function render_interpolation_frames(
+    left::IFS,
+    right::IFS;
+    frames::Integer,
+    outdir::AbstractString=joinpath(DEFAULT_MEDIA_DIR, "frames"),
+    basename::AbstractString="frame",
+    t_start::Real=0.0,
+    t_end::Real=1.0,
+    render_method::Union{RenderMethod,Symbol,AbstractString}=RenderTransformations,
+    limits_mode::Symbol=:interpolate,
+    npoints::Integer=min(length(left.points), length(right.points)),
+    name::AbstractString="",
+    docs::AbstractString="",
+    kwargs...,
+)
+    frames > 0 || throw(ArgumentError("frames must be > 0, got $frames"))
+    !isempty(strip(basename)) || throw(ArgumentError("basename must be non-empty"))
+    0 <= t_start <= 1 || throw(ArgumentError("t_start must be in [0, 1], got $t_start"))
+    0 <= t_end <= 1 || throw(ArgumentError("t_end must be in [0, 1], got $t_end"))
+
+    parsed_method = _parse_render_method(render_method)
+    parsed_method == RenderTransformations ||
+        throw(ArgumentError("render_interpolation_frames currently supports method=RenderTransformations only"))
+
+    mkpath(outdir)
+    ts = collect(Float64, frames == 1 ? [Float64(t_start)] : LinRange(Float64(t_start), Float64(t_end), frames))
+    paths = String[]
+    sizehint!(paths, frames)
+
+    for (i, t) in enumerate(ts)
+        ifs = interpolate_ifs(left, right, t;
+                              npoints=npoints,
+                              name=name,
+                              docs=docs,
+                              limits_mode=limits_mode)
+        path = joinpath(outdir, @sprintf("%s_%04d.png", basename, i))
+        img = _render_transformations_image(ifs;
+                                            width=get(kwargs, :resolution, RESOLUTION)[2],
+                                            height=get(kwargs, :resolution, RESOLUTION)[1],
+                                            show_base=get(kwargs, :show_base, false),
+                                            initial_polygon=get(kwargs, :initial_polygon, :default),
+                                            color=get(kwargs, :color, false),
+                                            axis=get(kwargs, :axis, false))
+        save(path, img)
+        push!(paths, path)
+    end
+
+    return (
+        outdir=String(outdir),
+        paths=paths,
+        ts=ts,
+        render_method=_render_method_symbol(parsed_method),
+    )
+end
+
 # --------------------------------
 # Chaos Game Iteration
 # --------------------------------

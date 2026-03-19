@@ -167,3 +167,26 @@ render(mid;
 ```
 
 Use `interpolate_eq_matrix(...)` when you want the blended 7-column equation matrix directly.
+
+## Recipe: Render Deterministic Animation Frames
+
+```julia
+using Fractals
+
+start = IFS(start_eq; npoints=5_000, name="start")
+finish = IFS(finish_eq; npoints=5_000, name="finish")
+
+frames = render_interpolation_frames(start, finish;
+                                     frames=4,
+                                     outdir="media/frames",
+                                     basename="recipe_anim",
+                                     render_method=RenderTransformations,
+                                     resolution=(512, 512),
+                                     color=true,
+                                     initial_polygon=:line_arrow,
+                                     axis=true)
+
+println.(frames.paths)
+```
+
+This first frame-renderer path currently targets `RenderTransformations` only, with deterministic file names like `recipe_anim_0001.png`.

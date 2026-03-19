@@ -244,6 +244,25 @@ Interpolation behavior:
 - 6-column inputs derive normalized weights from affine determinants before interpolation.
 - `interpolate_ifs(left, right, t)` blends map coefficients, translations, normalized weights, and by default also blends `ifs.limits` with `limits_mode=:interpolate`.
 - `limits_mode=:left|:right|:recompute` is available when a fixed or freshly sampled camera box is preferred.
+- `render_interpolation_frames(left, right; frames, outdir, basename, render_method=RenderTransformations, ...)` writes deterministic numbered PNG frames such as `dragon_0001.png`.
+- Current scope is intentionally narrow: `render_method=RenderTransformations` only, which keeps the first animation frame pipeline deterministic and easy to test.
+
+```julia
+using Fractals
+
+start = IFS(start_eq; npoints=2_000, name="start")
+finish = IFS(finish_eq; npoints=2_000, name="finish")
+
+frames = render_interpolation_frames(start, finish;
+                                     frames=5,
+                                     outdir="media/frames",
+                                     basename="dragon_morph",
+                                     render_method=RenderTransformations,
+                                     resolution=(512, 512),
+                                     color=true,
+                                     initial_polygon=:line_arrow,
+                                     axis=true)
+```
 
 ### Parse from file and render interactively
 
