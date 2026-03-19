@@ -244,9 +244,9 @@ end
     ifs2 = IFS(SMALL_EQ; npoints=1500)
     ifs3 = IFS(SMALL_EQ; npoints=1500)
 
-    Fractals._iterate_serial!(ifs1; warmup=10, seed=12345)
-    Fractals._iterate_serial!(ifs2; warmup=10, seed=12345)
-    Fractals._iterate_serial!(ifs3; warmup=10, seed=54321)
+    iterate_parallel!(ifs1; warmup=10, seed=12345)
+    iterate_parallel!(ifs2; warmup=10, seed=12345)
+    iterate_parallel!(ifs3; warmup=10, seed=54321)
 
     @test ifs1.points == ifs2.points
     @test ifs1.points != ifs3.points
@@ -292,7 +292,7 @@ end
     @test out2.points == expected_points
 
     # For one round, each map block must be exactly map(points).
-    one_round = Fractals._deterministic_expand_points(base.points, ifs2.maps, 1)
+    one_round = deterministic_iterate(ifs2, 1; warmup=5, seed=123).points
     base_len = length(base.points)
     for i in 1:length(ifs2.maps)
         start = (i - 1) * base_len + 1
