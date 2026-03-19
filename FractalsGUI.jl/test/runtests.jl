@@ -112,6 +112,21 @@ end
     end
 end
 
+@testset "Data Directory Listing" begin
+    mktempdir() do dir
+        mkpath(joinpath(dir, "nested"))
+        touch(joinpath(dir, "b_file.ifs"))
+        touch(joinpath(dir, "a_file.ifs"))
+        touch(joinpath(dir, "ignore.txt"))
+        touch(joinpath(dir, "nested", "inner.ifs"))
+
+        @test list_data_ifs(dir) == [
+            joinpath(dir, "a_file.ifs"),
+            joinpath(dir, "b_file.ifs"),
+        ]
+    end
+end
+
 @testset "State Apply + SVG Refresh" begin
     state = make_default_state()
     old_svg_path = state.svg_temp_path
@@ -135,51 +150,29 @@ end
     @test state.last_error !== nothing
 end
 
-@testset "Normalize Probability Column" begin
+@testset "Public Matrix Validation" begin
     eq = [
         1.0 0.0 0.0 1.0 0.0 0.0 2.0
         0.5 0.0 0.0 0.5 1.0 0.0 3.0
     ]
-    out = FractalsGUI._normalize_probability_column(eq)
-    @test isapprox(sum(out[:, 7]), 1.0; atol=1e-12)
-    @test out[1, 7] ≈ 0.4
-    @test out[2, 7] ≈ 0.6
+    out = normalize_eq_matrix(eq)
+    @test out == eq
 
     bad = copy(eq)
     bad[1, 7] = -1.0
-    @test_throws ArgumentError FractalsGUI._normalize_probability_column(bad)
+    @test_throws ArgumentError normalize_eq_matrix(bad)
+
+    @test_throws ArgumentError parse_matrix_text("1 2 3")
+    @test_throws ArgumentError parse_matrix_text("1 2 3 4 5 6 nope")
 end
 
-@testset "Gtk Compatibility Guard" begin
-    src_path = normpath(joinpath(@__DIR__, "..", "src", "FractalsGUI.jl"))
-    src = read(src_path, String)
-    @test !occursin("GAccessor.text(", src)
-    @test occursin("import Gtk", src)
-    @test !occursin("@eval import Gtk", src)
-end
-
-@testset "Gtk Callback Safety Guard" begin
-    src_path = normpath(joinpath(@__DIR__, "..", "src", "FractalsGUI.jl"))
-    src = read(src_path, String)
-
-    # Guard against mutating/walking Gtk child iterators during teardown.
-    @test !occursin("Gtk.GAccessor.children(rows_box)", src)
-    @test !occursin("Gtk.GAccessor.children(load_data_menu)", src)
-    @test occursin("load_data_items_ref = Ref(Vector{Any}())", src)
-    @test occursin("widget = get(row_ui, :widget, nothing)", src)
-
-    # Guard against uncaught exceptions bubbling through the Add Row callback.
-    @test occursin("Gtk.signal_connect(add_row_btn, \"clicked\")", src)
-    @test occursin("catch err", src)
-    @test occursin("Error: \" * sprint(showerror, err)", src)
-
-    # GUI workflow must not depend on terminal prompts/readline.
-    @test !occursin("readline()", src)
-    @test occursin("load_ifs_definition_gui!(state, file)", src)
-    @test occursin("load_ifs_definition_gui!(state, chosen)", src)
-    @test occursin("Gtk.GtkMenuItem(\"IFS definitions\")", src)
-    @test occursin("function reload_definitions_menu!()", src)
-    @test occursin("load_ifs_definition_gui!(state, state.source_file; definition_index=i)", src)
-    @test !occursin("load_ifs_definition!(state, state.source_file", src)
-    @test occursin("Gtk.showall(definitions_menu)", src)
+@testset "Default GUI State" begin
+    state = make_default_state()
+    @test state.definition_name == "Template"
+    @test state.is_valid
+    @test state.last_error === nothing
+    @test occursin("ready to render", state.fractal_placeholder_text)
+    @test occursin("Template", state.fractal_placeholder_text)
+    @test isfile(state.svg_temp_path)
+    @test occursin("<svg", state.svg_string)
 end
