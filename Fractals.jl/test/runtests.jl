@@ -301,21 +301,23 @@ end
     end
 end
 
-@testset "Pixel Maps" begin
-    ifs = IFS(SMALL_EQ; npoints=100)
-    pmap = make_pixelate_map(ifs.limits; resolution=(32, 32))
-    nmap = ifs.maps[1]
-    cmap = Fractals._make_pixeliterate_map(nmap, pmap)
+@testset "Make Image Resolution Behavior" begin
+    ifs = IFS(SMALL_EQ; npoints=4_000)
+    iterate!(ifs; warmup=5, seed=123)
 
-    p = SVector{2,Float64}(16.0, 16.0)
-    direct = pmap(nmap(inv(pmap)(p)))
-    composed = cmap(p)
-    @test direct ≈ composed
-end
+    square = make_image(ifs; resolution=(32, 32))
+    wide = make_image(ifs; resolution=(24, 40))
+    tall = make_image(ifs; resolution=(40, 24))
 
-@testset "Thread Buffer Slots" begin
-    @test Fractals._thread_buffer_slots() >= Base.Threads.nthreads()
-    @test Fractals._thread_buffer_slots() >= Base.Threads.maxthreadid()
+    @test size(square) == (32, 32)
+    @test size(wide) == (24, 40)
+    @test size(tall) == (40, 24)
+    @test maximum(square) > 0f0
+    @test maximum(wide) > 0f0
+    @test maximum(tall) > 0f0
+    @test all(square .>= 0f0) && maximum(square) <= 1f0
+    @test all(wide .>= 0f0) && maximum(wide) <= 1f0
+    @test all(tall .>= 0f0) && maximum(tall) <= 1f0
 end
 
 @testset "Make Image" begin
