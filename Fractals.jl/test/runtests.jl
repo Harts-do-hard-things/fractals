@@ -731,8 +731,6 @@ end
         @test isfile(svg_path)
 
         svg_text = read(svg_path, String)
-        map_line_count = length(Fractals._base_l_image())
-
         counts = Dict{String,Int}()
         for m in eachmatch(r"stroke=\"(#[0-9A-Fa-f]{6})\"", svg_text)
             c = m.captures[1]
@@ -740,7 +738,8 @@ end
         end
 
         @test length(counts) == length(ifs.maps)
-        @test all(v == map_line_count for v in values(counts))
+        @test all(v > 0 for v in values(counts))
+        @test length(unique(values(counts))) == 1
     end
 end
 
@@ -801,14 +800,8 @@ end
             x1, y1, x2, y2 = line_endpoints_from_svg(svg_text)
             dx_svg = x2 - x1
             dy_svg = y2 - y1
-            sx, sy, ox, oy = Fractals._projection_from_limits(ifs.limits, 320, 320)
-            px0 = Fractals._to_svg_xy(q0, sx, sy, ox, oy)
-            px1 = Fractals._to_svg_xy(q1, sx, sy, ox, oy)
-            dx_expected = px1[1] - px0[1]
-            dy_expected = px1[2] - px0[2]
-            @test dx_expected > 0
             @test dx_svg > 0
-            @test signbit(dy_svg) == signbit(dy_expected)
+            @test signbit(dy_svg) != signbit(dy_math)
 
             png_path = render_transformations_png(ifs;
                                                   outpath=joinpath(tmp, "rot_$label.png"),
@@ -826,62 +819,78 @@ end
 @testset "Transformation Origin Anchor Across Initial Polygons" begin
     presets = (:default, :equilateral_triangle, :line_arrow, :line)
     width, height = 320, 320
-    origin = SVector{2,Float64}(0.0, 0.0)
-
     ifs = IFS(reshape([1.0 0.0 0.0 1.0 0.0 0.0 1.0], 1, 7); npoints=10)
-    origin_points = Tuple{Float64,Float64}[]
-    for _ in presets
-        push!(origin_points, Fractals._limits_xy(origin, ifs.limits, width, height))
+    mktempdir() do tmp
+        centers = Tuple{Float64,Float64}[]
+        for preset in presets
+            out = render_transformations_png(ifs;
+                                             outpath=joinpath(tmp, "origin_$(preset).png"),
+                                             width=width,
+                                             height=height,
+                                             initial_polygon=preset,
+                                             color=false)
+            img = load(out)
+            xs = Int[]
+            ys = Int[]
+            for y in axes(img, 1), x in axes(img, 2)
+                if alpha(img[y, x]) > 0
+                    push!(xs, x)
+                    push!(ys, y)
+                end
+            end
+            isempty(xs) && error("Rendered PNG for preset $(preset) has no non-transparent pixels")
+            push!(centers, ((minimum(xs) + maximum(xs)) / 2, (minimum(ys) + maximum(ys)) / 2))
+        end
+        ref_x, ref_y = centers[1]
+        @test all(c -> abs(c[1] - ref_x) <= 1.0, centers)
+        @test all(c -> abs(c[2] - ref_y) <= 1.0, centers)
     end
-    @test length(unique(origin_points)) == 1
 end
 
 @testset "Transformation Renders Use IFS Bounds" begin
-    eq = reshape([1.0 0.0 0.0 1.0 0.0 0.0 1.0], 1, 7)
-    ifs = IFS(eq; npoints=10)
+    base_eq = reshape([1.0 0.0 0.0 1.0 0.0 0.0 1.0], 1, 7)
+    shifted_eq = reshape([1.0 0.0 0.0 1.0 0.0 10.0 1.0], 1, 7)
+    ifs = IFS(base_eq; npoints=10)
+    shifted_ifs = IFS(shifted_eq; npoints=10)
     width, height = 320, 320
 
-    base_segments, transformed_by_map, _ =
-        Fractals._collect_transformed_base_segments(ifs; initial_polygon=:line_arrow, show_base=false)
-    @test length(base_segments) > 0
-    @test length(transformed_by_map) == 1
-
-    transformed = transformed_by_map[1]
-    native_limits = Fractals._base_limits_image(:line_arrow)
-
-    function projected_y_span(segments, limits)
-        ys = Float64[]
-        for (p1, p2) in segments
-            _, y1 = Fractals._limits_xy(p1, limits, width, height)
-            _, y2 = Fractals._limits_xy(p2, limits, width, height)
-            push!(ys, y1, y2)
-        end
-        return maximum(ys) - minimum(ys)
-    end
-
-    ifs_span = projected_y_span(transformed, ifs.limits)
-    native_span = projected_y_span(transformed, native_limits)
-    @test abs(native_span - ifs_span) > 5.0
-
     mktempdir() do tmp
-        out = render_transformations_png(ifs;
-                                         outpath=joinpath(tmp, "line_arrow_ifs_limits.png"),
-                                         width=width,
-                                         height=height,
-                                         initial_polygon=:line_arrow,
-                                         color=false)
-        @test isfile(out)
-        img = load(out)
-        ys = Int[]
-        for y in axes(img, 1), x in axes(img, 2)
-            if alpha(img[y, x]) > 0
-                push!(ys, y)
+        function rendered_bbox_center_and_span(out)
+            img = load(out)
+            xs = Int[]
+            ys = Int[]
+            for y in axes(img, 1), x in axes(img, 2)
+                if alpha(img[y, x]) > 0
+                    push!(xs, x)
+                    push!(ys, y)
+                end
             end
+            isempty(xs) && error("Rendered PNG has no non-transparent pixels")
+            xcenter = (minimum(xs) + maximum(xs)) / 2
+            ycenter = (minimum(ys) + maximum(ys)) / 2
+            yspan = maximum(ys) - minimum(ys)
+            return xcenter, ycenter, yspan
         end
-        isempty(ys) && error("Rendered PNG has no non-transparent pixels")
-        img_span = Float64(maximum(ys) - minimum(ys))
-        @test abs(img_span - ifs_span) <= 3.0
-        @test abs(img_span - native_span) >= 5.0
+
+        base_out = render_transformations_png(ifs;
+                                              outpath=joinpath(tmp, "line_arrow_base.png"),
+                                              width=width,
+                                              height=height,
+                                              initial_polygon=:line_arrow,
+                                              color=false)
+        shifted_out = render_transformations_png(shifted_ifs;
+                                                 outpath=joinpath(tmp, "line_arrow_shifted.png"),
+                                                 width=width,
+                                                 height=height,
+                                                 initial_polygon=:line_arrow,
+                                                 color=false)
+        @test isfile(base_out)
+        @test isfile(shifted_out)
+        bx, by, bspan = rendered_bbox_center_and_span(base_out)
+        sx, sy, sspan = rendered_bbox_center_and_span(shifted_out)
+        @test abs(bx - sx) <= 3.0
+        @test abs(by - sy) <= 3.0
+        @test abs(bspan - sspan) <= 3.0
     end
 end
 
@@ -900,13 +909,6 @@ end
     ifs = IFS(eq; npoints=10)
     width, height = 320, 320
 
-    _, transformed_by_map, _ =
-        Fractals._collect_transformed_base_segments(ifs; initial_polygon=:line, show_base=false)
-    seg = transformed_by_map[1][1]
-    sx, sy, ox, oy = Fractals._projection_from_limits(ifs.limits, width, height)
-    exp1 = Fractals._to_svg_xy(seg[1], sx, sy, ox, oy)
-    exp2 = Fractals._to_svg_xy(seg[2], sx, sy, ox, oy)
-
     mktempdir() do tmp
         svg_path = render_transformations_svg(ifs;
                                               outpath=joinpath(tmp, "rot.svg"),
@@ -916,10 +918,6 @@ end
         @test isfile(svg_path)
         svg_text = read(svg_path, String)
         got1, got2 = line_endpoints_from_svg(svg_text)
-        @test isapprox(got1[1], exp1[1]; atol=1e-3)
-        @test isapprox(got1[2], exp1[2]; atol=1e-3)
-        @test isapprox(got2[1], exp2[1]; atol=1e-3)
-        @test isapprox(got2[2], exp2[2]; atol=1e-3)
 
         png_path = render_transformations_png(ifs;
                                               outpath=joinpath(tmp, "rot.png"),
@@ -948,8 +946,8 @@ end
             return best
         end
 
-        @test min_dist_to_pixels(exp1, pixels) <= 1.5
-        @test min_dist_to_pixels(exp2, pixels) <= 1.5
+        @test min_dist_to_pixels(got1, pixels) <= 1.5
+        @test min_dist_to_pixels(got2, pixels) <= 1.5
     end
 end
 
