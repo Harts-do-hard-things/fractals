@@ -981,31 +981,25 @@ end
         @test_throws MethodError render_transformations_png(ifs;
                                                             outpath=joinpath(tmp, "never_write_badkw_$suffix.png"),
                                                             limits_mode=:fit)
-    end
 
-    seed_line = Fractals._resolve_image_source(ifs,
-                                               :polygon,
-                                               nothing,
-                                               (64, 64),
-                                               0,
-                                               1,
-                                               1,
-                                               :ifs,
-                                               true,
-                                               :line)
-    seed_triangle = Fractals._resolve_image_source(ifs,
-                                                   :polygon,
-                                                   nothing,
-                                                   (64, 64),
-                                                   0,
-                                                   1,
-                                                   1,
-                                                   :ifs,
-                                                   true,
-                                                   :equilateral_triangle)
-    @test count(>(0), seed_line) > 0
-    @test count(>(0), seed_triangle) > 0
-    @test seed_line != seed_triangle
+        seed_line = render(SMALL_EQ;
+                           method=:image_iterate,
+                           image_source=:polygon,
+                           image_iterations=1,
+                           initial_polygon=:line,
+                           resolution=(64, 64),
+                           outpath=joinpath(tmp, "seed_line_$suffix.png"))
+        seed_triangle = render(SMALL_EQ;
+                               method=:image_iterate,
+                               image_source=:polygon,
+                               image_iterations=1,
+                               initial_polygon=:equilateral_triangle,
+                               resolution=(64, 64),
+                               outpath=joinpath(tmp, "seed_triangle_$suffix.png"))
+        @test count(>(Gray{Float32}(0)), seed_line.image) > 0
+        @test count(>(Gray{Float32}(0)), seed_triangle.image) > 0
+        @test seed_line.image != seed_triangle.image
+    end
 end
 
 @testset "Render Entrypoint" begin
@@ -1120,43 +1114,32 @@ end
         @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, polygon_limits_mode=:bad_mode, resolution=(24, 24), outpath=joinpath(tmp, "never_write3_$suffix.png"))
     end
 
-    # Polygon seed should remain sparse line art, generated from render_transformations_png.
-    poly_seed = Fractals._resolve_image_source(IFS(SMALL_EQ; npoints=10),
-                                               :polygon,
-                                               nothing,
-                                               (64, 64),
-                                               0,
-                                               1,
-                                               1,
-                                               :ifs,
-                                               true)
-    density = count(>(0f0), Float32.(poly_seed)) / length(poly_seed)
-    @test density > 0.005
-    @test density < 0.25
+    # Polygon-backed image iteration should remain sparse line art and preserve the
+    # documented :default -> :ifs compatibility behavior through the public API.
+    mktempdir() do tmp
+        poly_seed = render(SMALL_EQ;
+                           method=:image_iterate,
+                           image_source=:polygon,
+                           image_iterations=1,
+                           polygon_limits_mode=:ifs,
+                           resolution=(64, 64),
+                           outpath=joinpath(tmp, "poly_seed.png"))
+        density = count(>(Gray{Float32}(0)), poly_seed.image) / length(poly_seed.image)
+        @test density > 0.005
+        @test density < 0.25
 
-    poly_seed_default = Fractals._resolve_image_source(IFS(SMALL_EQ; npoints=10),
-                                                       :polygon,
-                                                       nothing,
-                                                       (64, 64),
-                                                       0,
-                                                       1,
-                                                       1,
-                                                       :default,
-                                                       true)
-    @test count(>(0), poly_seed_default) > 0
-    @test poly_seed_default == poly_seed
-
-    @test_logs (:warn, r"polygon_limits_mode=:default is treated as :ifs") Fractals._resolve_image_source(
-        IFS(SMALL_EQ; npoints=10),
-        :polygon,
-        nothing,
-        (64, 64),
-        0,
-        1,
-        1,
-        :default,
-        true
-    )
+        poly_seed_default = @test_logs (:warn, r"polygon_limits_mode=:default is treated as :ifs") render(
+            SMALL_EQ;
+            method=:image_iterate,
+            image_source=:polygon,
+            image_iterations=1,
+            polygon_limits_mode=:default,
+            resolution=(64, 64),
+            outpath=joinpath(tmp, "poly_seed_default.png")
+        )
+        @test count(>(Gray{Float32}(0)), poly_seed_default.image) > 0
+        @test poly_seed_default.image == poly_seed.image
+    end
 
 end
 
