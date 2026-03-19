@@ -102,25 +102,26 @@ end
     end
 end
 
-@testset "Build Maps And Weights" begin
-    maps, weights = Fractals._build_maps_and_weights(SMALL_EQ)
-    @test length(maps) == size(SMALL_EQ, 1)
-    @test length(weights) == size(SMALL_EQ, 1)
-    @test sum(weights) > 0
-end
-
-@testset "Get Limits" begin
-    maps, weights = Fractals._build_maps_and_weights(SMALL_EQ)
-    limits = Fractals._get_limits(maps, weights; warmup=10, n=200)
-    (xlim, ylim) = limits
-    @test xlim[1] < xlim[2]
-    @test ylim[1] < ylim[2]
-end
-
 @testset "IFS Constructors" begin
     ifs = IFS(SMALL_EQ; npoints=1000)
     @test length(ifs.points) == 1000
     @test length(ifs.maps) == size(SMALL_EQ, 1)
+    @test length(ifs.weights) == size(SMALL_EQ, 1)
+    @test collect(ifs.weights) ≈ [0.6, 0.4]
+    @test ifs.limits[1][1] < ifs.limits[1][2]
+    @test ifs.limits[2][1] < ifs.limits[2][2]
+
+    eq6 = [
+        1.0 0.0 0.0 1.0 0.0 0.0
+        0.5 0.0 0.0 0.5 1.0 0.0
+    ]
+    ifs6 = IFS(eq6; npoints=25, name="Derived", docs="from 6-column matrix")
+    @test length(ifs6.points) == 25
+    @test ifs6.name == "Derived"
+    @test ifs6.docs == "from 6-column matrix"
+    @test collect(ifs6.weights) ≈ [1.0, 0.25]
+    @test ifs6.maps[1](SVector{2,Float64}(2.0, 3.0)) ≈ SVector{2,Float64}(2.0, 3.0)
+    @test ifs6.maps[2](SVector{2,Float64}(2.0, 3.0)) ≈ SVector{2,Float64}(2.0, 1.5)
 end
 
 @testset "Interpolation Helpers" begin
