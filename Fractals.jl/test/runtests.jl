@@ -1147,14 +1147,15 @@ end
 end
 
 @testset "Snapshot Image Tests" begin
-    transform_ifs = IFS(SMALL_EQ; npoints=50)
-    transform_img = Fractals._render_transformations_image(transform_ifs;
-                                                           width=96,
-                                                           height=96,
-                                                           initial_polygon=:line_arrow,
-                                                           color=true,
-                                                           axis=true)
-    _assert_matches_snapshot("transformations-line-arrow-color-axis", transform_img)
+    transform = render(SMALL_EQ;
+                       npoints=50,
+                       method=RenderTransformations,
+                       resolution=(96, 96),
+                       initial_polygon=:line_arrow,
+                       color=true,
+                       axis=true,
+                       outpath=joinpath("media", "snapshot_transformations.png"))
+    _assert_matches_snapshot("transformations-line-arrow-color-axis", transform.image)
 
     inverse = render(SMALL_EQ;
                      method=Inverse,
