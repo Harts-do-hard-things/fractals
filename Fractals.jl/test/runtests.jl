@@ -142,8 +142,11 @@ end
     @test midpoint[:, 7] ≈ [0.5, 0.5]
     @test isapprox(sum(midpoint[:, 7]), 1.0; atol=1e-12)
 
-    @test interpolate_eq_matrix(left6, right7, 0.0) ≈ Fractals._eq_matrix_for_interpolation(left6)
-    @test interpolate_eq_matrix(left6, right7, 1.0) ≈ Fractals._eq_matrix_for_interpolation(right7)
+    @test interpolate_eq_matrix(left6, right7, 0.0) ≈ [
+        1.0  0.0  0.0  1.0  0.0  0.0  0.8
+        0.5  0.0  0.0  0.5  1.0  0.0  0.2
+    ]
+    @test interpolate_eq_matrix(left6, right7, 1.0) ≈ right7
 
     left_ifs = IFS(left6; npoints=12, name="Left", docs="left docs")
     right_ifs = IFS(right7; npoints=20, name="Right", docs="right docs")
@@ -152,8 +155,17 @@ end
     @test length(blended.points) == 12
     @test blended.name == "Interpolated(Left -> Right)"
     @test occursin("Interpolated IFS at t=0.25", blended.docs)
-    @test Fractals._eq_matrix_for_interpolation(blended) ≈ interpolate_eq_matrix(left6, right7, 0.25)
-    @test blended.limits == Fractals._interpolate_limits(left_ifs.limits, right_ifs.limits, 0.25)
+    @test blended.maps[1].A[1, 1] ≈ 0.75
+    @test blended.maps[1].A[1, 2] ≈ 0.25
+    @test blended.maps[1].A[2, 1] ≈ -0.25
+    @test blended.maps[1].A[2, 2] ≈ 0.75
+    @test blended.maps[1].b[1] ≈ 0.0
+    @test blended.maps[1].b[2] ≈ 0.25
+    @test collect(blended.weights) ≈ [0.65, 0.35]
+    @test blended.limits[1][1] ≈ 0.75 * left_ifs.limits[1][1] + 0.25 * right_ifs.limits[1][1]
+    @test blended.limits[1][2] ≈ 0.75 * left_ifs.limits[1][2] + 0.25 * right_ifs.limits[1][2]
+    @test blended.limits[2][1] ≈ 0.75 * left_ifs.limits[2][1] + 0.25 * right_ifs.limits[2][1]
+    @test blended.limits[2][2] ≈ 0.75 * left_ifs.limits[2][2] + 0.25 * right_ifs.limits[2][2]
 
     right_locked = interpolate_ifs(left_ifs, right_ifs, 0.5; limits_mode=:right, npoints=3, name="Blend", docs="manual docs")
     @test length(right_locked.points) == 3
@@ -608,16 +620,27 @@ end
 end
 
 @testset "Media Output Path" begin
-    p1 = Fractals._normalize_media_outpath("output.png")
-    @test p1 == joinpath("media", "output.png")
+    mktempdir() do d
+        old = pwd()
+        cd(d)
+        try
+            out1 = render(SMALL_EQ; method=Chaos, npoints=500, resolution=(16, 16), outpath="output.png")
+            @test out1.outpath == joinpath("media", "output.png")
+            @test isfile(out1.outpath)
 
-    p2 = Fractals._normalize_media_outpath(joinpath("media", "nested", "x.png"))
-    @test p2 == joinpath("media", "nested", "x.png")
+            out2 = render(SMALL_EQ; method=Chaos, npoints=500, resolution=(16, 16), outpath=joinpath("media", "nested", "x.png"))
+            @test out2.outpath == joinpath("media", "nested", "x.png")
+            @test isfile(out2.outpath)
 
-    p3 = Fractals._normalize_media_outpath(joinpath("other", "path", "image.png"))
-    @test p3 == joinpath("media", "image.png")
+            out3 = render(SMALL_EQ; method=Chaos, npoints=500, resolution=(16, 16), outpath=joinpath("other", "path", "image.png"))
+            @test out3.outpath == joinpath("media", "image.png")
+            @test isfile(out3.outpath)
 
-    @test isdir("media")
+            @test isdir("media")
+        finally
+            cd(old)
+        end
+    end
 end
 
 @testset "Affine Map SVG Rendering" begin
