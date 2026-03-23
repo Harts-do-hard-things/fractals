@@ -21,6 +21,7 @@ include("inverse.jl")                # rasterize_image_inversely
 # image_iterate.jl must follow chaos, point_deterministic, rasterize, inverse, and
 # render_transformations — _resolve_image_source calls all of them
 include("image_iterate.jl")          # iterate_image, _resolve_image_source
+include("interpolation.jl")          # interpolate_eq_matrix, interpolate_ifs, render_interpolation_frames
 include("ifsparser.jl")              # IFS file/string parser (pure; no I/O)
 # interactive.jl must follow ifsparser.jl (calls parse_ifs_file) and all render-method files,
 # but must come BEFORE render.jl — render.jl's _resolve_render_input calls _select_ifs_definition
@@ -38,6 +39,7 @@ export AffineMap,
        PointDeterministic,
        ImageIterate,
        Inverse,
+       RenderTransformations,
        lex_ifs,
        parse_ifs_string,
        parse_ifs_file,
@@ -50,6 +52,9 @@ export AffineMap,
        iterate!,
        iterate_parallel!,
        deterministic_iterate,
+       interpolate_eq_matrix,
+       interpolate_ifs,
+       render_interpolation_frames,
        make_pixelate_map,
        make_image,
        iterate_image,

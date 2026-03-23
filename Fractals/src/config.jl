@@ -38,6 +38,7 @@ const _INITIAL_POLYGON_NAMES = (:default, :equilateral_triangle, :line_arrow, :l
     PointDeterministic
     ImageIterate
     Inverse
+    RenderTransformations
 end
 
 const _RENDER_METHOD_CHOICES = (
@@ -46,4 +47,5 @@ const _RENDER_METHOD_CHOICES = (
     PointDeterministic,
     ImageIterate,
     Inverse,
+    RenderTransformations,
 )

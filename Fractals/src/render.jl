@@ -234,7 +234,7 @@ function _warn_irrelevant_kwargs(
     if method == ImageIterate && color
         throw(ArgumentError("color=true is not supported for method=ImageIterate. ImageIterate is grayscale-only."))
     end
-    if method != ImageIterate
+    if method != ImageIterate && method != RenderTransformations
         image_source != :polygon &&
             @warn "image_source=$image_source is ignored for method=$(method); only applies to ImageIterate"
         !isnothing(image_path) &&
@@ -245,6 +245,15 @@ function _warn_irrelevant_kwargs(
             @warn "polygon_limits_mode=$polygon_limits_mode is ignored for method=$(method); only applies to ImageIterate"
         initial_polygon != :default &&
             @warn "initial_polygon=$initial_polygon is ignored for method=$(method); only applies to ImageIterate"
+    elseif method == RenderTransformations
+        image_source != :polygon &&
+            @warn "image_source=$image_source is ignored for method=$(method); only applies to ImageIterate"
+        !isnothing(image_path) &&
+            @warn "image_path is ignored for method=$(method); only applies to ImageIterate"
+        image_iterations != 1 &&
+            @warn "image_iterations=$image_iterations is ignored for method=$(method); only applies to ImageIterate"
+        polygon_limits_mode != :ifs &&
+            @warn "polygon_limits_mode=$polygon_limits_mode is ignored for method=$(method); only applies to ImageIterate"
     end
     if method in (Chaos, Parallel, PointDeterministic)
         !show_divergence_scale &&
@@ -263,6 +272,8 @@ function render(
     warmup::Integer=DEFAULT_WARMUP,
     color::Bool=false,
     show_divergence_scale::Bool=true,
+    show_base::Bool=false,
+    axis::Bool=false,
     image_source::Symbol=:polygon,
     image_path::Union{Nothing,AbstractString}=nothing,
     image_iterations::Integer=1,
@@ -289,32 +300,61 @@ function render(
         initial_polygon=initial_polygon, show_divergence_scale=show_divergence_scale,
         color=color)
 
+    ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index, ifs_name=ifs_name, input_fn=input_fn)
+
     if render_method == Chaos
-        return render_chaos(input;
-            npoints=npoints, warmup=warmup, color=color,
-            resolution=resolution, outpath=outpath, backend=backend,
-            ifs_index=ifs_index, ifs_name=ifs_name, input_fn=input_fn)
+        iterate!(ifs; warmup=warmup)
+        img = make_image(ifs; resolution=resolution, backend=backend)
+        if color
+            img = iterate_image(ifs, img; colors=true, backend=backend)
+        end
+        final_outpath = _normalize_media_outpath(outpath)
+        save(final_outpath, img)
+        return (ifs=ifs, image=img, outpath=final_outpath, method=:chaos)
 
     elseif render_method == PointDeterministic
-        return render_point_deterministic(input;
-            npoints=npoints, warmup=warmup, iterations=det_iters, color=color,
-            resolution=resolution, outpath=outpath, backend=backend,
-            ifs_index=ifs_index, ifs_name=ifs_name, input_fn=input_fn)
+        rendered_ifs = deterministic_iterate(ifs, det_iters; warmup=warmup)
+        img = make_image(rendered_ifs; resolution=resolution, backend=backend)
+        if color
+            img = iterate_image(ifs, img; colors=true, backend=backend)
+        end
+        final_outpath = _normalize_media_outpath(outpath)
+        save(final_outpath, img)
+        return (ifs=rendered_ifs, image=img, outpath=final_outpath, method=:point_deterministic)
 
     elseif render_method == Inverse
-        return render_inverse(input;
-            npoints=npoints, warmup=warmup, iterations=inv_iters,
-            show_divergence_scale=show_divergence_scale, color=color,
-            resolution=resolution, outpath=outpath, backend=backend,
-            ifs_index=ifs_index, ifs_name=ifs_name, input_fn=input_fn)
+        img = rasterize_image_inversely(ifs, inv_iters, ifs.limits;
+                                        resolution=resolution,
+                                        show_divergence_scale=show_divergence_scale,
+                                        backend=backend)
+        if color
+            img = iterate_image(ifs, img; colors=true, backend=backend)
+        end
+        final_outpath = _normalize_media_outpath(outpath)
+        save(final_outpath, img)
+        return (ifs=ifs, image=img, outpath=final_outpath, method=:inverse)
+
+    elseif render_method == RenderTransformations
+        img = _render_transformations_image(ifs;
+                                            width=resolution[2],
+                                            height=resolution[1],
+                                            show_base=show_base,
+                                            initial_polygon=initial_polygon,
+                                            color=color,
+                                            axis=axis)
+        final_outpath = _normalize_media_outpath(outpath)
+        save(final_outpath, img)
+        return (ifs=ifs, image=img, outpath=final_outpath, method=:render_transformations)
 
     else  # ImageIterate
-        return render_image_iterate(input;
-            npoints=npoints, warmup=warmup, iterations=det_iters,
-            image_source=image_source, image_path=image_path,
-            image_iterations=image_iterations, polygon_limits_mode=polygon_limits_mode,
-            initial_polygon=initial_polygon,
-            resolution=resolution, outpath=outpath, backend=backend,
-            ifs_index=ifs_index, ifs_name=ifs_name, input_fn=input_fn)
+        img = _resolve_image_source(ifs, image_source, image_path, resolution, warmup,
+                                    det_iters, det_iters,
+                                    polygon_limits_mode, true, initial_polygon, backend)
+        for _ in 1:image_iterations
+            img = iterate_image(ifs, img; colors=false, backend=backend)
+        end
+        final_outpath = _normalize_media_outpath(outpath)
+        save(final_outpath, img)
+        return (ifs=ifs, image=img, outpath=final_outpath, method=:image_iterate)
     end
 end

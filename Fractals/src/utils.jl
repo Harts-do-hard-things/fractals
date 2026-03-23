@@ -3,6 +3,8 @@ function _render_method_symbol(m::RenderMethod)
         return :point_deterministic
     elseif m == ImageIterate
         return :image_iterate
+    elseif m == RenderTransformations
+        return :render_transformations
     end
     return Symbol(lowercase(string(m)))
 end
@@ -23,10 +25,12 @@ function _parse_render_method(method::Symbol)
         return ImageIterate
     elseif m == :inverse
         return Inverse
+    elseif m == :render_transformations || m == :rendertransformations || m == :transformations
+        return RenderTransformations
     elseif m == :deterministic
         throw(ArgumentError("Method '$method' was removed. Use point_deterministic."))
     end
-    throw(ArgumentError("Invalid method '$method'. Supported methods: chaos, parallel, point_deterministic, image_iterate, inverse"))
+    throw(ArgumentError("Invalid method '$method'. Supported methods: chaos, parallel, point_deterministic, image_iterate, inverse, render_transformations"))
 end
 
 function _parse_render_method(method::AbstractString)
