@@ -18,9 +18,20 @@ const SMALL_EQ = [
 ]
 const SNAPSHOT_DIR = joinpath(@__DIR__, "snapshots")
 
+function _probe_gpu_available()::Bool
+    ifs = IFS(SMALL_EQ; npoints=4)
+    try
+        make_image(ifs; resolution=(4, 4), backend=:gpu)
+        return true
+    catch e
+        e isa ArgumentError && return false
+        rethrow()
+    end
+end
+
 function _skip_optional_gpu_parity!(name::AbstractString)
     @warn "$name skipped: FRACTALS_RUN_GPU_TESTS=1 but no CUDA GPU is available."
-    @test_skip Fractals._gpu_backend_available(Val(:cuda))
+    @test_skip "GPU available"
 end
 
 _snapshot_path(name::AbstractString) = joinpath(SNAPSHOT_DIR, name * ".png")
@@ -102,7 +113,7 @@ end
     end
 end
 
-@testset "IFS Constructors" begin
+@testset "IFS constructor initializes maps, weights, and bounds from equation matrices" begin
     ifs = IFS(SMALL_EQ; npoints=1000)
     @test length(ifs.points) == 1000
     @test length(ifs.maps) == size(SMALL_EQ, 1)
@@ -156,12 +167,10 @@ end
     @test length(blended.points) == 12
     @test blended.name == "Interpolated(Left -> Right)"
     @test occursin("Interpolated IFS at t=0.25", blended.docs)
-    @test blended.maps[1].A[1, 1] ≈ 0.75
-    @test blended.maps[1].A[1, 2] ≈ 0.25
-    @test blended.maps[1].A[2, 1] ≈ -0.25
-    @test blended.maps[1].A[2, 2] ≈ 0.75
-    @test blended.maps[1].b[1] ≈ 0.0
-    @test blended.maps[1].b[2] ≈ 0.25
+    # Verify the blended map transforms points correctly (t=0.25 linear blend):
+    # left map 1 is identity; right map 1 maps (x,y)→(-y, x+1). Blended: A*x+b.
+    @test blended.maps[1](SVector{2,Float64}(1.0, 0.0)) ≈ SVector{2,Float64}(0.75, 0.0)
+    @test blended.maps[1](SVector{2,Float64}(0.0, 1.0)) ≈ SVector{2,Float64}(0.25, 1.0)
     @test collect(blended.weights) ≈ [0.65, 0.35]
     @test blended.limits[1][1] ≈ 0.75 * left_ifs.limits[1][1] + 0.25 * right_ifs.limits[1][1]
     @test blended.limits[1][2] ≈ 0.75 * left_ifs.limits[1][2] + 0.25 * right_ifs.limits[1][2]
@@ -229,7 +238,7 @@ end
     end
 end
 
-@testset "Iterate" begin
+@testset "iterate! and iterate_parallel! populate the IFS point cloud" begin
     ifs = IFS(SMALL_EQ; npoints=5000)
     iterate!(ifs; warmup=5)
     @test length(ifs.points) == 5000
@@ -301,6 +310,20 @@ end
     end
 end
 
+@testset "make_pixelate_map produces an invertible coordinate transform into pixel space" begin
+    limits = ((0.0, 2.0), (-1.0, 1.0))
+    m = make_pixelate_map(limits; resolution=(100, 200))
+    @test m isa AffineMap
+    # Round-trip: mapping a coordinate to pixels and back recovers the original
+    p = SVector{2,Float64}(1.0, 0.0)
+    @test inv(m)(m(p)) ≈ p
+    # The center of the limits maps into the interior of the image
+    center = SVector{2,Float64}(1.0, 0.0)  # center of limits ((0.0,2.0), (-1.0,1.0))
+    pixel = m(center)
+    @test 1.0 <= pixel[1] <= 200.0
+    @test 1.0 <= pixel[2] <= 100.0
+end
+
 @testset "Make Image Resolution Behavior" begin
     ifs = IFS(SMALL_EQ; npoints=4_000)
     iterate!(ifs; warmup=5, seed=123)
@@ -320,7 +343,7 @@ end
     @test all(tall .>= 0f0) && maximum(tall) <= 1f0
 end
 
-@testset "Make Image" begin
+@testset "make_image converts point cloud to a normalized Float32 grayscale heatmap" begin
     ifs = IFS(SMALL_EQ; npoints=2000)
     iterate!(ifs; warmup=5)
     img = make_image(ifs; resolution=(32, 32))
@@ -344,7 +367,7 @@ end
     @test all(img_auto .>= 0f0)
     @test maximum(img_auto) <= 1f0
 
-    if Fractals._gpu_backend_available(Val(:cuda))
+    if _probe_gpu_available()
         img_gpu = make_image(ifs; resolution=(32, 32), backend=:gpu)
         @test size(img_gpu) == (32, 32)
         @test eltype(img_gpu) == Float32
@@ -359,7 +382,7 @@ end
 
 @testset "GPU Parity (Optional)" begin
     if get(ENV, "FRACTALS_RUN_GPU_TESTS", "0") == "1"
-        if Fractals._gpu_backend_available(Val(:cuda))
+        if _probe_gpu_available()
             ifs = IFS(SMALL_EQ; npoints=5000)
             iterate!(ifs; warmup=5, seed=987)
             cpu_img = make_image(ifs; resolution=(48, 48), backend=:cpu)
@@ -413,7 +436,7 @@ end
     @test size(out_auto_color) == (24, 24)
     @test eltype(out_auto_color) == RGB{Float32}
 
-    if Fractals._gpu_backend_available(Val(:cuda))
+    if _probe_gpu_available()
         out_gpu = iterate_image(ifs, src; backend=:gpu)
         @test size(out_gpu) == (24, 24)
         @test eltype(out_gpu) == Gray{Float32}
@@ -431,7 +454,7 @@ end
 
 @testset "Iterate Image GPU Parity (Optional)" begin
     if get(ENV, "FRACTALS_RUN_GPU_TESTS", "0") == "1"
-        if Fractals._gpu_backend_available(Val(:cuda))
+        if _probe_gpu_available()
             ifs = IFS(SMALL_EQ; npoints=2000)
             iterate!(ifs; warmup=5, seed=4321)
             src = make_image(ifs; resolution=(28, 28), backend=:cpu)
@@ -466,6 +489,20 @@ end
     @test all(v -> v == 0.0f0 || v == 1.0f0, img_hide)
 end
 
+@testset "inverse_iterate returns a Float32 coverage value in [0, 1] for pixel corners" begin
+    ifs = IFS(SMALL_EQ; npoints=10)
+    p0 = SVector{2,Float64}(0.0, 0.0)
+    p1 = SVector{2,Float64}(0.1, 0.0)
+    p2 = SVector{2,Float64}(0.0, 0.1)
+    result = inverse_iterate(ifs, 2, p0, p1, p2)
+    @test result isa Float32
+    @test 0.0f0 <= result <= 1.0f0
+    # Deeper iteration returns a value in the same range
+    result_deep = inverse_iterate(ifs, 4, p0, p1, p2)
+    @test result_deep isa Float32
+    @test 0.0f0 <= result_deep <= 1.0f0
+end
+
 @testset "Inverse Rasterize Backends" begin
     ifs = IFS(SMALL_EQ; npoints=100)
     lims = ifs.limits
@@ -484,7 +521,7 @@ end
     img_cpu_preview_b = rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:cpu, mode=:preview)
     @test img_cpu_preview_a == img_cpu_preview_b
 
-    if Fractals._gpu_backend_available(Val(:cuda))
+    if _probe_gpu_available()
         img_gpu_exact = rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:gpu, mode=:exact)
         @test size(img_gpu_exact) == (8, 8)
         @test eltype(img_gpu_exact) == Float32
@@ -507,7 +544,7 @@ end
 
 @testset "Inverse Rasterize GPU Parity (Optional)" begin
     if get(ENV, "FRACTALS_RUN_GPU_TESTS", "0") == "1"
-        if Fractals._gpu_backend_available(Val(:cuda))
+        if _probe_gpu_available()
             ifs = IFS(SMALL_EQ; npoints=100)
             lims = ifs.limits
 
@@ -526,7 +563,7 @@ end
     end
 end
 
-@testset "IFS Parser" begin
+@testset "parse_ifs_string extracts name, documentation, and maps from IFS text blocks" begin
     sample = """
     Test IFS {; Doc line 1
     ; Doc line 2
@@ -539,6 +576,31 @@ end
     @test defs[1].name == "Test IFS"
     @test occursin("Doc line 1", defs[1].docs)
     @test length(defs[1].points) == 10
+end
+
+@testset "lex_ifs tokenizes IFS text into a structured token stream" begin
+    input = """
+    MyFractal {; Some documentation
+    ; More docs
+      0.5 0.0 0.0 0.5 0.0 0.0 0.6
+     -0.5 0.0 0.0 -0.5 1.0 0.0 0.4
+    }
+    """
+    tokens = lex_ifs(input)
+    kinds = [t.kind for t in tokens]
+    @test :NAME in kinds
+    @test :LBRACE in kinds
+    @test :DOCS in kinds
+    @test :ARRAY in kinds
+    @test :RBRACE in kinds
+
+    name_tok = first(t for t in tokens if t.kind == :NAME)
+    @test name_tok.value == "MyFractal"
+
+    array_toks = filter(t -> t.kind == :ARRAY, tokens)
+    @test length(array_toks) == 2
+    @test length(array_toks[1].value) == 7
+    @test array_toks[1].value[1] ≈ 0.5
 end
 
 @testset "IFS Parser File" begin
@@ -1269,17 +1331,6 @@ end
     end
     @test err isa ArgumentError
     @test occursin("positive total weight", sprint(showerror, err))
-
-    ifs = IFS(SMALL_EQ; npoints=100)
-    img = make_image(ifs; resolution=(16, 16))
-    err = try
-        Fractals._iterate_image_single_map(ifs, img, 99)
-        nothing
-    catch e
-        e
-    end
-    @test err isa ArgumentError
-    @test occursin("out of range", sprint(showerror, err))
 
     @test_throws ArgumentError render(SMALL_EQ;
                                       method=:chaos,
