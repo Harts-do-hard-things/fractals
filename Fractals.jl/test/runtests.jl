@@ -1130,6 +1130,24 @@ end
     @test_throws ArgumentError render(SMALL_EQ; method=:badmethod)
     @test_throws ArgumentError render(SMALL_EQ; method="not_a_method")
     @test_throws ArgumentError render(SMALL_EQ; method=:deterministic)
+
+    # render() must delegate to render_*() — verify output parity for deterministic methods
+    mktempdir() do tmp
+        res = (32, 32)
+        ifs = IFS(SMALL_EQ; npoints=50)
+
+        # Inverse is deterministic given the same IFS limits
+        c = render(ifs; method=:inverse, iterations=2, resolution=res, outpath=joinpath(tmp, "parity_inv_render.png"))
+        d = render_inverse(ifs; iterations=2, resolution=res, outpath=joinpath(tmp, "parity_inv_direct.png"))
+        @test c.image == d.image
+        @test c.method == d.method
+
+        # RenderTransformations is fully deterministic
+        e = render(ifs; method=:render_transformations, resolution=res, outpath=joinpath(tmp, "parity_tf_render.png"))
+        f = render_transformations(ifs; resolution=res, outpath=joinpath(tmp, "parity_tf_direct.png"))
+        @test e.image == f.image
+        @test e.method == f.method
+    end
 end
 
 @testset "Render Image Iterate API" begin

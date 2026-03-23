@@ -144,6 +144,36 @@ function render_image_iterate(
     return (ifs=ifs, image=img, outpath=final_outpath, method=:image_iterate)
 end
 
+function render_transformations(
+    input;
+    npoints::Union{Nothing,Integer}             = nothing,
+    show_base::Bool                             = false,
+    axis::Bool                                  = false,
+    color::Bool                                 = true,
+    initial_polygon::Symbol                     = :default,
+    resolution::Tuple{Int,Int}                  = RESOLUTION,
+    outpath::AbstractString                     = "media/render.png",
+    ifs_index::Union{Nothing,Integer}           = nothing,
+    ifs_name::Union{Nothing,AbstractString}     = nothing,
+    input_fn                                    = readline,
+)
+    isnothing(npoints) || npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
+    resolution[1] > 0 && resolution[2] > 0 || throw(ArgumentError("resolution must be positive, got $resolution"))
+    _resolve_initial_polygon(initial_polygon)
+
+    ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index, ifs_name=ifs_name, input_fn=input_fn)
+    img = _render_transformations_image(ifs;
+                                        width=resolution[2],
+                                        height=resolution[1],
+                                        show_base=show_base,
+                                        initial_polygon=initial_polygon,
+                                        color=color,
+                                        axis=axis)
+    final_outpath = _normalize_media_outpath(outpath)
+    save(final_outpath, img)
+    return (ifs=ifs, image=img, outpath=final_outpath, method=:render_transformations)
+end
+
 # --------------------------------
 # Input resolution helpers
 # --------------------------------
@@ -200,161 +230,44 @@ function _resolve_render_input(
     return IFS(selected.eq; npoints=resolved_npoints, name=selected.name, docs=selected.docs)
 end
 
-function _resolve_render_iterations(
-    iterations::Union{Nothing,Integer},
-    deterministic_depth::Integer,
-    inverse_depth::Integer
-)
-    if isnothing(iterations)
-        if deterministic_depth != 1 || inverse_depth != 8
-            @warn "deterministic_depth/inverse_depth are compatibility aliases; prefer iterations=..."
-        end
-        deterministic_iters = deterministic_depth
-        inverse_iters = inverse_depth
-    else
-        if deterministic_depth != 1 || inverse_depth != 8
-            @warn "iterations takes precedence over deterministic_depth/inverse_depth"
-        end
-        deterministic_iters = iterations
-        inverse_iters = iterations
-    end
-
-    deterministic_iters >= 0 || throw(ArgumentError("iterations must be >= 0, got $deterministic_iters"))
-    inverse_iters >= 0 || throw(ArgumentError("iterations must be >= 0, got $inverse_iters"))
-    return deterministic_iters, inverse_iters
-end
-
-function _warn_irrelevant_kwargs(
-    method::RenderMethod;
-    image_source, image_path, image_iterations,
-    polygon_limits_mode, initial_polygon,
-    show_divergence_scale,
-    color,
-)
-    if method == ImageIterate && color
-        throw(ArgumentError("color=true is not supported for method=ImageIterate. ImageIterate is grayscale-only."))
-    end
-    if method != ImageIterate && method != RenderTransformations
-        image_source != :polygon &&
-            @warn "image_source=$image_source is ignored for method=$(method); only applies to ImageIterate"
-        !isnothing(image_path) &&
-            @warn "image_path is ignored for method=$(method); only applies to ImageIterate"
-        image_iterations != 1 &&
-            @warn "image_iterations=$image_iterations is ignored for method=$(method); only applies to ImageIterate"
-        polygon_limits_mode != :ifs &&
-            @warn "polygon_limits_mode=$polygon_limits_mode is ignored for method=$(method); only applies to ImageIterate"
-        initial_polygon != :default &&
-            @warn "initial_polygon=$initial_polygon is ignored for method=$(method); only applies to ImageIterate"
-    elseif method == RenderTransformations
-        image_source != :polygon &&
-            @warn "image_source=$image_source is ignored for method=$(method); only applies to ImageIterate"
-        !isnothing(image_path) &&
-            @warn "image_path is ignored for method=$(method); only applies to ImageIterate"
-        image_iterations != 1 &&
-            @warn "image_iterations=$image_iterations is ignored for method=$(method); only applies to ImageIterate"
-        polygon_limits_mode != :ifs &&
-            @warn "polygon_limits_mode=$polygon_limits_mode is ignored for method=$(method); only applies to ImageIterate"
-    end
-    if method in (Chaos, Parallel, PointDeterministic)
-        !show_divergence_scale &&
-            @warn "show_divergence_scale=false is ignored for method=$(method); only applies to Inverse"
-    end
-end
-
 # --------------------------------
-# High-level render entrypoint (thin router)
+# High-level render entrypoint (thin delegator)
 # --------------------------------
 
 function render(
     input;
-    method::Union{RenderMethod,Symbol,AbstractString}=Chaos,
-    npoints::Union{Nothing,Integer}=nothing,
-    warmup::Integer=DEFAULT_WARMUP,
-    color::Bool=false,
-    show_divergence_scale::Bool=true,
-    show_base::Bool=false,
-    axis::Bool=false,
-    image_source::Symbol=:polygon,
-    image_path::Union{Nothing,AbstractString}=nothing,
-    image_iterations::Integer=1,
-    polygon_limits_mode::Symbol=:ifs,
-    backend::Symbol=:cpu,
-    initial_polygon::Symbol=:default,
-    resolution::Tuple{Int,Int}=RESOLUTION,
-    outpath::AbstractString="media/render.png",
-    ifs_index::Union{Nothing,Integer}=nothing,
-    ifs_name::Union{Nothing,AbstractString}=nothing,
-    iterations::Union{Nothing,Integer}=nothing,
-    deterministic_depth::Integer=1,
-    inverse_depth::Integer=8,
-    input_fn=readline,
+    method::Union{RenderMethod,Symbol,AbstractString} = Chaos,
+    npoints::Union{Nothing,Integer}                   = nothing,
+    warmup::Integer                                   = DEFAULT_WARMUP,
+    resolution::Tuple{Int,Int}                        = RESOLUTION,
+    outpath::AbstractString                           = "media/render.png",
+    backend::Symbol                                   = :cpu,
+    ifs_index::Union{Nothing,Integer}                 = nothing,
+    ifs_name::Union{Nothing,AbstractString}           = nothing,
+    input_fn                                          = readline,
+    kwargs...
 )
     parsed_method = _parse_render_method(method)
     render_method = parsed_method == Parallel ? Chaos : parsed_method
 
-    det_iters, inv_iters = _resolve_render_iterations(iterations, deterministic_depth, inverse_depth)
+    if render_method == ImageIterate && get(kwargs, :color, false) == true
+        throw(ArgumentError("color=true is not supported for method=ImageIterate. ImageIterate is grayscale-only."))
+    end
 
-    _warn_irrelevant_kwargs(render_method;
-        image_source=image_source, image_path=image_path,
-        image_iterations=image_iterations, polygon_limits_mode=polygon_limits_mode,
-        initial_polygon=initial_polygon, show_divergence_scale=show_divergence_scale,
-        color=color)
-
-    ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index, ifs_name=ifs_name, input_fn=input_fn)
+    shared = (; npoints, warmup, resolution, outpath, backend, ifs_index, ifs_name, input_fn)
 
     if render_method == Chaos
-        iterate!(ifs; warmup=warmup)
-        img = make_image(ifs; resolution=resolution, backend=backend)
-        if color
-            img = iterate_image(ifs, img; colors=true, backend=backend)
-        end
-        final_outpath = _normalize_media_outpath(outpath)
-        save(final_outpath, img)
-        return (ifs=ifs, image=img, outpath=final_outpath, method=:chaos)
-
+        return render_chaos(input; shared..., kwargs...)
     elseif render_method == PointDeterministic
-        rendered_ifs = deterministic_iterate(ifs, det_iters; warmup=warmup)
-        img = make_image(rendered_ifs; resolution=resolution, backend=backend)
-        if color
-            img = iterate_image(ifs, img; colors=true, backend=backend)
-        end
-        final_outpath = _normalize_media_outpath(outpath)
-        save(final_outpath, img)
-        return (ifs=rendered_ifs, image=img, outpath=final_outpath, method=:point_deterministic)
-
+        return render_point_deterministic(input; shared..., kwargs...)
     elseif render_method == Inverse
-        img = rasterize_image_inversely(ifs, inv_iters, ifs.limits;
-                                        resolution=resolution,
-                                        show_divergence_scale=show_divergence_scale,
-                                        backend=backend)
-        if color
-            img = iterate_image(ifs, img; colors=true, backend=backend)
-        end
-        final_outpath = _normalize_media_outpath(outpath)
-        save(final_outpath, img)
-        return (ifs=ifs, image=img, outpath=final_outpath, method=:inverse)
-
-    elseif render_method == RenderTransformations
-        img = _render_transformations_image(ifs;
-                                            width=resolution[2],
-                                            height=resolution[1],
-                                            show_base=show_base,
-                                            initial_polygon=initial_polygon,
-                                            color=color,
-                                            axis=axis)
-        final_outpath = _normalize_media_outpath(outpath)
-        save(final_outpath, img)
-        return (ifs=ifs, image=img, outpath=final_outpath, method=:render_transformations)
-
-    else  # ImageIterate
-        img = _resolve_image_source(ifs, image_source, image_path, resolution, warmup,
-                                    det_iters, det_iters,
-                                    polygon_limits_mode, true, initial_polygon, backend)
-        for _ in 1:image_iterations
-            img = iterate_image(ifs, img; colors=false, backend=backend)
-        end
-        final_outpath = _normalize_media_outpath(outpath)
-        save(final_outpath, img)
-        return (ifs=ifs, image=img, outpath=final_outpath, method=:image_iterate)
+        return render_inverse(input; shared..., kwargs...)
+    elseif render_method == ImageIterate
+        return render_image_iterate(input; shared..., kwargs...)
+    else  # RenderTransformations — warmup and backend are not forwarded (unused)
+        return render_transformations(input;
+                                      npoints, resolution, outpath,
+                                      ifs_index, ifs_name, input_fn,
+                                      kwargs...)
     end
 end
