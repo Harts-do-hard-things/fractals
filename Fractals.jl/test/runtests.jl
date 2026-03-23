@@ -6,6 +6,7 @@ using Random
 using FileIO
 using Colors
 using JSON3
+using Printf
 
 function _env_flag(name::AbstractString)::Bool
     value = get(ENV, name, "")
@@ -277,6 +278,78 @@ end
         @test_throws ArgumentError render_interpolation_frames(left, right; frames=2, outdir=tmp, basename=" ")
         @test_throws ArgumentError render_interpolation_frames(left, right; frames=2, outdir=tmp, render_method=Chaos)
         @test_throws ArgumentError render_interpolation_frames(left, mismatch; frames=2, outdir=tmp)
+    end
+end
+
+@testset "Animation Export Helpers" begin
+    mktempdir() do tmp
+        missing_dir = joinpath(tmp, "missing_frames")
+        err = _capture_exception(() -> export_animation(:gif;
+                                                        frames_dir=missing_dir,
+                                                        basename="anim",
+                                                        outpath=joinpath(tmp, "out.gif"),
+                                                        ffmpeg_cmd="definitely_missing_ffmpeg_binary"))
+        @test err isa ArgumentError
+        @test occursin("frames_dir", sprint(showerror, err))
+
+        frames_dir = joinpath(tmp, "frames")
+        mkpath(frames_dir)
+        no_frames_err = _capture_exception(() -> export_animation(:gif;
+                                                                  frames_dir=frames_dir,
+                                                                  basename="anim",
+                                                                  outpath=joinpath(tmp, "out.gif"),
+                                                                  ffmpeg_cmd="definitely_missing_ffmpeg_binary"))
+        @test no_frames_err isa ArgumentError
+        @test occursin("No PNG frames matching", sprint(showerror, no_frames_err))
+
+        for i in 1:3
+            img = fill(Gray{Float32}(0.0f0), 12, 12)
+            img[2+i:5+i, 3:6] .= Gray{Float32}(1.0f0)
+            save(joinpath(frames_dir, @sprintf("anim_%04d.png", i)), img)
+        end
+
+        missing_ffmpeg = _capture_exception(() -> export_animation(:gif;
+                                                                   frames_dir=frames_dir,
+                                                                   basename="anim",
+                                                                   outpath=joinpath(tmp, "nested", "anim.gif"),
+                                                                   ffmpeg_cmd="definitely_missing_ffmpeg_binary"))
+        @test missing_ffmpeg isa ArgumentError
+        @test occursin("ffmpeg executable", sprint(showerror, missing_ffmpeg))
+
+        start_gap_dir = joinpath(tmp, "gap_frames")
+        mkpath(start_gap_dir)
+        save(joinpath(start_gap_dir, "gap_0002.png"), fill(Gray{Float32}(1.0f0), 8, 8))
+        gap_err = _capture_exception(() -> export_animation(:mp4;
+                                                            frames_dir=start_gap_dir,
+                                                            basename="gap",
+                                                            outpath=joinpath(tmp, "gap.mp4"),
+                                                            ffmpeg_cmd="definitely_missing_ffmpeg_binary"))
+        @test gap_err isa ArgumentError
+        @test occursin("must start at", sprint(showerror, gap_err))
+
+        if !isnothing(Sys.which("ffmpeg"))
+            gif_out = joinpath(tmp, "nested", "anim.gif")
+            gif_result = export_animation(:gif;
+                                          frames_dir=frames_dir,
+                                          basename="anim",
+                                          outpath=gif_out,
+                                          fps=6)
+            @test gif_result.format == :gif
+            @test isfile(gif_result.outpath)
+            @test filesize(gif_result.outpath) > 0
+
+            mp4_out = joinpath(tmp, "nested", "anim.mp4")
+            mp4_result = export_animation(:mp4;
+                                          frames_dir=frames_dir,
+                                          basename="anim",
+                                          outpath=mp4_out,
+                                          fps=6)
+            @test mp4_result.format == :mp4
+            @test isfile(mp4_result.outpath)
+            @test filesize(mp4_result.outpath) > 0
+        else
+            @test_skip "ffmpeg available"
+        end
     end
 end
 
@@ -1156,6 +1229,17 @@ end
         line_img = load(png_line)
         @test count(px -> alpha(px) > 0, line_img) > 0
 
+        default_preset = initial_polygon()
+        png_default_preset = render_transformations_png(ifs;
+                                                        outpath=joinpath(tmp, "maps_default_preset_$suffix.png"),
+                                                        width=192,
+                                                        height=192,
+                                                        initial_polygon=default_preset,
+                                                        color=false)
+        @test isfile(png_default_preset)
+        default_img = load(png_default_preset)
+        @test count(px -> alpha(px) > 0, default_img) > 0
+
         @test_throws ArgumentError render_transformations_png(ifs;
                                                               outpath=joinpath(tmp, "never_write_badpoly_$suffix.png"),
                                                               initial_polygon=:not_a_polygon)
@@ -1340,6 +1424,55 @@ end
         @test poly_seed_default.image == poly_seed.image
     end
 
+end
+
+@testset "Image Source Resolution" begin
+    mktempdir() do tmp
+        ifs = IFS(SMALL_EQ; npoints=400)
+        res = (32, 32)
+
+        polygon_img = Fractals._resolve_image_source(ifs, :polygon, nothing, res, 5, 1, 2, :ifs, true, initial_polygon(:line), :cpu)
+        @test size(polygon_img) == res
+        @test eltype(polygon_img) <: AbstractFloat
+        @test count(>(0f0), polygon_img) > 0
+
+        polygon_default = @test_logs (:warn, r"polygon_limits_mode=:default is treated as :ifs") Fractals._resolve_image_source(
+            ifs, :polygon, nothing, res, 5, 1, 2, :default, true, initial_polygon(:line), :cpu
+        )
+        @test polygon_default == polygon_img
+
+        chaos_img = Fractals._resolve_image_source(ifs, :chaos, nothing, res, 5, 1, 2, :ifs, true, initial_polygon(), :cpu)
+        @test size(chaos_img) == res
+        @test eltype(chaos_img) <: AbstractFloat
+
+        deterministic_img = Fractals._resolve_image_source(ifs, :point_deterministic, nothing, res, 5, 1, 2, :ifs, true, initial_polygon(), :cpu)
+        @test size(deterministic_img) == res
+        @test eltype(deterministic_img) <: AbstractFloat
+
+        inverse_img = Fractals._resolve_image_source(ifs, :inverse, nothing, res, 5, 1, 2, :ifs, false, initial_polygon(), :cpu)
+        @test size(inverse_img) == res
+        @test eltype(inverse_img) <: AbstractFloat
+
+        src = fill(Gray{Float32}(0.0f0), res...)
+        src[8:24, 8:24] .= Gray{Float32}(1.0f0)
+        p = joinpath(tmp, "resolver_seed.png")
+        save(p, src)
+        file_img = Fractals._resolve_image_source(ifs, :file, p, res, 5, 1, 2, :ifs, true, initial_polygon(), :cpu)
+        @test size(file_img) == res
+        @test file_img == Float32.(Gray.(src))
+
+        err = try
+            Fractals._resolve_image_source(ifs, :bad_source, nothing, res, 5, 1, 2, :ifs, true, initial_polygon(), :cpu)
+            nothing
+        catch caught
+            caught
+        end
+        @test err isa ArgumentError
+        @test occursin("Supported: :polygon, :chaos, :point_deterministic, :inverse, :file", sprint(showerror, err))
+        @test_throws ArgumentError Fractals._resolve_image_source(ifs, :file, nothing, res, 5, 1, 2, :ifs, true, initial_polygon(), :cpu)
+        @test_throws ArgumentError Fractals._resolve_image_source(ifs, :file, joinpath(tmp, "missing.png"), res, 5, 1, 2, :ifs, true, initial_polygon(), :cpu)
+        @test_throws ArgumentError Fractals._resolve_image_source(ifs, :polygon, nothing, res, 5, 1, 2, :bad_mode, true, initial_polygon(), :cpu)
+    end
 end
 
 @testset "Snapshot Image Tests" begin

@@ -99,7 +99,7 @@ function render_inverse(
     return (ifs=ifs, image=img, outpath=final_outpath, method=:inverse)
 end
 
-function render_image_iterate(
+function _render_image_iterate_impl(
     input;
     npoints::Union{Nothing,Integer}             = nothing,
     warmup::Integer                             = DEFAULT_WARMUP,
@@ -108,7 +108,7 @@ function render_image_iterate(
     image_path::Union{Nothing,AbstractString}   = nothing,
     image_iterations::Integer                   = 1,
     polygon_limits_mode::Symbol                 = :ifs,
-    initial_polygon::Symbol                     = :default,
+    initial_polygon_spec::Symbol                = :default,
     resolution::Tuple{Int,Int}                  = RESOLUTION,
     outpath::AbstractString                     = "media/render.png",
     backend::Symbol                             = :cpu,
@@ -123,11 +123,10 @@ function render_image_iterate(
     image_iterations > 0 || throw(ArgumentError("image_iterations must be > 0, got $image_iterations"))
     resolution[1] > 0 && resolution[2] > 0 || throw(ArgumentError("resolution must be positive, got $resolution"))
     backend in (:cpu, :gpu, :auto) || throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
-    image_source in (:polygon, :chaos, :point_deterministic, :inverse, :file) ||
-        throw(ArgumentError("Invalid image_source '$image_source'. Supported: :polygon, :chaos, :point_deterministic, :inverse, :file"))
+    _validate_image_source(image_source)
     polygon_limits_mode in (:ifs, :default) ||
         throw(ArgumentError("Invalid polygon_limits_mode '$polygon_limits_mode'. Supported: :ifs, :default"))
-    preset = _resolve_initial_polygon(initial_polygon)
+    preset = _resolve_initial_polygon(initial_polygon_spec)
     image_source == :file && isnothing(image_path) &&
         throw(ArgumentError("image_path is required when image_source=:file"))
 
@@ -144,6 +143,70 @@ function render_image_iterate(
     return (ifs=ifs, image=img, outpath=final_outpath, method=:image_iterate)
 end
 
+function render_image_iterate(
+    input;
+    npoints::Union{Nothing,Integer}             = nothing,
+    warmup::Integer                             = DEFAULT_WARMUP,
+    iterations::Integer                         = 1,
+    image_source::Symbol                        = :polygon,
+    image_path::Union{Nothing,AbstractString}   = nothing,
+    image_iterations::Integer                   = 1,
+    polygon_limits_mode::Symbol                 = :ifs,
+    initial_polygon::Symbol                     = :default,
+    resolution::Tuple{Int,Int}                  = RESOLUTION,
+    outpath::AbstractString                     = "media/render.png",
+    backend::Symbol                             = :cpu,
+    ifs_index::Union{Nothing,Integer}           = nothing,
+    ifs_name::Union{Nothing,AbstractString}     = nothing,
+    input_fn                                    = readline,
+)
+    return _render_image_iterate_impl(input;
+                                      npoints=npoints,
+                                      warmup=warmup,
+                                      iterations=iterations,
+                                      image_source=image_source,
+                                      image_path=image_path,
+                                      image_iterations=image_iterations,
+                                      polygon_limits_mode=polygon_limits_mode,
+                                      initial_polygon_spec=initial_polygon,
+                                      resolution=resolution,
+                                      outpath=outpath,
+                                      backend=backend,
+                                      ifs_index=ifs_index,
+                                      ifs_name=ifs_name,
+                                      input_fn=input_fn)
+end
+
+function _render_transformations_impl(
+    input;
+    npoints::Union{Nothing,Integer}             = nothing,
+    show_base::Bool                             = false,
+    axis::Bool                                  = false,
+    color::Bool                                 = true,
+    initial_polygon_spec::Symbol                = :default,
+    resolution::Tuple{Int,Int}                  = RESOLUTION,
+    outpath::AbstractString                     = "media/render.png",
+    ifs_index::Union{Nothing,Integer}           = nothing,
+    ifs_name::Union{Nothing,AbstractString}     = nothing,
+    input_fn                                    = readline,
+)
+    isnothing(npoints) || npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
+    resolution[1] > 0 && resolution[2] > 0 || throw(ArgumentError("resolution must be positive, got $resolution"))
+    preset = _resolve_initial_polygon(initial_polygon_spec)
+
+    ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index, ifs_name=ifs_name, input_fn=input_fn)
+    img = _render_transformations_image(ifs;
+                                        width=resolution[2],
+                                        height=resolution[1],
+                                        show_base=show_base,
+                                        initial_polygon_spec=preset,
+                                        color=color,
+                                        axis=axis)
+    final_outpath = _normalize_media_outpath(outpath)
+    save(final_outpath, img)
+    return (ifs=ifs, image=img, outpath=final_outpath, method=:render_transformations)
+end
+
 function render_transformations(
     input;
     npoints::Union{Nothing,Integer}             = nothing,
@@ -157,21 +220,17 @@ function render_transformations(
     ifs_name::Union{Nothing,AbstractString}     = nothing,
     input_fn                                    = readline,
 )
-    isnothing(npoints) || npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
-    resolution[1] > 0 && resolution[2] > 0 || throw(ArgumentError("resolution must be positive, got $resolution"))
-    preset = _resolve_initial_polygon(initial_polygon)
-
-    ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index, ifs_name=ifs_name, input_fn=input_fn)
-    img = _render_transformations_image(ifs;
-                                        width=resolution[2],
-                                        height=resolution[1],
+    return _render_transformations_impl(input;
+                                        npoints=npoints,
                                         show_base=show_base,
-                                        initial_polygon=preset,
+                                        axis=axis,
                                         color=color,
-                                        axis=axis)
-    final_outpath = _normalize_media_outpath(outpath)
-    save(final_outpath, img)
-    return (ifs=ifs, image=img, outpath=final_outpath, method=:render_transformations)
+                                        initial_polygon_spec=initial_polygon,
+                                        resolution=resolution,
+                                        outpath=outpath,
+                                        ifs_index=ifs_index,
+                                        ifs_name=ifs_name,
+                                        input_fn=input_fn)
 end
 
 # --------------------------------

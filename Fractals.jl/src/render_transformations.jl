@@ -71,9 +71,9 @@ end
 function _collect_transformed_base_segments(
     ifs;
     show_base::Bool=false,
-    initial_polygon::Union{InitialPolygonPreset,Symbol}=:default,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
 )
-    preset = _resolve_initial_polygon(initial_polygon)
+    preset = _resolve_initial_polygon(initial_polygon_spec)
     base_segments = preset.segments
     transformed_by_map = Vector{Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}}(undef, length(ifs.maps))
     all_segments = Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}()
@@ -91,18 +91,18 @@ function _collect_transformed_base_segments(
     return preset, base_segments, transformed_by_map, all_segments
 end
 
-function render_transformations_svg(
+function _render_transformations_svg_impl(
     ifs;
     outpath::AbstractString="media/affine_maps.svg",
     width::Int=1200,
     height::Int=1200,
     show_base::Bool=false,
-    initial_polygon::Union{InitialPolygonPreset,Symbol}=:default,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
     stroke_width::Real=2.0,
     axis::Bool=false,
 )
     _, base_segments, transformed_by_map, _ =
-        _collect_transformed_base_segments(ifs; show_base=show_base, initial_polygon=initial_polygon)
+        _collect_transformed_base_segments(ifs; show_base=show_base, initial_polygon_spec=initial_polygon_spec)
     colors = _map_colors(length(transformed_by_map))
 
     sx, sy, ox, oy = _projection_from_limits(ifs.limits, width, height)
@@ -175,6 +175,26 @@ $body
     return final_outpath
 end
 
+function render_transformations_svg(
+    ifs;
+    outpath::AbstractString="media/affine_maps.svg",
+    width::Int=1200,
+    height::Int=1200,
+    show_base::Bool=false,
+    initial_polygon::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+    stroke_width::Real=2.0,
+    axis::Bool=false,
+)
+    return _render_transformations_svg_impl(ifs;
+                                            outpath=outpath,
+                                            width=width,
+                                            height=height,
+                                            show_base=show_base,
+                                            initial_polygon_spec=initial_polygon,
+                                            stroke_width=stroke_width,
+                                            axis=axis)
+end
+
 function _draw_line!(
     img::AbstractMatrix{RGBA{Float32}},
     x1::Real, y1::Real, x2::Real, y2::Real,
@@ -238,12 +258,12 @@ function _render_transformations_image(
     width::Int=1200,
     height::Int=1200,
     show_base::Bool=false,
-    initial_polygon::Union{InitialPolygonPreset,Symbol}=:default,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
     color::Bool=true,
     axis::Bool=false,
 )
     _, base_segments, transformed_by_map, _ =
-        _collect_transformed_base_segments(ifs; show_base=show_base, initial_polygon=initial_polygon)
+        _collect_transformed_base_segments(ifs; show_base=show_base, initial_polygon_spec=initial_polygon_spec)
     map_colors = _map_colors(length(transformed_by_map))
     img = fill(RGBA{Float32}(0.0f0, 0.0f0, 0.0f0, 0.0f0), height, width)
     limits = ifs.limits
@@ -278,13 +298,13 @@ function _render_transformations_image(
     return img
 end
 
-function render_transformations_png(
+function _render_transformations_png_impl(
     ifs;
     outpath::AbstractString="media/affine_maps.png",
     width::Int=1200,
     height::Int=1200,
     show_base::Bool=false,
-    initial_polygon::Union{InitialPolygonPreset,Symbol}=:default,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
     color::Bool=true,
     axis::Bool=false,
 )
@@ -292,13 +312,33 @@ function render_transformations_png(
                                         width=width,
                                         height=height,
                                         show_base=show_base,
-                                        initial_polygon=initial_polygon,
+                                        initial_polygon_spec=initial_polygon_spec,
                                         color=color,
                                         axis=axis)
 
     final_outpath = _normalize_media_outpath(outpath)
     save(final_outpath, img)
     return final_outpath
+end
+
+function render_transformations_png(
+    ifs;
+    outpath::AbstractString="media/affine_maps.png",
+    width::Int=1200,
+    height::Int=1200,
+    show_base::Bool=false,
+    initial_polygon::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+    color::Bool=true,
+    axis::Bool=false,
+)
+    return _render_transformations_png_impl(ifs;
+                                            outpath=outpath,
+                                            width=width,
+                                            height=height,
+                                            show_base=show_base,
+                                            initial_polygon_spec=initial_polygon,
+                                            color=color,
+                                            axis=axis)
 end
 
 const _render_transformations_png_from_base_l_svg = render_transformations_png

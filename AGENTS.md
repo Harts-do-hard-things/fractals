@@ -65,7 +65,7 @@
 
 ### Release Checklist
 - [ ] Confirm working tree is clean and branch is up to date with target base branch.
-  Local status on 2026-03-18: working tree is clean, but `HEAD` is 3 commits ahead of `origin/julia-fractals`, so this is not yet a release-ready synced branch state.
+  Local status on 2026-03-23: working tree is not clean, so this is not yet a release-ready synced branch state.
 - [x] Bump project version in package metadata as needed for the release.
 - [x] Update changelog/release notes text to summarize user-visible API/CLI/docs changes.
 - [x] Run full test suite:
@@ -88,7 +88,7 @@ Release-state note:
 ### Animation
 - [x] Add transform interpolation for animated sequences.
 - [x] Add frame renderer (`media/frames/...`) with deterministic naming.
-- [ ] Add GIF/MP4 export helper scripts.
+- [x] Add GIF/MP4 export helper scripts.
 
 ---
 
@@ -109,7 +109,7 @@ Note: milestone checks below are based on repository state; live CI pass/fail de
 
 ### M3 (Day 90)
 - [ ] Enhanced rendering controls shipped
-- [ ] Animation workflow documented and tested
+- [x] Animation workflow documented and tested
 - [ ] Release process established for regular tagged versions (tag history exists, but package metadata/changelog/tagging flow are not yet aligned)
 
 ---

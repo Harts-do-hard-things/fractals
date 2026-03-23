@@ -190,3 +190,35 @@ println.(frames.paths)
 ```
 
 This first frame-renderer path currently targets `RenderTransformations` only, with deterministic file names like `recipe_anim_0001.png`.
+
+Convert those frames into an animation artifact with `ffmpeg`:
+
+```julia
+gif = export_animation(:gif;
+                       frames_dir="media/frames",
+                       basename="recipe_anim",
+                       outpath="media/recipe_anim.gif",
+                       fps=12)
+
+mp4 = export_animation(:mp4;
+                       frames_dir="media/frames",
+                       basename="recipe_anim",
+                       outpath="media/recipe_anim.mp4",
+                       fps=12)
+```
+
+Equivalent helper scripts are available for shell workflows:
+
+```bash
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/export_gif.jl \
+  --frames-dir media/frames \
+  --basename recipe_anim \
+  --out media/recipe_anim.gif \
+  --fps 12
+
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/export_mp4.jl \
+  --frames-dir media/frames \
+  --basename recipe_anim \
+  --out media/recipe_anim.mp4 \
+  --fps 12
+```

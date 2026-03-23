@@ -59,6 +59,85 @@ function _limits_from_points(points::Vector{SVector{2,Float64}})
     return compute_limits(points)
 end
 
+struct ImageSourceRequest
+    ifs::IFS
+    image_source::Symbol
+    image_path::Union{Nothing,AbstractString}
+    resolution::Tuple{Int,Int}
+    warmup::Int
+    deterministic_iters::Int
+    inverse_iters::Int
+    polygon_limits_mode::Symbol
+    show_divergence_scale::Bool
+    initial_polygon_spec::InitialPolygonPreset
+    backend::Symbol
+end
+
+const _IMAGE_SOURCE_CHOICES = (:polygon, :chaos, :point_deterministic, :inverse, :file)
+
+@inline function _image_source_names_text()
+    return join(":" .* string.(_IMAGE_SOURCE_CHOICES), ", ")
+end
+
+@inline function _validate_image_source(image_source::Symbol)
+    image_source in _IMAGE_SOURCE_CHOICES ||
+        throw(ArgumentError("Invalid image_source '$image_source'. Supported: $(_image_source_names_text())"))
+    return image_source
+end
+
+function _resolve_image_source_from_file(req::ImageSourceRequest)
+    isnothing(req.image_path) && throw(ArgumentError("image_path is required when image_source=:file"))
+    isfile(req.image_path) || throw(ArgumentError("image_path '$(req.image_path)' does not exist"))
+    return _to_grayscale_matrix(load(req.image_path))
+end
+
+function _resolve_image_source_from_chaos(req::ImageSourceRequest)
+    tifs = IFS(req.ifs.name, req.ifs.docs, copy(req.ifs.points), req.ifs.maps, req.ifs.weights, req.ifs.limits)
+    iterate!(tifs; warmup=req.warmup)
+    return make_image(tifs; resolution=req.resolution, backend=req.backend)
+end
+
+function _resolve_image_source_from_point_deterministic(req::ImageSourceRequest)
+    tifs = deterministic_iterate(req.ifs, req.deterministic_iters; warmup=req.warmup)
+    return make_image(tifs; resolution=req.resolution, backend=req.backend)
+end
+
+function _resolve_image_source_from_inverse(req::ImageSourceRequest)
+    return rasterize_image_inversely(req.ifs, req.inverse_iters, req.ifs.limits;
+                                     resolution=req.resolution,
+                                     show_divergence_scale=req.show_divergence_scale,
+                                     backend=req.backend)
+end
+
+function _resolve_image_source_from_polygon(req::ImageSourceRequest)
+    if req.polygon_limits_mode == :default
+        @warn "polygon_limits_mode=:default is treated as :ifs for image_source=:polygon."
+    elseif req.polygon_limits_mode != :ifs
+        throw(ArgumentError("Invalid polygon_limits_mode '$(req.polygon_limits_mode)'. Supported: :ifs, :default"))
+    end
+    return _to_grayscale_matrix(_render_transformations_image(req.ifs;
+                                                              width=req.resolution[2],
+                                                              height=req.resolution[1],
+                                                              show_base=false,
+                                                              initial_polygon_spec=req.initial_polygon_spec,
+                                                              color=false))
+end
+
+const _IMAGE_SOURCE_DISPATCH = Dict{Symbol,Function}(
+    :file => _resolve_image_source_from_file,
+    :chaos => _resolve_image_source_from_chaos,
+    :point_deterministic => _resolve_image_source_from_point_deterministic,
+    :inverse => _resolve_image_source_from_inverse,
+    :polygon => _resolve_image_source_from_polygon,
+)
+
+function _resolve_image_source(req::ImageSourceRequest)
+    handler = get(_IMAGE_SOURCE_DISPATCH, _validate_image_source(req.image_source), nothing)
+    handler === nothing &&
+        throw(ArgumentError("Invalid image_source '$(req.image_source)'. Supported: $(_image_source_names_text())"))
+    return handler(req)
+end
+
 function _resolve_image_source(
     ifs::IFS,
     image_source::Symbol,
@@ -69,40 +148,22 @@ function _resolve_image_source(
     inverse_iters::Integer,
     polygon_limits_mode::Symbol,
     show_divergence_scale::Bool,
-    initial_polygon::Union{InitialPolygonPreset,Symbol}=:default,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
     backend::Symbol=:cpu
 )
-    if image_source == :file
-        isnothing(image_path) && throw(ArgumentError("image_path is required when image_source=:file"))
-        isfile(image_path) || throw(ArgumentError("image_path '$image_path' does not exist"))
-        return _to_grayscale_matrix(load(image_path))
-    elseif image_source == :chaos
-        tifs = IFS(ifs.name, ifs.docs, copy(ifs.points), ifs.maps, ifs.weights, ifs.limits)
-        iterate!(tifs; warmup=warmup)
-        return make_image(tifs; resolution=resolution, backend=backend)
-    elseif image_source == :point_deterministic
-        tifs = deterministic_iterate(ifs, deterministic_iters; warmup=warmup)
-        return make_image(tifs; resolution=resolution, backend=backend)
-    elseif image_source == :inverse
-        return rasterize_image_inversely(ifs, inverse_iters, ifs.limits;
-                                         resolution=resolution,
-                                         show_divergence_scale=show_divergence_scale,
-                                         backend=backend)
-    elseif image_source == :polygon
-        if polygon_limits_mode == :default
-            @warn "polygon_limits_mode=:default is treated as :ifs for image_source=:polygon."
-        elseif polygon_limits_mode != :ifs
-            throw(ArgumentError("Invalid polygon_limits_mode '$polygon_limits_mode'. Supported: :ifs, :default"))
-        end
-        return _to_grayscale_matrix(_render_transformations_image(ifs;
-                                                                   width=resolution[2],
-                                                                   height=resolution[1],
-                                                                   show_base=false,
-                                                                   initial_polygon=initial_polygon,
-                                                                   color=false))
-    end
-
-    throw(ArgumentError("Invalid image_source '$image_source'. Supported: :polygon, :chaos, :point_deterministic, :inverse, :file"))
+    return _resolve_image_source(ImageSourceRequest(
+        ifs,
+        image_source,
+        image_path,
+        resolution,
+        Int(warmup),
+        Int(deterministic_iters),
+        Int(inverse_iters),
+        polygon_limits_mode,
+        show_divergence_scale,
+        _resolve_initial_polygon(initial_polygon_spec),
+        backend,
+    ))
 end
 
 function _iterate_image_gpu(

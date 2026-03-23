@@ -102,6 +102,7 @@ result = render(EISENSTEIN;
 `rasterize_image_inversely` also supports `mode=:exact|:preview` (`:exact` is default and parity-oriented).
 `interpolate_eq_matrix(...)` and `interpolate_ifs(...)` provide transform interpolation primitives for animation-oriented workflows.
 `render_interpolation_frames(...)` renders deterministic numbered PNG frame sequences into a chosen directory for transformation-preview animation workflows.
+`export_animation(:gif|:mp4; ...)` converts those numbered PNG frames into GIF or MP4 artifacts via `ffmpeg`.
 For `method=:point_deterministic` and `method=:inverse`, use `iterations=...` to control iteration depth.
 For `.ifs` files with multiple definitions, select one with `ifs_index=...` or `ifs_name=...`.
 

@@ -245,6 +245,7 @@ Interpolation behavior:
 - `interpolate_ifs(left, right, t)` blends map coefficients, translations, normalized weights, and by default also blends `ifs.limits` with `limits_mode=:interpolate`.
 - `limits_mode=:left|:right|:recompute` is available when a fixed or freshly sampled camera box is preferred.
 - `render_interpolation_frames(left, right; frames, outdir, basename, render_method=RenderTransformations, ...)` writes deterministic numbered PNG frames such as `dragon_0001.png`.
+- `export_animation(:gif|:mp4; frames_dir, basename, outpath, fps=12)` converts those numbered PNG frames into an animation artifact via `ffmpeg`.
 - Current scope is intentionally narrow: `render_method=RenderTransformations` only, which keeps the first animation frame pipeline deterministic and easy to test.
 
 ```julia
@@ -262,7 +263,28 @@ frames = render_interpolation_frames(start, finish;
                                      color=true,
                                      initial_polygon=:line_arrow,
                                      axis=true)
+
+gif = export_animation(:gif;
+                       frames_dir="media/frames",
+                       basename="dragon_morph",
+                       outpath="media/dragon_morph.gif",
+                       fps=12)
+
+mp4 = export_animation(:mp4;
+                       frames_dir="media/frames",
+                       basename="dragon_morph",
+                       outpath="media/dragon_morph.mp4",
+                       fps=12)
 ```
+
+Shell helpers are also available:
+
+```bash
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/export_gif.jl --frames-dir media/frames --basename dragon_morph --out media/dragon_morph.gif --fps 12
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/export_mp4.jl --frames-dir media/frames --basename dragon_morph --out media/dragon_morph.mp4 --fps 12
+```
+
+`ffmpeg` must be installed and available on `PATH`. The helper expects deterministic frame names in the form `basename_0001.png`, `basename_0002.png`, and so on.
 
 ### Parse from file and render interactively
 

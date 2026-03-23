@@ -180,7 +180,7 @@ function render_interpolation_frames(
                                             width=get(kwargs, :resolution, RESOLUTION)[2],
                                             height=get(kwargs, :resolution, RESOLUTION)[1],
                                             show_base=get(kwargs, :show_base, false),
-                                            initial_polygon=get(kwargs, :initial_polygon, :default),
+                                            initial_polygon_spec=get(kwargs, :initial_polygon, :default),
                                             color=get(kwargs, :color, false),
                                             axis=get(kwargs, :axis, false))
         save(path, img)
@@ -192,5 +192,91 @@ function render_interpolation_frames(
         paths=paths,
         ts=ts,
         render_method=_render_method_symbol(parsed_method),
+    )
+end
+
+function _animation_frame_pattern(basename::AbstractString)
+    stripped = strip(String(basename))
+    isempty(stripped) && throw(ArgumentError("basename must be non-empty"))
+    return Regex("^" * escape_string(stripped) * "_\\d{4}\\.png\$")
+end
+
+function _animation_frame_paths(
+    frames_dir::AbstractString,
+    basename::AbstractString,
+)
+    isdir(frames_dir) || throw(ArgumentError("frames_dir '$frames_dir' does not exist"))
+    pattern = _animation_frame_pattern(basename)
+    matches = sort(filter(name -> occursin(pattern, name), readdir(frames_dir)))
+    isempty(matches) &&
+        throw(ArgumentError("No PNG frames matching '$(strip(String(basename)))_####.png' were found in '$frames_dir'"))
+    first(matches) == "$(strip(String(basename)))_0001.png" ||
+        throw(ArgumentError("Frame sequence in '$frames_dir' must start at '$(strip(String(basename)))_0001.png'"))
+    return joinpath.(Ref(String(frames_dir)), matches)
+end
+
+function _resolve_ffmpeg(ffmpeg_cmd::AbstractString="ffmpeg")
+    path = Sys.which(ffmpeg_cmd)
+    isnothing(path) && throw(ArgumentError("ffmpeg executable '$ffmpeg_cmd' was not found on PATH"))
+    return path
+end
+
+function _run_ffmpeg(cmd::Cmd)
+    try
+        run(cmd)
+    catch err
+        if err isa ProcessFailedException
+            throw(ArgumentError("ffmpeg command failed: $(join(cmd.exec, ' '))"))
+        end
+        rethrow()
+    end
+    return nothing
+end
+
+"""
+    export_animation(format; frames_dir, basename, outpath, fps=12, ffmpeg_cmd="ffmpeg")
+
+Convert a deterministic numbered PNG frame sequence such as `basename_0001.png`
+into a GIF or MP4 animation using `ffmpeg`.
+"""
+function export_animation(
+    format::Symbol;
+    frames_dir::AbstractString,
+    basename::AbstractString,
+    outpath::AbstractString,
+    fps::Real=12,
+    ffmpeg_cmd::AbstractString="ffmpeg",
+)
+    format in (:gif, :mp4) ||
+        throw(ArgumentError("Invalid animation format '$format'. Supported: :gif, :mp4"))
+    fps > 0 || throw(ArgumentError("fps must be > 0, got $fps"))
+
+    frame_paths = _animation_frame_paths(frames_dir, basename)
+    ffmpeg = _resolve_ffmpeg(ffmpeg_cmd)
+
+    final_outpath = normpath(String(outpath))
+    mkpath(dirname(final_outpath))
+
+    input_pattern = joinpath(String(frames_dir), "$(strip(String(basename)))_%04d.png")
+
+    if format == :gif
+        palette_path = joinpath(dirname(final_outpath), "$(Base.Filesystem.basename(final_outpath)).palette.png")
+        try
+            _run_ffmpeg(`$ffmpeg -y -framerate $fps -i $input_pattern -vf palettegen $palette_path`)
+            _run_ffmpeg(`$ffmpeg -y -framerate $fps -i $input_pattern -i $palette_path -lavfi paletteuse $final_outpath`)
+        finally
+            isfile(palette_path) && rm(palette_path; force=true)
+        end
+    else
+        _run_ffmpeg(`$ffmpeg -y -framerate $fps -i $input_pattern -c:v libx264 -pix_fmt yuv420p $final_outpath`)
+    end
+
+    return (
+        format=format,
+        frames_dir=String(frames_dir),
+        basename=strip(String(basename)),
+        frame_paths=frame_paths,
+        fps=Float64(fps),
+        outpath=final_outpath,
     )
 end
