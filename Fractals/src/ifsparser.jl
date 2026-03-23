@@ -10,40 +10,6 @@ struct IFSToken
     line::Int
 end
 
-function _prompt_int(msg::AbstractString, default::Int)
-    print(msg)
-    line = readline()
-    isempty(strip(line)) && return default
-    try
-        return parse(Int, strip(line))
-    catch
-        println("Invalid number, using default $default")
-        return default
-    end
-end
-
-function _prompt_string(msg::AbstractString, default::AbstractString)
-    print(msg)
-    line = readline()
-    isempty(strip(line)) && return String(default)
-    return strip(line)
-end
-
-function _prompt_choice(msg::AbstractString, n::Int, default::Int)
-    print(msg)
-    line = readline()
-    isempty(strip(line)) && return default
-    try
-        choice = parse(Int, strip(line))
-        if 1 <= choice <= n
-            return choice
-        end
-    catch
-    end
-    println("Invalid choice, using default $default")
-    return default
-end
-
 function lex_ifs(input::AbstractString)
     tokens = IFSToken[]
     sizehint!(tokens, max(16, div(length(input), 32)))
@@ -205,50 +171,3 @@ function parse_ifs_file(path::AbstractString; npoints::Integer=DEFAULT_SAMPLES)
     return out
 end
 
-function prompt_ifs_and_render(path::AbstractString;
-                               npoints::Integer=DEFAULT_SAMPLES,
-                               resolution::Tuple{Int,Int}=RESOLUTION,
-                               outpath::AbstractString="media/output.png")
-    ifs_list = parse_ifs_file(path; npoints=npoints)
-    if isempty(ifs_list)
-        println("No IFS definitions found in: $path")
-        return nothing
-    end
-
-    println("IFS definitions in file:")
-    for (i, ifs) in enumerate(ifs_list)
-        doc_preview = isempty(ifs.docs) ? "" : " - " * first(split(ifs.docs, '\n'))
-        println("  [$i] $(ifs.name)$(doc_preview)")
-    end
-
-    idx = _prompt_choice("Select a fractal [1-$(length(ifs_list))] (default 1): ",
-                         length(ifs_list), 1)
-    ifs = ifs_list[idx]
-
-    println("Iteration methods:")
-    println("  [1] chaos auto-threaded (iterate!)")
-    println("  [2] chaos auto-threaded (iterate_parallel! alias)")
-    println("  [3] point deterministic (deterministic_iterate, n=1)")
-    method = _prompt_choice("Select method [1-3] (default 1): ", 3, 1)
-
-    npoints = _prompt_int("Number of points (default $(npoints)): ", npoints)
-    width = _prompt_int("Image width (default $(resolution[2])): ", resolution[2])
-    height = _prompt_int("Image height (default $(resolution[1])): ", resolution[1])
-    outpath = _prompt_string("Output path (default $(outpath)): ", outpath)
-
-    ifs = IFS(ifs.maps, ifs.weights; npoints=npoints, name=ifs.name, docs=ifs.docs, limits=ifs.limits)
-
-    if method == 1
-        iterate!(ifs)
-    elseif method == 2
-        iterate_parallel!(ifs)
-    else
-        ifs = deterministic_iterate(ifs, 1)
-    end
-
-    final_outpath = _normalize_media_outpath(outpath)
-    img = make_image(ifs; resolution=(height, width))
-    save(final_outpath, img)
-    println("Saved image to $(final_outpath)")
-    return ifs
-end
