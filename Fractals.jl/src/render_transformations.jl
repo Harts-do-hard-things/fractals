@@ -68,8 +68,13 @@ function _visible_world_bounds(sx, sy, ox, oy, width::Int, height::Int)
     return xmin, xmax, ymin, ymax
 end
 
-function _collect_transformed_base_segments(ifs; show_base::Bool=false, initial_polygon::Symbol=:default)
-    base_segments = _base_l_image(initial_polygon)
+function _collect_transformed_base_segments(
+    ifs;
+    show_base::Bool=false,
+    initial_polygon::Union{InitialPolygonPreset,Symbol}=:default,
+)
+    preset = _resolve_initial_polygon(initial_polygon)
+    base_segments = preset.segments
     transformed_by_map = Vector{Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}}(undef, length(ifs.maps))
     all_segments = Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}()
 
@@ -83,7 +88,7 @@ function _collect_transformed_base_segments(ifs; show_base::Bool=false, initial_
         append!(all_segments, transformed)
     end
 
-    return base_segments, transformed_by_map, all_segments
+    return preset, base_segments, transformed_by_map, all_segments
 end
 
 function render_transformations_svg(
@@ -92,11 +97,11 @@ function render_transformations_svg(
     width::Int=1200,
     height::Int=1200,
     show_base::Bool=false,
-    initial_polygon::Symbol=:default,
+    initial_polygon::Union{InitialPolygonPreset,Symbol}=:default,
     stroke_width::Real=2.0,
     axis::Bool=false,
 )
-    base_segments, transformed_by_map, _ =
+    _, base_segments, transformed_by_map, _ =
         _collect_transformed_base_segments(ifs; show_base=show_base, initial_polygon=initial_polygon)
     colors = _map_colors(length(transformed_by_map))
 
@@ -233,11 +238,11 @@ function _render_transformations_image(
     width::Int=1200,
     height::Int=1200,
     show_base::Bool=false,
-    initial_polygon::Symbol=:default,
+    initial_polygon::Union{InitialPolygonPreset,Symbol}=:default,
     color::Bool=true,
     axis::Bool=false,
 )
-    base_segments, transformed_by_map, _ =
+    _, base_segments, transformed_by_map, _ =
         _collect_transformed_base_segments(ifs; show_base=show_base, initial_polygon=initial_polygon)
     map_colors = _map_colors(length(transformed_by_map))
     img = fill(RGBA{Float32}(0.0f0, 0.0f0, 0.0f0, 0.0f0), height, width)
@@ -279,7 +284,7 @@ function render_transformations_png(
     width::Int=1200,
     height::Int=1200,
     show_base::Bool=false,
-    initial_polygon::Symbol=:default,
+    initial_polygon::Union{InitialPolygonPreset,Symbol}=:default,
     color::Bool=true,
     axis::Bool=false,
 )

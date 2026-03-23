@@ -34,6 +34,15 @@ function _skip_optional_gpu_parity!(name::AbstractString)
     @test_skip "GPU available"
 end
 
+function _capture_exception(f)
+    try
+        f()
+        return nothing
+    catch err
+        return err
+    end
+end
+
 _snapshot_path(name::AbstractString) = joinpath(SNAPSHOT_DIR, name * ".png")
 
 function _snapshot_diff_pixel(expected::Gray, actual::Gray)
@@ -187,6 +196,39 @@ end
     @test_throws ArgumentError interpolate_eq_matrix(left6, ones(3, 6), 0.5)
     @test_throws ArgumentError interpolate_ifs(left_ifs, right_ifs, 0.5; limits_mode=:bad)
     @test_throws ArgumentError interpolate_ifs(left_ifs, right_ifs, 0.5; npoints=-1)
+
+    recomputed = interpolate_ifs(left_ifs, right_ifs, 0.5; limits_mode=:recompute)
+    @test recomputed.limits == refresh_limits(recomputed; source=:maps).limits
+end
+
+@testset "Limits Refresh And Staleness" begin
+    ifs = IFS(SMALL_EQ; npoints=128, name="Limits", docs="stale limits")
+    original_limits = ifs.limits
+    iterate!(ifs; warmup=5, seed=4242)
+    @test ifs.limits == original_limits
+
+    shifted_points = [p + SVector{2,Float64}(25.0, -17.0) for p in ifs.points]
+    stale = IFS(ifs.name, ifs.docs, shifted_points, ifs.maps, ifs.weights, ifs.limits)
+    point_refreshed = refresh_limits(stale; source=:points)
+    @test point_refreshed.name == stale.name
+    @test point_refreshed.docs == stale.docs
+    @test point_refreshed.maps == stale.maps
+    @test collect(point_refreshed.weights) == collect(stale.weights)
+    @test point_refreshed.points == stale.points
+    @test point_refreshed.limits != stale.limits
+
+    maps_refreshed = refresh_limits(ifs; source=:maps)
+    @test maps_refreshed.limits == original_limits
+    @test maps_refreshed.points == ifs.points
+
+    bad_source = _capture_exception(() -> refresh_limits(ifs; source=:bad))
+    @test bad_source isa ArgumentError
+    @test occursin("Supported: :maps, :points", sprint(showerror, bad_source))
+
+    stale_wide = IFS(stale.name, stale.docs, stale.points, stale.maps, stale.weights, ((-100.0, 100.0), (-100.0, 100.0)))
+    stale_img = make_image(stale_wide; resolution=(32, 32), backend=:cpu)
+    refreshed_img = make_image(refresh_limits(stale_wide; source=:points); resolution=(32, 32), backend=:cpu)
+    @test stale_img != refreshed_img
 end
 
 @testset "Interpolation Frame Renderer" begin
@@ -1014,6 +1056,25 @@ end
 end
 
 @testset "Initial Polygon Presets" begin
+    @test supported_initial_polygons() == [:default, :equilateral_triangle, :line_arrow, :line]
+
+    for name in supported_initial_polygons()
+        preset = initial_polygon(name)
+        @test preset isa InitialPolygonPreset
+        @test preset.name == name
+        @test !isempty(preset.segments)
+        @test length(preset.limits) == 2
+    end
+
+    err = try
+        initial_polygon(:not_a_polygon)
+        nothing
+    catch ex
+        ex
+    end
+    @test err isa ArgumentError
+    @test occursin("Supported: default, equilateral_triangle, line_arrow, line", sprint(showerror, err))
+
     ifs = IFS(SMALL_EQ; npoints=20)
     mktempdir() do tmp
         suffix = randstring(8)

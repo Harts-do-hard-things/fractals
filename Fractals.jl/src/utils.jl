@@ -53,31 +53,37 @@ function _normalize_media_outpath(outpath::AbstractString)
 end
 
 @inline function _initial_polygon_names_text()
-    return join(string.(collect(_INITIAL_POLYGON_NAMES)), ", ")
+    return join(string.(supported_initial_polygons()), ", ")
 end
 
-function _resolve_initial_polygon(initial_polygon::Symbol)
-    normalized = Symbol(lowercase(String(initial_polygon)))
-    if normalized == :default
-        return _DEFAULT_INITIAL_POLYGON_SEGMENTS, _DEFAULT_INITIAL_POLYGON_LIMITS
-    elseif normalized == :equilateral_triangle
-        return _EQUILATERAL_TRIANGLE_SEGMENTS, _EQUILATERAL_TRIANGLE_LIMITS
-    elseif normalized == :line_arrow
-        return _LINE_ARROW_SEGMENTS, _LINE_BASE_LIMITS
-    elseif normalized == :line
-        return _LINE_SEGMENTS, _LINE_BASE_LIMITS
+function supported_initial_polygons()
+    return [preset.name for preset in _INITIAL_POLYGON_REGISTRY]
+end
+
+function initial_polygon(name::Symbol=:default)
+    normalized = Symbol(lowercase(String(name)))
+    for preset in _INITIAL_POLYGON_REGISTRY
+        if preset.name == normalized
+            return preset
+        end
     end
-    throw(ArgumentError("Invalid initial_polygon '$initial_polygon'. Supported: $(_initial_polygon_names_text())"))
+    throw(ArgumentError("Invalid initial_polygon '$name'. Supported: $(_initial_polygon_names_text())"))
 end
 
-function _base_limits_image(initial_polygon::Symbol=:default)
-    _, limits = _resolve_initial_polygon(initial_polygon)
-    return limits
+@inline function _resolve_initial_polygon(preset::InitialPolygonPreset)
+    return preset
 end
 
-function _base_l_image(initial_polygon::Symbol=:default)
-    segments, _ = _resolve_initial_polygon(initial_polygon)
-    return segments
+@inline function _resolve_initial_polygon(name::Symbol)
+    return initial_polygon(name)
+end
+
+@inline function _base_limits_image(initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=:default)
+    return _resolve_initial_polygon(initial_polygon_spec).limits
+end
+
+@inline function _base_l_image(initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=:default)
+    return _resolve_initial_polygon(initial_polygon_spec).segments
 end
 
 @inline function _thread_buffer_slots()

@@ -123,7 +123,7 @@ function interpolate_ifs(
         elseif limits_mode == :right
             right.limits
         elseif limits_mode == :recompute
-            _get_limits(maps, weights)
+            compute_limits(maps, weights)
         else
             throw(ArgumentError("Invalid limits_mode '$limits_mode'. Supported: :interpolate, :left, :right, :recompute"))
         end

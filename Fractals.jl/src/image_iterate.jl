@@ -56,30 +56,7 @@ function _to_grayscale_matrix(img::AbstractMatrix)
 end
 
 function _limits_from_points(points::Vector{SVector{2,Float64}})
-    isempty(points) && return _DEFAULT_INITIAL_POLYGON_LIMITS
-
-    xmin = Inf; xmax = -Inf
-    ymin = Inf; ymax = -Inf
-    @inbounds for p in points
-        x, y = p
-        xmin = min(xmin, x)
-        xmax = max(xmax, x)
-        ymin = min(ymin, y)
-        ymax = max(ymax, y)
-    end
-
-    dx = xmax - xmin
-    dy = ymax - ymin
-    m = max(dx, dy)
-    m = m == 0 ? 1e-9 : m
-    pad = 0.05m
-
-    cx = (xmin + xmax) / 2
-    cy = (ymin + ymax) / 2
-    half = (m + 2pad) / 2
-
-    return ((cx - half, cx + half),
-            (cy - half, cy + half))
+    return compute_limits(points)
 end
 
 function _resolve_image_source(
@@ -92,7 +69,7 @@ function _resolve_image_source(
     inverse_iters::Integer,
     polygon_limits_mode::Symbol,
     show_divergence_scale::Bool,
-    initial_polygon::Symbol=:default,
+    initial_polygon::Union{InitialPolygonPreset,Symbol}=:default,
     backend::Symbol=:cpu
 )
     if image_source == :file

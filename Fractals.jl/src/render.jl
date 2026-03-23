@@ -127,14 +127,14 @@ function render_image_iterate(
         throw(ArgumentError("Invalid image_source '$image_source'. Supported: :polygon, :chaos, :point_deterministic, :inverse, :file"))
     polygon_limits_mode in (:ifs, :default) ||
         throw(ArgumentError("Invalid polygon_limits_mode '$polygon_limits_mode'. Supported: :ifs, :default"))
-    _resolve_initial_polygon(initial_polygon)
+    preset = _resolve_initial_polygon(initial_polygon)
     image_source == :file && isnothing(image_path) &&
         throw(ArgumentError("image_path is required when image_source=:file"))
 
     ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index, ifs_name=ifs_name, input_fn=input_fn)
     img = _resolve_image_source(ifs, image_source, image_path, resolution, warmup,
                                 iterations, iterations,
-                                polygon_limits_mode, true, initial_polygon, backend)
+                                polygon_limits_mode, true, preset, backend)
     for _ in 1:image_iterations
         img = iterate_image(ifs, img; colors=false, backend=backend)
     end
@@ -159,14 +159,14 @@ function render_transformations(
 )
     isnothing(npoints) || npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
     resolution[1] > 0 && resolution[2] > 0 || throw(ArgumentError("resolution must be positive, got $resolution"))
-    _resolve_initial_polygon(initial_polygon)
+    preset = _resolve_initial_polygon(initial_polygon)
 
     ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index, ifs_name=ifs_name, input_fn=input_fn)
     img = _render_transformations_image(ifs;
                                         width=resolution[2],
                                         height=resolution[1],
                                         show_base=show_base,
-                                        initial_polygon=initial_polygon,
+                                        initial_polygon=preset,
                                         color=color,
                                         axis=axis)
     final_outpath = _normalize_media_outpath(outpath)

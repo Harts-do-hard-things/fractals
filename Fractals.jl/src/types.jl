@@ -110,22 +110,29 @@ end
 # Compute limits via sampling
 # --------------------------------
 
-function _get_limits(maps, weights;
-                    warmup=DEFAULT_WARMUP,
-                    n=10_000)
+function compute_limits(
+    maps,
+    weights;
+    warmup::Integer=DEFAULT_WARMUP,
+    n::Integer=10_000,
+    seed::Integer=0,
+)
+    warmup >= 0 || throw(ArgumentError("warmup must be >= 0, got $warmup"))
+    n > 0 || throw(ArgumentError("n must be > 0, got $n"))
 
     map_indices = Base.OneTo(length(maps))
+    rng = MersenneTwister(seed)
     x = SVector{2,Float64}(0.0, 0.0)
 
     for _ in 1:warmup
-        x = maps[sample(map_indices, weights)](x)
+        x = maps[sample(rng, map_indices, weights)](x)
     end
 
     xmin = Inf; xmax = -Inf
     ymin = Inf; ymax = -Inf
 
     for _ in 1:n
-        x = maps[sample(map_indices, weights)](x)
+        x = maps[sample(rng, map_indices, weights)](x)
         xx, yy = x
         xmin = min(xmin, xx)
         xmax = max(xmax, xx)
@@ -146,6 +153,59 @@ function _get_limits(maps, weights;
             (cy-half, cy+half))
 end
 
+function compute_limits(points::AbstractVector{<:SVector{2,Float64}})
+    isempty(points) && return initial_polygon().limits
+
+    xmin = Inf; xmax = -Inf
+    ymin = Inf; ymax = -Inf
+    @inbounds for p in points
+        x, y = p
+        xmin = min(xmin, x)
+        xmax = max(xmax, x)
+        ymin = min(ymin, y)
+        ymax = max(ymax, y)
+    end
+
+    dx = xmax - xmin
+    dy = ymax - ymin
+    m = max(dx, dy)
+    m = m == 0 ? 1e-9 : m
+    pad = 0.05m
+
+    cx = (xmin + xmax) / 2
+    cy = (ymin + ymax) / 2
+    half = (m + 2pad) / 2
+
+    return ((cx - half, cx + half),
+            (cy - half, cy + half))
+end
+
+function compute_limits(
+    ifs::IFS;
+    source::Symbol=:maps,
+    warmup::Integer=DEFAULT_WARMUP,
+    n::Integer=10_000,
+    seed::Integer=0,
+)
+    if source == :maps
+        return compute_limits(ifs.maps, ifs.weights; warmup=warmup, n=n, seed=seed)
+    elseif source == :points
+        return compute_limits(ifs.points)
+    end
+    throw(ArgumentError("Invalid limits source '$source'. Supported: :maps, :points"))
+end
+
+function refresh_limits(
+    ifs::IFS;
+    source::Symbol=:maps,
+    warmup::Integer=DEFAULT_WARMUP,
+    n::Integer=10_000,
+    seed::Integer=0,
+)
+    limits = compute_limits(ifs; source=source, warmup=warmup, n=n, seed=seed)
+    return IFS(ifs.name, ifs.docs, copy(ifs.points), ifs.maps, ifs.weights, limits)
+end
+
 # --------------------------------
 # Constructors
 # --------------------------------
@@ -157,7 +217,7 @@ function IFS(eq::AbstractMatrix{<:Real};
 
     _validate_eq_matrix(eq)
     maps, weights = _build_maps_and_weights(eq)
-    limits = _get_limits(maps, weights)
+    limits = compute_limits(maps, weights)
 
     points = [SVector{2,Float64}(0.0,0.0)
               for _ in 1:npoints]
@@ -170,7 +230,7 @@ function IFS(maps::Vector{AffineMap{Float64}},
              npoints::Integer=DEFAULT_SAMPLES,
              name::AbstractString="",
              docs::AbstractString="",
-             limits=_get_limits(maps, weights))
+             limits=compute_limits(maps, weights))
     points = [SVector{2,Float64}(0.0,0.0)
               for _ in 1:npoints]
     return IFS(String(name), String(docs), points, maps, weights, limits)
