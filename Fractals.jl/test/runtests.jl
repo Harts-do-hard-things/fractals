@@ -422,6 +422,28 @@ end
     @test_throws ArgumentError make_image(ifs; resolution=(32, 32), backend=:bad)
 end
 
+@testset "Shared Backend Dispatch" begin
+    @test Fractals._dispatch_backend(:cpu, () -> :cpu, () -> :gpu; gpu_available=false) == :cpu
+    @test Fractals._dispatch_backend(:auto, () -> :cpu, () -> :gpu; gpu_available=false) == :cpu
+    @test Fractals._dispatch_backend(:auto, () -> :cpu, () -> :gpu; gpu_available=true) == :gpu
+    @test Fractals._dispatch_backend(:auto,
+                                     () -> :cpu,
+                                     () -> throw(ArgumentError("gpu failed"));
+                                     gpu_available=true) == :cpu
+    @test_throws DomainError Fractals._dispatch_backend(:auto,
+                                                        () -> :cpu,
+                                                        () -> throw(DomainError(:gpu, "boom"));
+                                                        gpu_available=true)
+
+    gpu_err = _capture_exception(() -> Fractals._dispatch_backend(:gpu, () -> :cpu, () -> :gpu; gpu_available=false))
+    @test gpu_err isa ArgumentError
+    @test sprint(showerror, gpu_err) == sprint(showerror, Fractals._gpu_backend_unavailable_error())
+
+    bad_err = _capture_exception(() -> Fractals._dispatch_backend(:bad, () -> :cpu, () -> :gpu; gpu_available=false))
+    @test bad_err isa ArgumentError
+    @test occursin("Invalid backend 'bad'. Supported: :cpu, :gpu, :auto", sprint(showerror, bad_err))
+end
+
 @testset "GPU Parity (Optional)" begin
     if get(ENV, "FRACTALS_RUN_GPU_TESTS", "0") == "1"
         if _probe_gpu_available()
@@ -582,6 +604,41 @@ end
 
     @test_throws ArgumentError rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:bad)
     @test_throws ArgumentError rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), mode=:bad)
+end
+
+@testset "Backend Dispatch Consistency" begin
+    ifs = IFS(SMALL_EQ; npoints=2000)
+    iterate!(ifs; warmup=5, seed=2468)
+    lims = ifs.limits
+    src = make_image(ifs; resolution=(24, 24), backend=:cpu)
+
+    bad_make = _capture_exception(() -> make_image(ifs; resolution=(24, 24), backend=:bad))
+    bad_iterate = _capture_exception(() -> iterate_image(ifs, src; backend=:bad))
+    bad_inverse = _capture_exception(() -> rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:bad))
+    @test bad_make isa ArgumentError
+    @test sprint(showerror, bad_make) == sprint(showerror, bad_iterate)
+    @test sprint(showerror, bad_make) == sprint(showerror, bad_inverse)
+
+    if _probe_gpu_available()
+        make_auto = make_image(ifs; resolution=(24, 24), backend=:auto)
+        iterate_auto = iterate_image(ifs, src; backend=:auto)
+        inverse_auto = rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:auto)
+        @test size(make_auto) == (24, 24)
+        @test size(iterate_auto) == (24, 24)
+        @test size(inverse_auto) == (8, 8)
+    else
+        gpu_make = _capture_exception(() -> make_image(ifs; resolution=(24, 24), backend=:gpu))
+        gpu_iterate = _capture_exception(() -> iterate_image(ifs, src; backend=:gpu))
+        gpu_inverse = _capture_exception(() -> rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:gpu))
+        @test gpu_make isa ArgumentError
+        @test sprint(showerror, gpu_make) == sprint(showerror, gpu_iterate)
+        @test sprint(showerror, gpu_make) == sprint(showerror, gpu_inverse)
+
+        @test make_image(ifs; resolution=(24, 24), backend=:auto) == make_image(ifs; resolution=(24, 24), backend=:cpu)
+        @test iterate_image(ifs, src; backend=:auto) == iterate_image(ifs, src; backend=:cpu)
+        @test rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:auto) ==
+              rasterize_image_inversely(ifs, 2, lims; resolution=(8, 8), backend=:cpu)
+    end
 end
 
 @testset "Inverse Rasterize GPU Parity (Optional)" begin

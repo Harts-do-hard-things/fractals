@@ -111,7 +111,7 @@ function _iterate_image_gpu(
     colors::Bool=false,
     seed::Union{Nothing,Integer}=nothing
 )
-    throw(ArgumentError("GPU backend is not available. Install CUDA.jl and ensure a functional CUDA runtime, or use backend=:cpu/:auto."))
+    throw(_gpu_backend_unavailable_error())
 end
 
 function _iterate_image_cpu(
@@ -206,24 +206,11 @@ function iterate_image(
     backend::Symbol=:cpu
 )
     src = _to_grayscale_matrix(img)
-    if backend == :cpu
-        return _iterate_image_cpu(ifs, src; colors=colors, seed=seed)
-    elseif backend == :gpu
-        return _iterate_image_gpu(ifs, src; colors=colors, seed=seed)
-    elseif backend == :auto
-        if _gpu_backend_available(Val(:cuda))
-            try
-                return _iterate_image_gpu(ifs, src; colors=colors, seed=seed)
-            catch err
-                if err isa ArgumentError
-                    return _iterate_image_cpu(ifs, src; colors=colors, seed=seed)
-                end
-                rethrow(err)
-            end
-        end
-        return _iterate_image_cpu(ifs, src; colors=colors, seed=seed)
-    end
-    throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
+    return _dispatch_backend(
+        backend,
+        () -> _iterate_image_cpu(ifs, src; colors=colors, seed=seed),
+        () -> _iterate_image_gpu(ifs, src; colors=colors, seed=seed),
+    )
 end
 
 function _iterate_image_single_map(ifs::IFS, img::AbstractMatrix{<:Real}, map_index::Integer)

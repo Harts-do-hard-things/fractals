@@ -76,19 +76,13 @@ end
 end
 
 function _make_image_gpu(ifs::IFS, ::Val; resolution::Tuple{Int,Int}=RESOLUTION)
-    throw(ArgumentError("GPU backend is not available. Install CUDA.jl and ensure a functional CUDA runtime, or use backend=:cpu/:auto."))
+    throw(_gpu_backend_unavailable_error())
 end
 
 function make_image(ifs::IFS; resolution::Tuple{Int,Int}=RESOLUTION, backend::Symbol=:cpu)
-    if backend == :cpu
-        return _make_image_cpu(ifs; resolution=resolution)
-    elseif backend == :gpu
-        return _make_image_gpu(ifs, Val(:cuda); resolution=resolution)
-    elseif backend == :auto
-        if _gpu_backend_available(Val(:cuda))
-            return _make_image_gpu(ifs, Val(:cuda); resolution=resolution)
-        end
-        return _make_image_cpu(ifs; resolution=resolution)
-    end
-    throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
+    return _dispatch_backend(
+        backend,
+        () -> _make_image_cpu(ifs; resolution=resolution),
+        () -> _make_image_gpu(ifs, Val(:cuda); resolution=resolution),
+    )
 end

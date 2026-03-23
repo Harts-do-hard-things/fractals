@@ -267,7 +267,7 @@ function _rasterize_image_inversely_gpu(
     show_divergence_scale::Bool=true,
     mode::Symbol=:exact
 )
-    throw(ArgumentError("GPU backend is not available. Install CUDA.jl and ensure a functional CUDA runtime, or use backend=:cpu/:auto."))
+    throw(_gpu_backend_unavailable_error())
 end
 
 function _rasterize_image_inversely_gpu_or_throw(
@@ -303,40 +303,18 @@ function rasterize_image_inversely(
     backend::Symbol=:cpu,
     mode::Symbol=:exact
     )
-    backend in (:cpu, :gpu, :auto) ||
-        throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
     mode in (:exact, :preview) ||
         throw(ArgumentError("Invalid mode '$mode'. Supported: :exact, :preview"))
 
-    if backend == :cpu
-        return _rasterize_image_inversely_cpu(ifs, n, limits;
-                                              resolution=resolution,
-                                              show_divergence_scale=show_divergence_scale,
-                                              mode=mode)
-    elseif backend == :gpu
-        return _rasterize_image_inversely_gpu_or_throw(ifs, n, limits;
-                                                       resolution=resolution,
-                                                       show_divergence_scale=show_divergence_scale,
-                                                       mode=mode)
-    elseif _gpu_backend_available(Val(:cuda))
-        try
-            return _rasterize_image_inversely_gpu_or_throw(ifs, n, limits;
-                                                           resolution=resolution,
-                                                           show_divergence_scale=show_divergence_scale,
-                                                           mode=mode)
-        catch err
-            if err isa ArgumentError
-                return _rasterize_image_inversely_cpu(ifs, n, limits;
+    return _dispatch_backend(
+        backend,
+        () -> _rasterize_image_inversely_cpu(ifs, n, limits;
+                                             resolution=resolution,
+                                             show_divergence_scale=show_divergence_scale,
+                                             mode=mode),
+        () -> _rasterize_image_inversely_gpu_or_throw(ifs, n, limits;
                                                       resolution=resolution,
                                                       show_divergence_scale=show_divergence_scale,
-                                                      mode=mode)
-            end
-            rethrow(err)
-        end
-    end
-
-    return _rasterize_image_inversely_cpu(ifs, n, limits;
-                                          resolution=resolution,
-                                          show_divergence_scale=show_divergence_scale,
-                                          mode=mode)
+                                                      mode=mode),
+    )
 end

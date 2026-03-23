@@ -94,6 +94,46 @@ end
     return false
 end
 
+@inline function _gpu_backend_unavailable_error()
+    return ArgumentError("GPU backend is not available. Install CUDA.jl and ensure a functional CUDA runtime, or use backend=:cpu/:auto.")
+end
+
+@inline function _validate_backend(backend::Symbol)
+    backend in (:cpu, :gpu, :auto) ||
+        throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
+    return backend
+end
+
+function _dispatch_backend(
+    backend::Symbol,
+    cpu_fn,
+    gpu_fn;
+    gpu_available::Bool=_gpu_backend_available(Val(:cuda)),
+    auto_fallback_exceptions::Tuple{Vararg{DataType}}=(ArgumentError,),
+)
+    _validate_backend(backend)
+
+    if backend == :cpu
+        return cpu_fn()
+    elseif backend == :gpu
+        gpu_available || throw(_gpu_backend_unavailable_error())
+        return gpu_fn()
+    end
+
+    if !gpu_available
+        return cpu_fn()
+    end
+
+    try
+        return gpu_fn()
+    catch err
+        if any(T -> err isa T, auto_fallback_exceptions)
+            return cpu_fn()
+        end
+        rethrow(err)
+    end
+end
+
 function _map_colors(n::Integer)
     n <= 0 && return RGB{Float32}[]
     # Generate visually distinct, deterministic colors and exclude near-white/near-black colors.
