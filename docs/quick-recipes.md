@@ -3,7 +3,7 @@
 ## Prerequisites
 
 ```powershell
-julia --project=Fractals -e "using Pkg; Pkg.instantiate()"
+julia --project=Fractals.jl -e "using Pkg; Pkg.instantiate()"
 ```
 
 ## Input Selection
@@ -115,7 +115,7 @@ result = render(EISENSTEIN;
                 outpath="media/recipe_image_iterate.png")
 ```
 
-The `:polygon` seed is produced via `render_transformations_png(...; show_base=false, limits_mode=:ifs, initial_polygon=...)` and then read as grayscale.
+The `:polygon` seed is produced via `render_transformations_png(...; show_base=false, initial_polygon=...)` and then read as grayscale.
 For `image_source=:polygon`, `polygon_limits_mode=:default` is treated as `:ifs` (compatibility alias).
 
 ## Recipe: Inverse
@@ -138,3 +138,55 @@ result = render(EISENSTEIN;
                 resolution=(900, 900),
                 outpath="media/recipe_inverse.png")
 ```
+
+## Recipe: Interpolate Between Two IFS States
+
+```julia
+using Fractals
+
+start_eq = [
+    0.5  -0.5   0.5   0.5   0.0   0.0
+   -0.5  -0.5   0.5  -0.5   1.0   0.0
+]
+
+finish_eq = [
+    0.5   0.0   0.0   0.5   0.0   0.0   0.3
+    0.0   0.5  -0.5   0.0   1.0   0.0   0.7
+]
+
+# For animation work, keep the same transform count/order on both sides.
+mid = interpolate_ifs(IFS(start_eq; npoints=5_000, name="start"),
+                      IFS(finish_eq; npoints=5_000, name="finish"),
+                      0.5;
+                      limits_mode=:interpolate)
+
+render(mid;
+       method=RenderTransformations,
+       resolution=(900, 900),
+       outpath="media/recipe_interpolated_transforms.png")
+```
+
+Use `interpolate_eq_matrix(...)` when you want the blended 7-column equation matrix directly.
+
+## Recipe: Render Deterministic Animation Frames
+
+```julia
+using Fractals
+
+start = IFS(start_eq; npoints=5_000, name="start")
+finish = IFS(finish_eq; npoints=5_000, name="finish")
+
+frames = render_interpolation_frames(start, finish;
+                                     frames=4,
+                                     outdir="media/frames",
+                                     basename="recipe_anim",
+                                     render_method=RenderTransformations,
+                                     resolution=(512, 512),
+                                     color=true,
+                                     initial_polygon=:line_arrow,
+                                     axis=true)
+
+println.(frames.paths)
+```
+
+This first frame-renderer path currently targets `RenderTransformations` only, with deterministic file names like `recipe_anim_0001.png`.

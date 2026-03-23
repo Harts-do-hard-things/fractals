@@ -7,15 +7,20 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
 ## [Unreleased]
 
 ### Added
-- Placeholder section for upcoming changes after `1.0.0`.
+- `interpolate_eq_matrix(...)` and `interpolate_ifs(...)` helpers for animation-oriented transform interpolation.
+- `render_interpolation_frames(...)` for deterministic transformation-frame rendering into numbered PNG sequences.
+
+### Changed
+- Breaking API change: `render_transformations_svg` and `render_transformations_png` now always project using `ifs.limits`; `render_transformations_png(...; limits_mode=...)` is no longer supported.
+- Transformation axis overlays now render within the existing `ifs.limits` projection instead of affecting the visible framing.
 
 ## [1.0.0] - 2026-03-02
 
 ### Added
 - High-level `render(...)` API covering chaos, point-deterministic, image-iterate, and inverse workflows.
-- CLI entrypoint (`Fractals/bin/fractals.jl`) with `render`, `batch-render`, `validate-ifs`, and `benchmark`.
+- CLI entrypoint (`Fractals.jl/bin/fractals.jl`) with `render`, `batch-render`, `validate-ifs`, and `benchmark`.
 - Benchmark suite and regression target checking support.
-- Curated `Fractals/data/*.ifs` dataset.
+- Curated `Fractals.jl/data/*.ifs` dataset.
 - Polygon seed preset selection (`initial_polygon`) for transformation renders and image-iterate polygon source.
 - Expanded parser negative tests and affine inverse property tests.
 

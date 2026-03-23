@@ -5,7 +5,7 @@ Fractals.jl provides fast tools for rendering 2D iterated function system fracta
 ## Start Here
 
 - Use the high-level `render(...)` API for most workflows.
-- Use the render methods in this order: `Chaos`, `PointDeterministic`, `ImageIterate`, `Inverse`.
+- Use the render methods in this order: `Chaos`, `PointDeterministic`, `ImageIterate`, `Inverse`, `RenderTransformations`.
 - `Parallel` is a compatibility alias for `Chaos` and may be deprecated in a future release.
 - Save outputs to `media/` (default behavior).
 
@@ -27,17 +27,21 @@ Fractals.jl provides fast tools for rendering 2D iterated function system fracta
 - Arguments used: `method`, `iterations`, `show_divergence_scale`, `backend`, `resolution`, `outpath`
 - Best for: inverse branch coverage style rendering.
 
+### `RenderTransformations`
+- Arguments used: `method`, `initial_polygon`, `show_base`, `axis`, `color`, `resolution`, `outpath`
+- Best for: direct affine-map previews of the transformed seed polygon.
+
 ## Key Links
 
 - [Quick Recipes](quick-recipes.md)
 - [CLI](cli.md)
 - [Benchmarks](benchmarks.md)
 - [Troubleshooting](troubleshooting.md)
-- Package reference: `Fractals/DOCUMENTATION.md`
+- Package reference: `Fractals.jl/DOCUMENTATION.md`
 
 ## Local Build
 
 ```powershell
-julia --project=Fractals -e "using Pkg; Pkg.instantiate()"
+julia --project=Fractals.jl -e "using Pkg; Pkg.instantiate()"
 mkdocs serve
 ```

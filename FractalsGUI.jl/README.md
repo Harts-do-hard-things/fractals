@@ -8,10 +8,10 @@ Desktop GUI package for editing IFS transformation matrices and previewing trans
 julia --startup-file=no --project=FractalsGUI.jl FractalsGUI.jl/bin/gui.jl
 ```
 
-## Run tests (local only)
+## Run tests
 
 ```bash
 julia --startup-file=no --project=FractalsGUI.jl -e "using Pkg; Pkg.test()"
 ```
 
-This test suite is intentionally separate from `Fractals/test/runtests.jl` and is not wired into repository CI.
+This test suite remains separate from `Fractals.jl/test/runtests.jl`, and the non-interactive suite is also exercised by repository CI on Ubuntu.
