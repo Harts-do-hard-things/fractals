@@ -112,12 +112,9 @@ function _resolve_image_source(
                                          show_divergence_scale=show_divergence_scale,
                                          backend=backend)
     elseif image_source == :polygon
-        limits_mode = if polygon_limits_mode == :ifs
-            :ifs
-        elseif polygon_limits_mode == :default
+        if polygon_limits_mode == :default
             @warn "polygon_limits_mode=:default is treated as :ifs for image_source=:polygon."
-            :ifs
-        else
+        elseif polygon_limits_mode != :ifs
             throw(ArgumentError("Invalid polygon_limits_mode '$polygon_limits_mode'. Supported: :ifs, :default"))
         end
         return _to_grayscale_matrix(_render_transformations_image(ifs;
@@ -125,7 +122,6 @@ function _resolve_image_source(
                                                                    height=resolution[1],
                                                                    show_base=false,
                                                                    initial_polygon=initial_polygon,
-                                                                   limits_mode=limits_mode,
                                                                    color=false))
     end
 

@@ -30,7 +30,7 @@ AffineMap(a11::T,a12::T,
           a21::T,a22::T,
           b1::T,b2::T) where {T<:AbstractFloat} =
     AffineMap(
-        SMatrix{2,2,Float64,4}((a11,a12,a21,a22)),
+        SMatrix{2,2,Float64,4}((a11,a21,a12,a22)),
         SVector{2,Float64}(b1,b2)
     )
 
