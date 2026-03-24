@@ -182,7 +182,8 @@ function render_interpolation_frames(
                                             show_base=get(kwargs, :show_base, false),
                                             initial_polygon_spec=get(kwargs, :initial_polygon, :default),
                                             color=get(kwargs, :color, false),
-                                            axis=get(kwargs, :axis, false))
+                                            axis=get(kwargs, :axis, false),
+                                            alpha=get(kwargs, :alpha, false))
         save(path, img)
         push!(paths, path)
     end

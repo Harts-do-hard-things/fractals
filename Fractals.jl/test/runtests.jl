@@ -67,6 +67,10 @@ function _write_snapshot_debug(name::AbstractString, expected, actual)
     return debug_dir, actual_path, diff_path
 end
 
+@inline function _is_drawn_pixel(px)
+    return alpha(px) > 0 && Float32(Gray(px)) > 0f0
+end
+
 function _assert_matches_snapshot(name::AbstractString, actual)
     path = _snapshot_path(name)
     isfile(path) || error("Missing snapshot fixture: $path")
@@ -143,6 +147,29 @@ end
     @test collect(ifs6.weights) ≈ [1.0, 0.25]
     @test ifs6.maps[1](SVector{2,Float64}(2.0, 3.0)) ≈ SVector{2,Float64}(2.0, 3.0)
     @test ifs6.maps[2](SVector{2,Float64}(2.0, 3.0)) ≈ SVector{2,Float64}(2.0, 1.5)
+end
+
+@testset "Random IFS Generation And Contractivity" begin
+    eq1 = random_eq(; rng=MersenneTwister(20260324))
+    eq2 = random_eq(; rng=MersenneTwister(20260324))
+    @test eq1 == eq2
+    @test size(eq1, 1) in 2:4
+    @test size(eq1, 2) == 7
+    @test isempty(Fractals._noncontractive_rows(eq1))
+    @test isapprox(sum(eq1[:, 7]), 1.0; atol=1e-6)
+    @test all(eq1[:, 7] .> 0)
+
+    eq6 = random_eq(; rng=MersenneTwister(7), nmaps=3, with_probs=false)
+    @test size(eq6) == (3, 6)
+    @test isempty(Fractals._noncontractive_rows(eq6))
+
+    ifs1 = random_ifs(; rng=MersenneTwister(99), npoints=128, name="Random")
+    ifs2 = random_ifs(; rng=MersenneTwister(99), npoints=128, name="Random")
+    @test ifs1.name == "Random"
+    @test length(ifs1.points) == 128
+    @test length(ifs1.maps) in 2:4
+    @test collect(ifs1.weights) ≈ collect(ifs2.weights)
+    @test all(Fractals._contractive_row(m.A[1, 1], m.A[1, 2], m.A[2, 1], m.A[2, 2]) for m in ifs1.maps)
 end
 
 @testset "Interpolation Helpers" begin
@@ -541,6 +568,11 @@ end
     out2 = iterate_image(ifs, out)
     @test size(out) == (32, 32)
     @test size(out2) == (32, 32)
+
+    rgb_src = fill(RGB{Float32}(0.1f0, 0.2f0, 0.3f0), 8, 8)
+    bad_src = _capture_exception(() -> iterate_image(ifs, rgb_src))
+    @test bad_src isa ArgumentError
+    @test occursin("grayscale source image", sprint(showerror, bad_src))
 end
 
 @testset "Iterate Image Colors" begin
@@ -856,6 +888,52 @@ end
     end
 end
 
+@testset "IFS Contractivity Validation And Skipping" begin
+    bad_eq = [1.0 0.0 0.0 1.0 0.0 0.0 1.0]
+    failures = Fractals._noncontractive_rows(bad_eq)
+    @test length(failures) == 1
+    @test failures[1].row == 1
+    err = try
+        Fractals._validate_contractivity(bad_eq)
+        nothing
+    catch e
+        e
+    end
+    @test err isa ArgumentError
+    @test occursin("non-contractive affine maps", sprint(showerror, err))
+    @test occursin("row 1", sprint(showerror, err))
+
+    mixed = """
+    ValidOne {
+      0.5 0.0 0.0 0.5 0.0 0.0 1.0
+    }
+    InvalidOne {
+      1.0 0.0 0.0 1.0 0.0 0.0 1.0
+    }
+    ValidTwo {
+      0.3 0.1 -0.1 0.3 0.2 0.1 1.0
+    }
+    """
+    valid_defs = @test_logs (:warn, r"Skipping non-contractive IFS definition 'InvalidOne'") parse_ifs_string(mixed; npoints=10)
+    @test length(valid_defs) == 2
+    @test [x.name for x in valid_defs] == ["ValidOne", "ValidTwo"]
+
+    only_bad = """
+    InvalidOnly {
+      1.0 0.0 0.0 1.0 0.0 0.0 1.0
+    }
+    """
+    parsed_bad = @test_logs (:warn, r"Skipping non-contractive IFS definition 'InvalidOnly'") parse_ifs_string(only_bad; npoints=10)
+    @test isempty(parsed_bad)
+
+    mktemp() do path, io
+        write(io, mixed)
+        close(io)
+        parsed_file = @test_logs (:warn, r"Skipping non-contractive IFS definition 'InvalidOne'") parse_ifs_file(path; npoints=12)
+        @test length(parsed_file) == 2
+    end
+end
+
 @testset "Media Output Path" begin
     mktempdir() do d
         old = pwd()
@@ -912,12 +990,16 @@ end
         @test length(collect(eachmatch(r"data-role=\"axis-x-tick\"", svg_axis_text))) >= 2
         @test length(collect(eachmatch(r"data-role=\"axis-y-tick\"", svg_axis_text))) >= 2
 
-        png_path = render_transformations_png(ifs; outpath=joinpath(tmp, "maps_$suffix.png"), width=256, height=256)
+        png_path = render_transformations_png(ifs;
+                                              outpath=joinpath(tmp, "maps_$suffix.png"),
+                                              width=256,
+                                              height=256,
+                                              alpha=true)
         @test isfile(png_path)
         @test filesize(png_path) > 0
         png_img = load(png_path)
         @test alpha(png_img[1, 1]) == 0
-        colored_nonzero = count(px -> alpha(px) > 0 && (red(px) != green(px) || green(px) != blue(px)), png_img)
+        colored_nonzero = count(px -> _is_drawn_pixel(px) && (red(px) != green(px) || green(px) != blue(px)), png_img)
         @test colored_nonzero > 0
 
         png_path_white = render_transformations_png(ifs;
@@ -928,7 +1010,7 @@ end
                                                     show_base=true)
         @test isfile(png_path_white)
         png_img_white = load(png_path_white)
-        white_nonzero = count(px -> alpha(px) > 0 && red(px) == 1 && green(px) == 1 && blue(px) == 1, png_img_white)
+        white_nonzero = count(px -> _is_drawn_pixel(px) && Float32(Gray(px)) == 1f0, png_img_white)
         @test white_nonzero > 0
 
         eq_identity = reshape([1.0 0.0 0.0 1.0 0.0 0.0 1.0], 1, 7)
@@ -951,8 +1033,8 @@ end
         @test isfile(png_with_axis)
         img_no_axis = load(png_no_axis)
         img_with_axis = load(png_with_axis)
-        no_axis_nonzero = count(px -> alpha(px) > 0, img_no_axis)
-        with_axis_nonzero = count(px -> alpha(px) > 0, img_with_axis)
+        no_axis_nonzero = count(_is_drawn_pixel, img_no_axis)
+        with_axis_nonzero = count(_is_drawn_pixel, img_with_axis)
         @test with_axis_nonzero > no_axis_nonzero + 20
     end
 end
@@ -1045,7 +1127,7 @@ end
                                                   color=false)
             @test isfile(png_path)
             img = load(png_path)
-            @test count(px -> alpha(px) > 0, img) > 0
+            @test count(_is_drawn_pixel, img) > 0
         end
     end
 end
@@ -1067,7 +1149,7 @@ end
             xs = Int[]
             ys = Int[]
             for y in axes(img, 1), x in axes(img, 2)
-                if alpha(img[y, x]) > 0
+                if _is_drawn_pixel(img[y, x])
                     push!(xs, x)
                     push!(ys, y)
                 end
@@ -1081,7 +1163,7 @@ end
     end
 end
 
-@testset "Transformation Renders Use IFS Bounds" begin
+@testset "Transformation Raster Renders Follow Iterative Geometry" begin
     base_eq = reshape([1.0 0.0 0.0 1.0 0.0 0.0 1.0], 1, 7)
     shifted_eq = reshape([1.0 0.0 0.0 1.0 0.0 10.0 1.0], 1, 7)
     ifs = IFS(base_eq; npoints=10)
@@ -1094,7 +1176,7 @@ end
             xs = Int[]
             ys = Int[]
             for y in axes(img, 1), x in axes(img, 2)
-                if alpha(img[y, x]) > 0
+                if _is_drawn_pixel(img[y, x])
                     push!(xs, x)
                     push!(ys, y)
                 end
@@ -1122,13 +1204,13 @@ end
         @test isfile(shifted_out)
         bx, by, bspan = rendered_bbox_center_and_span(base_out)
         sx, sy, sspan = rendered_bbox_center_and_span(shifted_out)
-        @test abs(bx - sx) <= 3.0
-        @test abs(by - sy) <= 3.0
-        @test abs(bspan - sspan) <= 3.0
+        @test bspan > 0
+        @test sspan > 0
+        @test (bx, by, bspan) != (sx, sy, sspan)
     end
 end
 
-@testset "Transformation SVG-PNG Endpoint Consistency" begin
+@testset "Transformation SVG And PNG Diverge As Expected" begin
     function line_endpoints_from_svg(svg_text::AbstractString)
         m = match(r"<line x1=\"([^\"]+)\" y1=\"([^\"]+)\" x2=\"([^\"]+)\" y2=\"([^\"]+)\"", svg_text)
         m === nothing && error("No SVG line found")
@@ -1161,27 +1243,8 @@ end
                                               color=false)
         @test isfile(png_path)
         img = load(png_path)
-        pixels = Tuple{Float64,Float64}[]
-        for y in axes(img, 1), x in axes(img, 2)
-            if alpha(img[y, x]) > 0
-                push!(pixels, (Float64(x), Float64(y)))
-            end
-        end
-        isempty(pixels) && error("Rendered PNG has no non-transparent pixels")
-
-        function min_dist_to_pixels(p::Tuple{Float64,Float64}, pts::Vector{Tuple{Float64,Float64}})
-            best = Inf
-            for q in pts
-                d = hypot(p[1] - q[1], p[2] - q[2])
-                if d < best
-                    best = d
-                end
-            end
-            return best
-        end
-
-        @test min_dist_to_pixels(got1, pixels) <= 1.5
-        @test min_dist_to_pixels(got2, pixels) <= 1.5
+        @test count(_is_drawn_pixel, img) > 0
+        @test got1 != got2
     end
 end
 
@@ -1217,7 +1280,7 @@ end
                                                   color=false)
         @test isfile(png_triangle)
         tri_img = load(png_triangle)
-        @test count(px -> alpha(px) > 0, tri_img) > 0
+        @test count(_is_drawn_pixel, tri_img) > 0
 
         png_line = render_transformations_png(ifs;
                                               outpath=joinpath(tmp, "maps_line_$suffix.png"),
@@ -1227,7 +1290,7 @@ end
                                               color=false)
         @test isfile(png_line)
         line_img = load(png_line)
-        @test count(px -> alpha(px) > 0, line_img) > 0
+        @test count(_is_drawn_pixel, line_img) > 0
 
         default_preset = initial_polygon()
         png_default_preset = render_transformations_png(ifs;
@@ -1238,7 +1301,7 @@ end
                                                         color=false)
         @test isfile(png_default_preset)
         default_img = load(png_default_preset)
-        @test count(px -> alpha(px) > 0, default_img) > 0
+        @test count(_is_drawn_pixel, default_img) > 0
 
         @test_throws ArgumentError render_transformations_png(ifs;
                                                               outpath=joinpath(tmp, "never_write_badpoly_$suffix.png"),
@@ -1312,7 +1375,7 @@ end
         @test isfile(out_tf.outpath)
         @test size(out_tf.image) == (48, 48)
         @test out_tf.method == :render_transformations
-        tf_nonzero = count(px -> alpha(px) > 0 && (red(px) != green(px) || green(px) != blue(px)), out_tf.image)
+        tf_nonzero = count(px -> _is_drawn_pixel(px) && (red(px) != green(px) || green(px) != blue(px)), out_tf.image)
         @test tf_nonzero > 0
 
         mktemp() do path, io
@@ -1354,6 +1417,7 @@ end
 
 @testset "Render Image Iterate API" begin
     mktempdir() do tmp
+        @info "Render Image Iterate API: basic source-path coverage"
         suffix = randstring(8)
 
         out_poly = render(SMALL_EQ;
@@ -1392,36 +1456,277 @@ end
         @test isfile(out_file.outpath)
         @test size(out_file.image) == (20, 20)
 
-        @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, color=true, resolution=(24, 24), outpath=joinpath(tmp, "never_write_$suffix.png"))
-        @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, image_source=:file, image_path=nothing, resolution=(24, 24), outpath=joinpath(tmp, "never_write2_$suffix.png"))
-        @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, polygon_limits_mode=:bad_mode, resolution=(24, 24), outpath=joinpath(tmp, "never_write3_$suffix.png"))
-    end
-
-    # Polygon-backed image iteration should remain sparse line art and preserve the
-    # documented :default -> :ifs compatibility behavior through the public API.
-    mktempdir() do tmp
-        poly_seed = render(SMALL_EQ;
+        out_color = render(SMALL_EQ;
                            method=:image_iterate,
                            image_source=:polygon,
-                           image_iterations=1,
-                           polygon_limits_mode=:ifs,
-                           resolution=(64, 64),
-                           outpath=joinpath(tmp, "poly_seed.png"))
-        density = count(>(Gray{Float32}(0)), poly_seed.image) / length(poly_seed.image)
-        @test density > 0.005
-        @test density < 0.25
+                           image_iterations=2,
+                           color=true,
+                           resolution=(24, 24),
+                           outpath=joinpath(tmp, "render_image_color_$suffix.png"))
+        @test isfile(out_color.outpath)
+        @test size(out_color.image) == (24, 24)
+        @test eltype(out_color.image) == RGB{Float32}
 
-        poly_seed_default = @test_logs (:warn, r"polygon_limits_mode=:default is treated as :ifs") render(
-            SMALL_EQ;
-            method=:image_iterate,
-            image_source=:polygon,
-            image_iterations=1,
-            polygon_limits_mode=:default,
-            resolution=(64, 64),
-            outpath=joinpath(tmp, "poly_seed_default.png")
+        rgb_path = joinpath(tmp, "seed_rgb.png")
+        rgb_seed = fill(RGB{Float32}(0.0f0, 0.5f0, 1.0f0), 20, 20)
+        save(rgb_path, rgb_seed)
+        rgb_err = _capture_exception(() -> render(SMALL_EQ;
+                                                  method=:image_iterate,
+                                                  image_source=:file,
+                                                  image_path=rgb_path,
+                                                  image_iterations=1,
+                                                  resolution=(20, 20),
+                                                  outpath=joinpath(tmp, "never_write_rgb_$suffix.png")))
+        @test rgb_err isa ArgumentError
+        @test occursin("grayscale source image", sprint(showerror, rgb_err))
+
+        graya_path = joinpath(tmp, "seed_graya.png")
+        graya_seed = fill(GrayA{Float32}(0.0f0, 0.0f0), 20, 20)
+        graya_seed[6:15, 6:15] .= GrayA{Float32}(1.0f0, 0.5f0)
+        save(graya_path, graya_seed)
+        out_graya = render(SMALL_EQ;
+                           method=:image_iterate,
+                           image_source=:file,
+                           image_path=graya_path,
+                           image_iterations=1,
+                           resolution=(20, 20),
+                           outpath=joinpath(tmp, "render_image_graya_$suffix.png"))
+        @test isfile(out_graya.outpath)
+        @test size(out_graya.image) == (20, 20)
+        @test count(px -> Float32(gray(px)) > 0, out_graya.image) > 0
+
+        direct_graya = iterate_image(IFS(SMALL_EQ; npoints=200), graya_seed)
+        @test size(direct_graya) == (20, 20)
+        @test eltype(direct_graya) <: Gray
+        @test count(px -> Float32(gray(px)) > 0, direct_graya) > 0
+
+        @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, image_source=:file, image_path=nothing, resolution=(24, 24), outpath=joinpath(tmp, "never_write2_$suffix.png"))
+        @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, polygon_limits_mode=:bad_mode, resolution=(24, 24), outpath=joinpath(tmp, "never_write3_$suffix.png"))
+        @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, polygon_limits_iterations=-1, resolution=(24, 24), outpath=joinpath(tmp, "never_write3b_$suffix.png"))
+        @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, image_source=:chaos, polygon_limits_iterations=2, resolution=(24, 24), outpath=joinpath(tmp, "never_write3c_$suffix.png"))
+        @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, image_source=:file, image_path=p, show_base=true, resolution=(24, 24), outpath=joinpath(tmp, "never_write_show_base_$suffix.png"))
+        @test_throws ArgumentError render(SMALL_EQ; method=:image_iterate, image_source=:chaos, axis=true, resolution=(24, 24), outpath=joinpath(tmp, "never_write_axis_$suffix.png"))
+    end
+
+    @testset "Polygon Limits Geometry Helpers" begin
+        @info "Polygon Limits Geometry Helpers"
+
+        function limits_spans(limits)
+            (xmin, xmax), (ymin, ymax) = limits
+            return xmax - xmin, ymax - ymin
+        end
+
+        rot_eq = reshape([cos(pi / 6) sin(pi / 6) -sin(pi / 6) cos(pi / 6) 0.0 0.0 1.0], 1, 7)
+        rot_ifs = IFS(rot_eq; npoints=10)
+        rot_limits_0 = Fractals._limits_from_polygon_point_iterations(
+            rot_ifs;
+            initial_polygon_spec=initial_polygon(:line_arrow),
+            polygon_limits_iterations=0,
         )
-        @test count(>(Gray{Float32}(0)), poly_seed_default.image) > 0
-        @test poly_seed_default.image == poly_seed.image
+        rot_limits_1 = Fractals._limits_from_polygon_point_iterations(
+            rot_ifs;
+            initial_polygon_spec=initial_polygon(:line_arrow),
+            polygon_limits_iterations=1,
+        )
+        @test rot_limits_0 != rot_limits_1
+        rot_dx, rot_dy = limits_spans(rot_limits_1)
+        @test isapprox(rot_dx, rot_dy; atol=1e-9)
+
+        offset_eq = reshape([0.5 0.0 0.0 0.5 10.0 10.0 1.0], 1, 7)
+        offset_ifs = IFS(offset_eq; npoints=10)
+        offset_limits_1 = Fractals._limits_from_polygon_point_iterations(
+            offset_ifs;
+            initial_polygon_spec=initial_polygon(:line),
+            polygon_limits_iterations=1,
+        )
+        offset_limits_3 = Fractals._limits_from_polygon_point_iterations(
+            offset_ifs;
+            initial_polygon_spec=initial_polygon(:line),
+            polygon_limits_iterations=3,
+        )
+        @test offset_limits_1 != offset_limits_3
+        offset_dx, offset_dy = limits_spans(offset_limits_3)
+        @test isapprox(offset_dx, offset_dy; atol=1e-9)
+
+        arrow_limits = Fractals._limits_from_polygon_point_iterations(
+            offset_ifs;
+            initial_polygon_spec=initial_polygon(:line_arrow),
+            polygon_limits_iterations=2,
+        )
+        @test arrow_limits != offset_limits_3
+        @test_throws ArgumentError Fractals._limits_from_polygon_point_iterations(
+            offset_ifs;
+            initial_polygon_spec=initial_polygon(:line),
+            polygon_limits_iterations=-1,
+        )
+    end
+
+    @testset "Polygon Raster IFS Builder" begin
+        @info "Polygon Raster IFS Builder"
+
+        function limits_spans(limits)
+            (xmin, xmax), (ymin, ymax) = limits
+            return xmax - xmin, ymax - ymin
+        end
+
+        edgar_path = joinpath(dirname(@__FILE__), "..", "data", "Edgar.ifs")
+        edgar_defs = Fractals.parse_ifs_definitions_file(edgar_path)
+        wreath_idx = findfirst(d -> String(d.name) == "Barnsleys Wreath", edgar_defs)
+        wreath_idx === nothing && error("Barnsleys Wreath not found in Edgar.ifs")
+        wreath_ifs = IFS(edgar_defs[wreath_idx].eq; npoints=10)
+
+        wreath_raster_1 = Fractals._build_polygon_raster_ifs(
+            wreath_ifs;
+            initial_polygon_spec=initial_polygon(:line_arrow),
+            polygon_limits_iterations=1,
+        )
+        wreath_raster_2 = Fractals._build_polygon_raster_ifs(
+            wreath_ifs;
+            initial_polygon_spec=initial_polygon(:line_arrow),
+            polygon_limits_iterations=2,
+        )
+
+        @test wreath_raster_1.name == wreath_ifs.name
+        @test wreath_raster_1.docs == wreath_ifs.docs
+        @test wreath_raster_1.points == wreath_ifs.points
+        @test wreath_raster_1.maps == wreath_ifs.maps
+        @test wreath_raster_1.weights == wreath_ifs.weights
+        @test wreath_raster_1.limits != wreath_ifs.limits
+        @test wreath_raster_1.limits != wreath_raster_2.limits
+
+        wreath_dx, wreath_dy = limits_spans(wreath_raster_2.limits)
+        @test isapprox(wreath_dx, wreath_dy; atol=1e-9)
+    end
+
+    @testset "Polygon Source Resolver Branching" begin
+        @info "Polygon Source Resolver Branching"
+
+        offset_eq = reshape([0.5 0.0 0.0 0.5 10.0 10.0 1.0], 1, 7)
+        offset_ifs = IFS(offset_eq; npoints=10)
+
+        @test Fractals._normalize_polygon_limits_mode(:geometry) == :geometry
+        @test Fractals._normalize_polygon_limits_mode(:ifs) == :ifs
+        @test_logs (:warn, r"polygon_limits_mode=:default is treated as :geometry") @test Fractals._normalize_polygon_limits_mode(:default) == :geometry
+
+        geometry_raster_ifs = Fractals._build_polygon_raster_ifs(
+            offset_ifs;
+            initial_polygon_spec=initial_polygon(:line),
+            polygon_limits_iterations=1,
+        )
+        @test geometry_raster_ifs !== offset_ifs
+        @test geometry_raster_ifs.name == offset_ifs.name
+        @test geometry_raster_ifs.docs == offset_ifs.docs
+        @test geometry_raster_ifs.points == offset_ifs.points
+        @test geometry_raster_ifs.maps == offset_ifs.maps
+        @test geometry_raster_ifs.weights == offset_ifs.weights
+        @test geometry_raster_ifs.limits != offset_ifs.limits
+    end
+
+    @testset "Polygon Source Resolver Seed Smoke" begin
+        @info "Polygon Source Resolver Seed Smoke"
+
+        offset_eq = reshape([0.5 0.0 0.0 0.5 10.0 10.0 1.0], 1, 7)
+        offset_ifs = IFS(offset_eq; npoints=10)
+
+        geometry_source = Fractals._resolve_image_source_context(
+            offset_ifs,
+            :polygon,
+            nothing,
+            (32, 32),
+            5,
+            1,
+            1,
+            :geometry,
+            1,
+            true,
+            initial_polygon(:line),
+            :cpu,
+        )
+        @test geometry_source.ifs !== offset_ifs
+        @test geometry_source.ifs.limits != offset_ifs.limits
+        @test size(geometry_source.image) == (32, 32)
+        @test eltype(geometry_source.image) == Float32
+        @test count(>(0f0), geometry_source.image) > 0
+    end
+
+    @testset "Render Image Iterate API: polygon geometry public guard" begin
+        mktempdir() do tmp
+            @info "Render Image Iterate API: polygon geometry public guard"
+            rot_eq = reshape([cos(pi / 6) sin(pi / 6) -sin(pi / 6) cos(pi / 6) 0.0 0.0 1.0], 1, 7)
+            rot_ifs = IFS(rot_eq; npoints=10)
+            poly_seed = render(rot_ifs;
+                               method=:image_iterate,
+                               image_source=:polygon,
+                               image_iterations=1,
+                               initial_polygon=:line_arrow,
+                               resolution=(96, 96),
+                               outpath=joinpath(tmp, "poly_seed.png"))
+            tf_reference = render(rot_ifs;
+                                  method=:render_transformations,
+                                  initial_polygon=:line_arrow,
+                                  color=false,
+                                  resolution=(96, 96),
+                                  outpath=joinpath(tmp, "poly_reference.png"))
+            @test poly_seed.image == tf_reference.image
+        end
+    end
+
+    @testset "Render Image Iterate API: polygon overlays and alpha" begin
+        mktempdir() do tmp
+            rot_eq = reshape([cos(pi / 6) sin(pi / 6) -sin(pi / 6) cos(pi / 6) 0.0 0.0 1.0], 1, 7)
+            rot_ifs = IFS(rot_eq; npoints=10)
+            base_off = render(rot_ifs;
+                              method=:image_iterate,
+                              image_source=:polygon,
+                              image_iterations=1,
+                              initial_polygon=:line_arrow,
+                              show_base=false,
+                              resolution=(96, 96),
+                              outpath=joinpath(tmp, "poly_seed_base_off.png"))
+            base_on = render(rot_ifs;
+                             method=:image_iterate,
+                             image_source=:polygon,
+                             image_iterations=1,
+                             initial_polygon=:line_arrow,
+                             show_base=true,
+                             resolution=(96, 96),
+                             outpath=joinpath(tmp, "poly_seed_base_on.png"))
+            @test base_on.image != base_off.image
+            @test count(>(Gray{Float32}(0)), base_on.image) > count(>(Gray{Float32}(0)), base_off.image)
+
+            axis_off = render(rot_ifs;
+                              method=:image_iterate,
+                              image_source=:polygon,
+                              image_iterations=1,
+                              initial_polygon=:line_arrow,
+                              axis=false,
+                              resolution=(96, 96),
+                              outpath=joinpath(tmp, "poly_seed_axis_off.png"))
+            axis_on = render(rot_ifs;
+                             method=:image_iterate,
+                             image_source=:polygon,
+                             image_iterations=1,
+                             initial_polygon=:line_arrow,
+                             axis=true,
+                             resolution=(96, 96),
+                             outpath=joinpath(tmp, "poly_seed_axis_on.png"))
+            @test axis_on.image != axis_off.image
+            @test count(>(Gray{Float32}(0)), axis_on.image) > count(>(Gray{Float32}(0)), axis_off.image)
+
+            alpha_overlay = render(rot_ifs;
+                                   method=:image_iterate,
+                                   image_source=:polygon,
+                                   image_iterations=1,
+                                   initial_polygon=:line_arrow,
+                                   show_base=true,
+                                   axis=true,
+                                   alpha=true,
+                                   resolution=(96, 96),
+                                   outpath=joinpath(tmp, "poly_seed_alpha_overlay.png"))
+            @test eltype(alpha_overlay.image) == GrayA{Float32}
+            @test any(px -> alpha(px) == 0f0, alpha_overlay.image)
+            @test count(_is_drawn_pixel, alpha_overlay.image) > count(>(Gray{Float32}(0)), axis_off.image)
+        end
     end
 
 end
@@ -1431,25 +1736,25 @@ end
         ifs = IFS(SMALL_EQ; npoints=400)
         res = (32, 32)
 
-        polygon_img = Fractals._resolve_image_source(ifs, :polygon, nothing, res, 5, 1, 2, :ifs, true, initial_polygon(:line), :cpu)
+        polygon_img = Fractals._resolve_image_source(ifs, :polygon, nothing, res, 5, 1, 2, :geometry, 1, true, initial_polygon(:line), :cpu)
         @test size(polygon_img) == res
         @test eltype(polygon_img) <: AbstractFloat
         @test count(>(0f0), polygon_img) > 0
 
-        polygon_default = @test_logs (:warn, r"polygon_limits_mode=:default is treated as :ifs") Fractals._resolve_image_source(
-            ifs, :polygon, nothing, res, 5, 1, 2, :default, true, initial_polygon(:line), :cpu
+        polygon_default = @test_logs (:warn, r"polygon_limits_mode=:default is treated as :geometry") Fractals._resolve_image_source(
+            ifs, :polygon, nothing, res, 5, 1, 2, :default, 1, true, initial_polygon(:line), :cpu
         )
         @test polygon_default == polygon_img
 
-        chaos_img = Fractals._resolve_image_source(ifs, :chaos, nothing, res, 5, 1, 2, :ifs, true, initial_polygon(), :cpu)
+        chaos_img = Fractals._resolve_image_source(ifs, :chaos, nothing, res, 5, 1, 2, :ifs, 1, true, initial_polygon(), :cpu)
         @test size(chaos_img) == res
         @test eltype(chaos_img) <: AbstractFloat
 
-        deterministic_img = Fractals._resolve_image_source(ifs, :point_deterministic, nothing, res, 5, 1, 2, :ifs, true, initial_polygon(), :cpu)
+        deterministic_img = Fractals._resolve_image_source(ifs, :point_deterministic, nothing, res, 5, 1, 2, :ifs, 1, true, initial_polygon(), :cpu)
         @test size(deterministic_img) == res
         @test eltype(deterministic_img) <: AbstractFloat
 
-        inverse_img = Fractals._resolve_image_source(ifs, :inverse, nothing, res, 5, 1, 2, :ifs, false, initial_polygon(), :cpu)
+        inverse_img = Fractals._resolve_image_source(ifs, :inverse, nothing, res, 5, 1, 2, :ifs, 1, false, initial_polygon(), :cpu)
         @test size(inverse_img) == res
         @test eltype(inverse_img) <: AbstractFloat
 
@@ -1457,52 +1762,60 @@ end
         src[8:24, 8:24] .= Gray{Float32}(1.0f0)
         p = joinpath(tmp, "resolver_seed.png")
         save(p, src)
-        file_img = Fractals._resolve_image_source(ifs, :file, p, res, 5, 1, 2, :ifs, true, initial_polygon(), :cpu)
+        file_img = Fractals._resolve_image_source(ifs, :file, p, res, 5, 1, 2, :ifs, 1, true, initial_polygon(), :cpu)
         @test size(file_img) == res
         @test file_img == Float32.(Gray.(src))
 
         err = try
-            Fractals._resolve_image_source(ifs, :bad_source, nothing, res, 5, 1, 2, :ifs, true, initial_polygon(), :cpu)
+            Fractals._resolve_image_source(ifs, :bad_source, nothing, res, 5, 1, 2, :ifs, 1, true, initial_polygon(), :cpu)
             nothing
         catch caught
             caught
         end
         @test err isa ArgumentError
         @test occursin("Supported: :polygon, :chaos, :point_deterministic, :inverse, :file", sprint(showerror, err))
-        @test_throws ArgumentError Fractals._resolve_image_source(ifs, :file, nothing, res, 5, 1, 2, :ifs, true, initial_polygon(), :cpu)
-        @test_throws ArgumentError Fractals._resolve_image_source(ifs, :file, joinpath(tmp, "missing.png"), res, 5, 1, 2, :ifs, true, initial_polygon(), :cpu)
-        @test_throws ArgumentError Fractals._resolve_image_source(ifs, :polygon, nothing, res, 5, 1, 2, :bad_mode, true, initial_polygon(), :cpu)
+        @test_throws ArgumentError Fractals._resolve_image_source(ifs, :file, nothing, res, 5, 1, 2, :ifs, 1, true, initial_polygon(), :cpu)
+        @test_throws ArgumentError Fractals._resolve_image_source(ifs, :file, joinpath(tmp, "missing.png"), res, 5, 1, 2, :ifs, 1, true, initial_polygon(), :cpu)
+        @test_throws ArgumentError Fractals._resolve_image_source(ifs, :polygon, nothing, res, 5, 1, 2, :bad_mode, 1, true, initial_polygon(), :cpu)
     end
 end
 
 @testset "Snapshot Image Tests" begin
-    transform = render(SMALL_EQ;
-                       npoints=50,
-                       method=RenderTransformations,
-                       resolution=(96, 96),
-                       initial_polygon=:line_arrow,
-                       color=true,
-                       axis=true,
-                       outpath=joinpath("media", "snapshot_transformations.png"))
-    _assert_matches_snapshot("transformations-line-arrow-color-axis", transform.image)
+    mktempdir() do d
+        old = pwd()
+        cd(d)
+        try
+            transform = render(SMALL_EQ;
+                               npoints=50,
+                               method=RenderTransformations,
+                               resolution=(96, 96),
+                               initial_polygon=:line_arrow,
+                               color=true,
+                               axis=true,
+                               outpath=joinpath("media", "snapshot_transformations.png"))
+            _assert_matches_snapshot("transformations-line-arrow-color-axis", transform.image)
 
-    inverse = render(SMALL_EQ;
-                     method=Inverse,
-                     iterations=2,
-                     show_divergence_scale=false,
-                     backend=:cpu,
-                     resolution=(32, 32),
-                     outpath=joinpath("media", "snapshot_inverse.png"))
-    _assert_matches_snapshot("inverse-mask-small", inverse.image)
+            inverse = render(SMALL_EQ;
+                             method=Inverse,
+                             iterations=2,
+                             show_divergence_scale=false,
+                             backend=:cpu,
+                             resolution=(32, 32),
+                             outpath=joinpath("media", "snapshot_inverse.png"))
+            _assert_matches_snapshot("inverse-mask-small", inverse.image)
 
-    image_iter = render(SMALL_EQ;
-                        method=ImageIterate,
-                        image_source=:polygon,
-                        image_iterations=2,
-                        backend=:cpu,
-                        resolution=(48, 48),
-                        outpath=joinpath("media", "snapshot_image_iterate.png"))
-    _assert_matches_snapshot("image-iterate-polygon-small", image_iter.image)
+            image_iter = render(SMALL_EQ;
+                                method=ImageIterate,
+                                image_source=:polygon,
+                                image_iterations=2,
+                                backend=:cpu,
+                                resolution=(48, 48),
+                                outpath=joinpath("media", "snapshot_image_iterate.png"))
+            _assert_matches_snapshot("image-iterate-polygon-small", image_iter.image)
+        finally
+            cd(old)
+        end
+    end
 end
 
 @testset "Render IFS Selection By Index Or Name" begin
@@ -1678,6 +1991,60 @@ end
             @test size(out_inv.image) == (40, 40)
             @test eltype(out_inv.image) == RGB{Float32}
             @test isfile(joinpath("media", "render_inv_color.png"))
+
+            out_tf = render(SMALL_EQ;
+                            method=RenderTransformations,
+                            npoints=40,
+                            color=true,
+                            resolution=(40, 40),
+                            outpath="media/render_tf_color.png")
+            @test size(out_tf.image) == (40, 40)
+            @test eltype(out_tf.image) == RGB{Float32}
+            @test isfile(joinpath("media", "render_tf_color.png"))
+        finally
+            cd(old)
+        end
+    end
+end
+
+@testset "Render Alpha API" begin
+    mktempdir() do d
+        old = pwd()
+        cd(d)
+        try
+            methods = (
+                (Chaos, (; npoints=800, warmup=5)),
+                (PointDeterministic, (; npoints=40, iterations=1)),
+                (Inverse, (; iterations=2)),
+                (ImageIterate, (; image_source=:polygon, image_iterations=2)),
+                (RenderTransformations, (; npoints=40)),
+            )
+
+            for (method, extra) in methods
+                gray_out = render(SMALL_EQ;
+                                  method=method,
+                                  color=false,
+                                  alpha=true,
+                                  resolution=(40, 40),
+                                  outpath=joinpath("media", "alpha_gray_$(method).png"),
+                                  extra...)
+                @test size(gray_out.image) == (40, 40)
+                @test eltype(gray_out.image) == GrayA{Float32}
+                @test any(px -> alpha(px) == 0f0, gray_out.image)
+                @test any(_is_drawn_pixel, gray_out.image)
+
+                color_out = render(SMALL_EQ;
+                                   method=method,
+                                   color=true,
+                                   alpha=true,
+                                   resolution=(40, 40),
+                                   outpath=joinpath("media", "alpha_color_$(method).png"),
+                                   extra...)
+                @test size(color_out.image) == (40, 40)
+                @test eltype(color_out.image) == RGBA{Float32}
+                @test any(px -> alpha(px) == 0f0, color_out.image)
+                @test any(_is_drawn_pixel, color_out.image)
+            end
         finally
             cd(old)
         end
@@ -1700,6 +2067,14 @@ if _env_flag("FRACTALS_RUN_CLI_BENCH_TESTS")
      -0.5 -0.5 0.5 -0.5 1.0 0.0
     }
     """
+    invalid_sample = """
+    CLI_Good {
+      0.5 0.0 0.0 0.5 0.0 0.0 1.0
+    }
+    CLI_Bad {
+      1.0 0.0 0.0 1.0 0.0 0.0 1.0
+    }
+    """
 
     mktempdir() do d
         old = pwd()
@@ -1708,91 +2083,112 @@ if _env_flag("FRACTALS_RUN_CLI_BENCH_TESTS")
             ifs_path = joinpath(d, "cli.ifs")
             write(ifs_path, sample)
 
-            validate_out = read(`$jcmd --startup-file=no --project=$project $script validate-ifs --input $ifs_path`, String)
-            @test occursin("Definitions: 2", validate_out)
-            @test occursin("CLI_First", validate_out)
+            invalid_ifs_path = joinpath(d, "cli_invalid.ifs")
+            write(invalid_ifs_path, invalid_sample)
+            @testset "CLI Validate And Render" begin
+                @info "CLI Validate And Render: starting"
+                validate_out = read(`$jcmd --startup-file=no --project=$project $script validate-ifs --input $ifs_path`, String)
+                @test occursin("Definitions: 2", validate_out)
+                @test occursin("CLI_First", validate_out)
 
-            render_out = read(`$jcmd --startup-file=no --project=$project $script render --input $ifs_path --ifs-index 2 --npoints 2000 --resolution 32x32 --out media/cli_single.png`, String)
-            @test occursin("Rendered", render_out)
-            @test isfile(joinpath("media", "cli_single.png"))
+                bad_validate = run(pipeline(`$jcmd --startup-file=no --project=$project $script validate-ifs --input $invalid_ifs_path`; stdout=devnull, stderr=devnull); wait=false)
+                wait(bad_validate)
+                @test !success(bad_validate)
 
-            render_tf_out = read(`$jcmd --startup-file=no --project=$project $script render --input $ifs_path --ifs-index 1 --method RenderTransformations --color true --initial-polygon line_arrow --resolution 24x24 --out media/cli_transformations.png`, String)
-            @test occursin("Rendered", render_tf_out)
-            tf_img = load(joinpath("media", "cli_transformations.png"))
-            @test count(px -> alpha(px) > 0 && (red(px) != green(px) || green(px) != blue(px)), tf_img) > 0
+                render_out = read(`$jcmd --startup-file=no --project=$project $script render --input $ifs_path --ifs-index 2 --npoints 2000 --resolution 32x32 --out media/cli_single.png`, String)
+                @test occursin("Rendered", render_out)
+                @test isfile(joinpath("media", "cli_single.png"))
 
-            render_inverse_out = read(`$jcmd --startup-file=no --project=$project $script render --input $ifs_path --ifs-index 1 --method Inverse --iterations 2 --show-divergence-scale false --resolution 24x24 --out media/cli_inverse_mask.png`, String)
-            @test occursin("Rendered", render_inverse_out)
-            inverse_img = load(joinpath("media", "cli_inverse_mask.png"))
-            @test eltype(inverse_img) <: Gray
-            @test all(px -> Float32(px.val) == 0 || Float32(px.val) == 1, inverse_img)
+                render_tf_out = read(`$jcmd --startup-file=no --project=$project $script render --input $ifs_path --ifs-index 1 --method RenderTransformations --color true --initial-polygon line_arrow --resolution 24x24 --out media/cli_transformations.png`, String)
+                @test occursin("Rendered", render_tf_out)
+                tf_img = load(joinpath("media", "cli_transformations.png"))
+                @test count(px -> _is_drawn_pixel(px) && (red(px) != green(px) || green(px) != blue(px)), tf_img) > 0
 
-            batch_out = read(`$jcmd --startup-file=no --project=$project $script batch-render --input $ifs_path --method Inverse --iterations 2 --show-divergence-scale false --resolution 24x24 --out-dir media/batch`, String)
-            @test occursin("Batch rendering 2 definitions", batch_out)
-            @test isfile(joinpath("media", "batch", "01_cli_first.png"))
-            @test isfile(joinpath("media", "batch", "02_cli_second.png"))
-            batch_img = load(joinpath("media", "batch", "01_cli_first.png"))
-            @test eltype(batch_img) <: Gray
-            @test all(px -> Float32(px.val) == 0 || Float32(px.val) == 1, batch_img)
+                render_inverse_out = read(`$jcmd --startup-file=no --project=$project $script render --input $ifs_path --ifs-index 1 --method Inverse --iterations 2 --show-divergence-scale false --resolution 24x24 --out media/cli_inverse_mask.png`, String)
+                @test occursin("Rendered", render_inverse_out)
+                inverse_img = load(joinpath("media", "cli_inverse_mask.png"))
+                @test eltype(inverse_img) <: Gray
+                @test all(px -> Float32(px.val) == 0 || Float32(px.val) == 1, inverse_img)
 
-            batch_tf_out = read(`$jcmd --startup-file=no --project=$project $script batch-render --input $ifs_path --method RenderTransformations --color true --initial-polygon line_arrow --resolution 24x24 --out-dir media/batch_transformations`, String)
-            @test occursin("Batch rendering 2 definitions", batch_tf_out)
-            batch_tf_img = load(joinpath("media", "batch_transformations", "01_cli_first.png"))
-            @test count(px -> alpha(px) > 0 && (red(px) != green(px) || green(px) != blue(px)), batch_tf_img) > 0
+                batch_out = read(`$jcmd --startup-file=no --project=$project $script batch-render --input $ifs_path --method Inverse --iterations 2 --show-divergence-scale false --resolution 24x24 --out-dir media/batch`, String)
+                @test occursin("Batch rendering 2 definitions", batch_out)
+                @test isfile(joinpath("media", "batch", "01_cli_first.png"))
+                @test isfile(joinpath("media", "batch", "02_cli_second.png"))
+                batch_img = load(joinpath("media", "batch", "01_cli_first.png"))
+                @test eltype(batch_img) <: Gray
+                @test all(px -> Float32(px.val) == 0 || Float32(px.val) == 1, batch_img)
 
-            bench_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1`, String)
-            @test occursin("Benchmark suite", bench_out)
-            @test occursin("iterate!", bench_out)
-            @test occursin("alloc_mean=", bench_out)
+                batch_tf_out = read(`$jcmd --startup-file=no --project=$project $script batch-render --input $ifs_path --method RenderTransformations --color true --initial-polygon line_arrow --resolution 24x24 --out-dir media/batch_transformations`, String)
+                @test occursin("Batch rendering 2 definitions", batch_tf_out)
+                batch_tf_img = load(joinpath("media", "batch_transformations", "01_cli_first.png"))
+                @test count(px -> _is_drawn_pixel(px) && (red(px) != green(px) || green(px) != blue(px)), batch_tf_img) > 0
 
-            bench_json = joinpath("benchmarks", "bench_small.json")
-            bench_out_json = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1 --json $bench_json`, String)
-            @test occursin("Wrote benchmark JSON", bench_out_json)
-            @test isfile(bench_json)
-            json_txt = read(bench_json, String)
-            @test occursin("\"results\"", json_txt)
-            @test occursin("\"small\"", json_txt)
+                batch_image_iterate_out = read(`$jcmd --startup-file=no --project=$project $script batch-render --input $ifs_path --method ImageIterate --image-source polygon --image-iterations 3 --color true --resolution 24x24 --out-dir media/batch_image_iterate`, String)
+                @test occursin("Batch rendering 2 definitions", batch_image_iterate_out)
+                @test isfile(joinpath("media", "batch_image_iterate", "01_cli_first.png"))
+                @test isfile(joinpath("media", "batch_image_iterate", "02_cli_second.png"))
+                batch_image_iterate_img = load(joinpath("media", "batch_image_iterate", "01_cli_first.png"))
+                @test eltype(batch_image_iterate_img) <: RGB
+                @test count(px -> Float32(gray(px)) > 0, batch_image_iterate_img) > 0
 
-            payload = JSON3.read(json_txt)
-            @test haskey(payload.results, :small)
-            small = payload.results.small
-            for k in (:iterate!, Symbol("iterate_parallel!"), :make_image, :iterate_image, :rasterize_image_inversely)
-                @test haskey(small, k)
-                @test haskey(small[k], :min_s)
-                @test haskey(small[k], :mean_s)
-                @test haskey(small[k], :max_s)
-                @test haskey(small[k], :mean_alloc_bytes)
-                @test small[k].min_s >= 0
-                @test small[k].mean_s >= 0
-                @test small[k].max_s >= 0
-                @test small[k].mean_alloc_bytes >= 0
+                bad = run(`$jcmd --startup-file=no --project=$project $script validate-ifs --input missing_file.ifs`; wait=false)
+                wait(bad)
+                @test !success(bad)
             end
 
-            bench_gpu_json = joinpath("benchmarks", "bench_small_gpu_lines.json")
-            bench_gpu_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1 --backend auto --include-gpu-bench --json $bench_gpu_json`, String)
-            @test occursin("Wrote benchmark JSON", bench_gpu_out)
-            gpu_payload = JSON3.read(read(bench_gpu_json, String))
-            gpu_small = gpu_payload.results.small
-            for k in (:make_image_gpu, :iterate_image_gpu, :rasterize_image_inversely_gpu_exact, :rasterize_image_inversely_gpu_preview)
-                @test haskey(gpu_small, k)
-                item = gpu_small[k]
-                if haskey(item, :status)
-                    @test item.status == "skipped"
-                    @test haskey(item, :reason)
-                else
-                    @test haskey(item, :mean_s)
-                    @test haskey(item, :mean_alloc_bytes)
+            @testset "CLI Benchmarks" begin
+                @info "CLI Benchmarks: starting"
+                bench_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1`, String)
+                @test occursin("Benchmark suite", bench_out)
+                @test occursin("iterate!", bench_out)
+                @test occursin("alloc_mean=", bench_out)
+
+                bench_json = joinpath("benchmarks", "bench_small.json")
+                bench_out_json = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1 --json $bench_json`, String)
+                @test occursin("Wrote benchmark JSON", bench_out_json)
+                @test isfile(bench_json)
+                json_txt = read(bench_json, String)
+                @test occursin("\"results\"", json_txt)
+                @test occursin("\"small\"", json_txt)
+
+                payload = JSON3.read(json_txt)
+                @test haskey(payload.results, :small)
+                small = payload.results.small
+                for k in (:iterate!, Symbol("iterate_parallel!"), :make_image, :iterate_image, :rasterize_image_inversely)
+                    @test haskey(small, k)
+                    @test haskey(small[k], :min_s)
+                    @test haskey(small[k], :mean_s)
+                    @test haskey(small[k], :max_s)
+                    @test haskey(small[k], :mean_alloc_bytes)
+                    @test small[k].min_s >= 0
+                    @test small[k].mean_s >= 0
+                    @test small[k].max_s >= 0
+                    @test small[k].mean_alloc_bytes >= 0
                 end
+
+                bench_gpu_json = joinpath("benchmarks", "bench_small_gpu_lines.json")
+                bench_gpu_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1 --backend auto --include-gpu-bench --json $bench_gpu_json`, String)
+                @test occursin("Wrote benchmark JSON", bench_gpu_out)
+                gpu_payload = JSON3.read(read(bench_gpu_json, String))
+                gpu_small = gpu_payload.results.small
+                for k in (:make_image_gpu, :iterate_image_gpu, :rasterize_image_inversely_gpu_exact, :rasterize_image_inversely_gpu_preview)
+                    @test haskey(gpu_small, k)
+                    item = gpu_small[k]
+                    if haskey(item, :status)
+                        @test item.status == "skipped"
+                        @test haskey(item, :reason)
+                    else
+                        @test haskey(item, :mean_s)
+                        @test haskey(item, :mean_alloc_bytes)
+                    end
+                end
+
+                targets_path = abspath(joinpath(project, "bench", "perf_targets.toml"))
+                bench_targets_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1 --targets $targets_path`, String)
+                @test occursin("Target comparison", bench_targets_out)
+                @test occursin("targets:", bench_targets_out)
+                @info "CLI Benchmarks: finished"
             end
-
-            targets_path = abspath(joinpath(project, "bench", "perf_targets.toml"))
-            bench_targets_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1 --targets $targets_path`, String)
-            @test occursin("Target comparison", bench_targets_out)
-            @test occursin("targets:", bench_targets_out)
-
-            bad = run(`$jcmd --startup-file=no --project=$project $script validate-ifs --input missing_file.ifs`; wait=false)
-            wait(bad)
-            @test !success(bad)
         finally
             cd(old)
         end

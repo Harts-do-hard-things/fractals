@@ -29,7 +29,7 @@ Common options:
   --image-source <name>    polygon|chaos|point_deterministic|inverse|file (ImageIterate only)
   --image-path <path>      Source image path when --image-source file
   --image-iterations <int> Number of iterate_image passes (ImageIterate only)
-  --polygon-limits-mode    ifs|default (ImageIterate polygon source)
+  --polygon-limits-mode    geometry|ifs|default (ImageIterate polygon source)
   --initial-polygon <name> default|equilateral_triangle|line_arrow|line
   --show-base <bool>       true|false for RenderTransformations
   --axis <bool>            true|false for RenderTransformations
@@ -141,8 +141,16 @@ function _slug(s::AbstractString)
     return isempty(t) ? "ifs" : t
 end
 
-function _render_from_input(input::String, opts::Dict{String,Any})
+function _push_kw!(kwargs::Vector{Pair{Symbol,Any}}, key::Symbol, value)
+    isnothing(value) && return kwargs
+    push!(kwargs, key => value)
+    return kwargs
+end
+
+function _render_kwargs(opts::Dict{String,Any}; outpath::Union{Nothing,String}=nothing, ifs_index::Union{Nothing,Int}=nothing, ifs_name::Union{Nothing,String}=nothing)
     method = _opt_str(opts, "method", "Chaos")
+    parsed_method = Fractals._parse_render_method(method)
+    render_method = parsed_method == Parallel ? Chaos : parsed_method
     backend = Symbol(_opt_str(opts, "backend", "cpu"))
     npoints = _opt_int(opts, "npoints", nothing)
     iterations = _opt_int(opts, "iterations", nothing)
@@ -151,60 +159,65 @@ function _render_from_input(input::String, opts::Dict{String,Any})
     image_source = Symbol(_opt_str(opts, "image-source", "polygon"))
     image_path = _opt_str(opts, "image-path", nothing)
     image_iterations = _opt_int(opts, "image-iterations", 1)
-    polygon_limits_mode = Symbol(_opt_str(opts, "polygon-limits-mode", "ifs"))
+    polygon_limits_mode = Symbol(_opt_str(opts, "polygon-limits-mode", "geometry"))
     initial_polygon = Symbol(_opt_str(opts, "initial-polygon", "default"))
     show_base = _opt_bool(opts, "show-base", false)
     axis = _opt_bool(opts, "axis", false)
+    resolution = haskey(opts, "resolution") ? _parse_resolution(string(opts["resolution"])) : RESOLUTION
+
+    kwargs = Pair{Symbol,Any}[
+        :method => method,
+        :color => color,
+        :resolution => resolution,
+    ]
+    _push_kw!(kwargs, :npoints, npoints)
+    _push_kw!(kwargs, :ifs_index, ifs_index)
+    _push_kw!(kwargs, :ifs_name, ifs_name)
+    _push_kw!(kwargs, :outpath, outpath)
+
+    if render_method in (Chaos, PointDeterministic, Inverse, ImageIterate)
+        push!(kwargs, :backend => backend)
+    end
+    if render_method in (PointDeterministic, Inverse, ImageIterate)
+        _push_kw!(kwargs, :iterations, iterations)
+    end
+    if render_method == Inverse
+        push!(kwargs, :show_divergence_scale => show_divergence_scale)
+    elseif render_method == ImageIterate
+        push!(kwargs, :show_divergence_scale => show_divergence_scale)
+        push!(kwargs, :image_source => image_source)
+        push!(kwargs, :image_iterations => image_iterations)
+        push!(kwargs, :polygon_limits_mode => polygon_limits_mode)
+        push!(kwargs, :initial_polygon => initial_polygon)
+        push!(kwargs, :show_base => show_base)
+        push!(kwargs, :axis => axis)
+        _push_kw!(kwargs, :image_path, image_path)
+    elseif render_method == RenderTransformations
+        push!(kwargs, :initial_polygon => initial_polygon)
+        push!(kwargs, :show_base => show_base)
+        push!(kwargs, :axis => axis)
+    end
+
+    return kwargs
+end
+
+function _render_from_input(input::String, opts::Dict{String,Any})
+    image_source = Symbol(_opt_str(opts, "image-source", "polygon"))
+    initial_polygon = Symbol(_opt_str(opts, "initial-polygon", "default"))
     ifs_index = _opt_int(opts, "ifs-index", nothing)
     ifs_name = _opt_str(opts, "ifs-name", nothing)
     outpath = _opt_str(opts, "out", "media/cli_render.png")
-    resolution = haskey(opts, "resolution") ? _parse_resolution(string(opts["resolution"])) : RESOLUTION
     if image_source != :polygon && initial_polygon != :default
         @warn "--initial-polygon is ignored unless --image-source polygon."
     end
+    kwargs = _render_kwargs(opts; outpath=outpath, ifs_index=ifs_index, ifs_name=ifs_name)
 
     if endswith(lowercase(input), ".ifs")
-        return render(
-            input;
-            method=method,
-            backend=backend,
-            npoints=npoints,
-            iterations=iterations,
-            color=color,
-            show_divergence_scale=show_divergence_scale,
-            image_source=image_source,
-            image_path=image_path,
-            image_iterations=image_iterations,
-            polygon_limits_mode=polygon_limits_mode,
-            initial_polygon=initial_polygon,
-            show_base=show_base,
-            axis=axis,
-            ifs_index=ifs_index,
-            ifs_name=ifs_name,
-            resolution=resolution,
-            outpath=outpath,
-        )
+        return render(input; kwargs...)
     end
 
     eq = _read_eq_file(input)
-    return render(
-        eq;
-        method=method,
-        backend=backend,
-        npoints=npoints,
-        iterations=iterations,
-        color=color,
-        show_divergence_scale=show_divergence_scale,
-        image_source=image_source,
-        image_path=image_path,
-        image_iterations=image_iterations,
-        polygon_limits_mode=polygon_limits_mode,
-        initial_polygon=initial_polygon,
-        show_base=show_base,
-        axis=axis,
-        resolution=resolution,
-        outpath=outpath,
-    )
+    return render(eq; kwargs...)
 end
 
 function _cmd_render(opts::Dict{String,Any})
@@ -220,21 +233,9 @@ function _cmd_batch_render(opts::Dict{String,Any})
     isnothing(input) && throw(ArgumentError("batch-render requires --input <path-to-.ifs>"))
     endswith(lowercase(input), ".ifs") || throw(ArgumentError("batch-render currently supports only .ifs input"))
 
-    method = _opt_str(opts, "method", "Chaos")
-    backend = Symbol(_opt_str(opts, "backend", "cpu"))
-    npoints = _opt_int(opts, "npoints", nothing)
-    iterations = _opt_int(opts, "iterations", nothing)
-    color = _opt_bool(opts, "color", false)
-    show_divergence_scale = _opt_bool(opts, "show-divergence-scale", true)
     image_source = Symbol(_opt_str(opts, "image-source", "polygon"))
-    image_path = _opt_str(opts, "image-path", nothing)
-    image_iterations = _opt_int(opts, "image-iterations", 1)
-    polygon_limits_mode = Symbol(_opt_str(opts, "polygon-limits-mode", "ifs"))
     initial_polygon = Symbol(_opt_str(opts, "initial-polygon", "default"))
-    show_base = _opt_bool(opts, "show-base", false)
-    axis = _opt_bool(opts, "axis", false)
     outdir = _opt_str(opts, "out-dir", "media/batch")
-    resolution = haskey(opts, "resolution") ? _parse_resolution(string(opts["resolution"])) : RESOLUTION
     mkpath(outdir)
 
     defs = parse_ifs_file(input; npoints=1)
@@ -247,25 +248,8 @@ function _cmd_batch_render(opts::Dict{String,Any})
     for (i, d) in enumerate(defs)
         filename = lpad(string(i), 2, '0') * "_" * _slug(d.name) * ".png"
         outpath = joinpath(outdir, filename)
-        out = render(
-            input;
-            method=method,
-            backend=backend,
-            npoints=npoints,
-            iterations=iterations,
-            color=color,
-            show_divergence_scale=show_divergence_scale,
-            image_source=image_source,
-            image_path=image_path,
-            image_iterations=image_iterations,
-            polygon_limits_mode=polygon_limits_mode,
-            initial_polygon=initial_polygon,
-            show_base=show_base,
-            axis=axis,
-            ifs_index=i,
-            resolution=resolution,
-            outpath=outpath,
-        )
+        kwargs = _render_kwargs(opts; ifs_index=i, outpath=outpath)
+        out = render(input; kwargs...)
         println("[$i] $(d.name) -> $(out.outpath)")
     end
     return 0
@@ -274,13 +258,29 @@ end
 function _cmd_validate_ifs(opts::Dict{String,Any})
     input = _opt_str(opts, "input", nothing)
     isnothing(input) && throw(ArgumentError("validate-ifs requires --input <path-to-.ifs>"))
-    defs = parse_ifs_file(input; npoints=1)
-    println("Valid IFS file: $input")
-    println("Definitions: $(length(defs))")
-    for (i, d) in enumerate(defs)
-        println("  [$i] $(d.name)")
+    defs = Fractals.parse_ifs_definitions_file(input)
+    isempty(defs) && throw(ArgumentError("No IFS definitions found in '$input'"))
+    valid, invalid = Fractals._split_valid_ifs_definitions(defs)
+
+    if isempty(invalid)
+        println("Valid IFS file: $input")
+        println("Definitions: $(length(valid))")
+        for (i, d) in enumerate(valid)
+            println("  [$i] $(d.name)")
+        end
+        return 0
     end
-    return 0
+
+    println(stderr, "Invalid IFS file: $input")
+    println(stderr, "Valid definitions: $(length(valid))")
+    println(stderr, "Invalid definitions: $(length(invalid))")
+    for entry in invalid
+        println(stderr, "  $(entry.definition.name)")
+        for failure in entry.failures
+            println(stderr, "    - $(Fractals._format_contractivity_failure(failure))")
+        end
+    end
+    throw(ArgumentError("IFS file contains non-contractive definitions"))
 end
 
 function _cmd_benchmark(opts::Dict{String,Any})

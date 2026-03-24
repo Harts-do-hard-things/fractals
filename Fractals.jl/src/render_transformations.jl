@@ -60,12 +60,168 @@ end
     return x, y
 end
 
+@inline function _to_raster_xy(p::SVector{2,Float64}, limits, width::Int, height::Int)
+    pmap = make_pixelate_map(limits; resolution=(height, width))
+    return pmap(p)
+end
+
 function _visible_world_bounds(sx, sy, ox, oy, width::Int, height::Int)
     xmin = (0.0 - ox) / sx
     xmax = (width - ox) / sx
     ymin = (oy - height) / sy
     ymax = (oy - 0.0) / sy
     return xmin, xmax, ymin, ymax
+end
+
+function _limits_from_segments(segments)
+    xmin = Inf
+    xmax = -Inf
+    ymin = Inf
+    ymax = -Inf
+    for (p1, p2) in segments
+        xmin = min(xmin, p1[1], p2[1])
+        xmax = max(xmax, p1[1], p2[1])
+        ymin = min(ymin, p1[2], p2[2])
+        ymax = max(ymax, p1[2], p2[2])
+    end
+    if !isfinite(xmin) || !isfinite(xmax) || !isfinite(ymin) || !isfinite(ymax)
+        return initial_polygon().limits
+    end
+    if xmin == xmax
+        xmin -= 0.5
+        xmax += 0.5
+    end
+    if ymin == ymax
+        ymin -= 0.5
+        ymax += 0.5
+    end
+
+    dx = xmax - xmin
+    dy = ymax - ymin
+    m = max(dx, dy)
+    pad = 0.06 * m
+
+    cx = (xmin + xmax) / 2
+    cy = (ymin + ymax) / 2
+    half = (m + 2pad) / 2
+
+    return ((cx - half, cx + half), (cy - half, cy + half))
+end
+
+function _limits_from_polygon_points(points::AbstractVector{SVector{2,Float64}})
+    xmin = Inf
+    xmax = -Inf
+    ymin = Inf
+    ymax = -Inf
+    for p in points
+        xmin = min(xmin, p[1])
+        xmax = max(xmax, p[1])
+        ymin = min(ymin, p[2])
+        ymax = max(ymax, p[2])
+    end
+    if !isfinite(xmin) || !isfinite(xmax) || !isfinite(ymin) || !isfinite(ymax)
+        return initial_polygon().limits
+    end
+    if xmin == xmax
+        xmin -= 0.5
+        xmax += 0.5
+    end
+    if ymin == ymax
+        ymin -= 0.5
+        ymax += 0.5
+    end
+
+    dx = xmax - xmin
+    dy = ymax - ymin
+    m = max(dx, dy)
+    pad = 0.06 * m
+
+    cx = (xmin + xmax) / 2
+    cy = (ymin + ymax) / 2
+    half = (m + 2pad) / 2
+
+    return ((cx - half, cx + half), (cy - half, cy + half))
+end
+
+function _unique_polygon_points(segments)
+    seen = Set{Tuple{Float64,Float64}}()
+    points = SVector{2,Float64}[]
+    for (p1, p2) in segments
+        for p in (p1, p2)
+            key = (p[1], p[2])
+            key in seen && continue
+            push!(seen, key)
+            push!(points, p)
+        end
+    end
+    return points
+end
+
+function _select_extreme_polygon_points(points::AbstractVector{SVector{2,Float64}})
+    isempty(points) && return SVector{2,Float64}[]
+
+    minx = minimum(p -> p[1], points)
+    maxx = maximum(p -> p[1], points)
+    miny = minimum(p -> p[2], points)
+    maxy = maximum(p -> p[2], points)
+
+    kept = SVector{2,Float64}[]
+    seen = Set{Tuple{Float64,Float64}}()
+
+    function keep_matches(pred)
+        saved = 0
+        for p in points
+            pred(p) || continue
+            key = (p[1], p[2])
+            key in seen && continue
+            push!(seen, key)
+            push!(kept, p)
+            saved += 1
+            saved == 2 && break
+        end
+    end
+
+    keep_matches(p -> p[1] == minx)
+    keep_matches(p -> p[1] == maxx)
+    keep_matches(p -> p[2] == miny)
+    keep_matches(p -> p[2] == maxy)
+    return kept
+end
+
+function _limits_from_polygon_point_iterations(
+    ifs;
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+    polygon_limits_iterations::Integer=1,
+)
+    polygon_limits_iterations >= 0 ||
+        throw(ArgumentError("polygon_limits_iterations must be >= 0, got $polygon_limits_iterations"))
+
+    preset = _resolve_initial_polygon(initial_polygon_spec)
+    frontier = _select_extreme_polygon_points(_unique_polygon_points(preset.segments))
+    retained = copy(frontier)
+
+    for _ in 1:polygon_limits_iterations
+        next_points = SVector{2,Float64}[]
+        for p in frontier, m in ifs.maps
+            push!(next_points, m(p))
+        end
+        isempty(next_points) && break
+        frontier = _select_extreme_polygon_points(next_points)
+        append!(retained, frontier)
+    end
+
+    return _limits_from_polygon_points(retained)
+end
+
+function _build_polygon_raster_ifs(
+    ifs;
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+    polygon_limits_iterations::Integer=1,
+)
+    limits = _limits_from_polygon_point_iterations(ifs;
+                                                   initial_polygon_spec=initial_polygon_spec,
+                                                   polygon_limits_iterations=polygon_limits_iterations)
+    return IFS(ifs.name, ifs.docs, copy(ifs.points), ifs.maps, ifs.weights, limits)
 end
 
 function _collect_transformed_base_segments(
@@ -196,10 +352,10 @@ function render_transformations_svg(
 end
 
 function _draw_line!(
-    img::AbstractMatrix{RGBA{Float32}},
+    img::AbstractMatrix{T},
     x1::Real, y1::Real, x2::Real, y2::Real,
-    color::RGBA{Float32}
-)
+    color::T
+) where {T}
     height, width = size(img)
     dx = x2 - x1
     dy = y2 - y1
@@ -221,15 +377,15 @@ function _limits_xy(p::SVector{2,Float64}, limits, width::Int, height::Int)
 end
 
 function _draw_axes_on_image!(
-    img::AbstractMatrix{RGBA{Float32}},
+    img::AbstractMatrix{T},
     sx,
     sy,
     ox,
     oy,
     width::Int,
     height::Int,
-    axis_color::RGBA{Float32},
-)
+    axis_color::T,
+) where {T}
     xmin, xmax, ymin, ymax = _visible_world_bounds(sx, sy, ox, oy, width, height)
 
     if ymin <= 0.0 <= ymax
@@ -253,7 +409,48 @@ function _draw_axes_on_image!(
     end
 end
 
-function _render_transformations_image(
+function _draw_axes_on_raster!(
+    img::AbstractMatrix{T},
+    limits,
+    width::Int,
+    height::Int,
+    axis_color::T,
+) where {T}
+    pmap = make_pixelate_map(limits; resolution=(height, width))
+    inv_pmap = inv(pmap)
+    corners = (
+        inv_pmap(SVector{2,Float64}(1.0, 1.0)),
+        inv_pmap(SVector{2,Float64}(width * 1.0, 1.0)),
+        inv_pmap(SVector{2,Float64}(1.0, height * 1.0)),
+        inv_pmap(SVector{2,Float64}(width * 1.0, height * 1.0)),
+    )
+    xs = map(p -> p[1], corners)
+    ys = map(p -> p[2], corners)
+    xmin, xmax = minimum(xs), maximum(xs)
+    ymin, ymax = minimum(ys), maximum(ys)
+
+    if ymin <= 0.0 <= ymax
+        x1, y1 = pmap(SVector{2,Float64}(xmin, 0.0))
+        x2, y2 = pmap(SVector{2,Float64}(xmax, 0.0))
+        _draw_line!(img, x1, y1, x2, y2, axis_color)
+        for xtick in ceil(Int, xmin):floor(Int, xmax)
+            x, y = pmap(SVector{2,Float64}(Float64(xtick), 0.0))
+            _draw_line!(img, x, y - 3.0, x, y + 3.0, axis_color)
+        end
+    end
+
+    if xmin <= 0.0 <= xmax
+        x1, y1 = pmap(SVector{2,Float64}(0.0, ymin))
+        x2, y2 = pmap(SVector{2,Float64}(0.0, ymax))
+        _draw_line!(img, x1, y1, x2, y2, axis_color)
+        for ytick in ceil(Int, ymin):floor(Int, ymax)
+            x, y = pmap(SVector{2,Float64}(0.0, Float64(ytick)))
+            _draw_line!(img, x - 3.0, y, x + 3.0, y, axis_color)
+        end
+    end
+end
+
+function _render_transformations_direct_image(
     ifs;
     width::Int=1200,
     height::Int=1200,
@@ -298,6 +495,111 @@ function _render_transformations_image(
     return img
 end
 
+function _render_initial_polygon_seed_image(
+    ifs;
+    width::Int=1200,
+    height::Int=1200,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+)
+    preset = _resolve_initial_polygon(initial_polygon_spec)
+    img = fill(Gray{Float32}(0.0f0), height, width)
+    for (p1, p2) in preset.segments
+        x1, y1 = _to_raster_xy(p1, ifs.limits, width, height)
+        x2, y2 = _to_raster_xy(p2, ifs.limits, width, height)
+        _draw_line!(img, x1, y1, x2, y2, Gray{Float32}(1.0f0))
+    end
+    return img
+end
+
+function _overlay_initial_polygon!(
+    img::AbstractMatrix{Gray{Float32}},
+    ifs;
+    width::Int,
+    height::Int,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+    color::Bool=false,
+)
+    preset = _resolve_initial_polygon(initial_polygon_spec)
+    line_color = Gray{Float32}(1.0f0)
+    for (p1, p2) in preset.segments
+        x1, y1 = _to_raster_xy(p1, ifs.limits, width, height)
+        x2, y2 = _to_raster_xy(p2, ifs.limits, width, height)
+        _draw_line!(img, x1, y1, x2, y2, line_color)
+    end
+    return img
+end
+
+function _overlay_initial_polygon!(
+    img::AbstractMatrix{RGB{Float32}},
+    ifs;
+    width::Int,
+    height::Int,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+    color::Bool=true,
+)
+    preset = _resolve_initial_polygon(initial_polygon_spec)
+    line_color = color ? RGB{Float32}(0.2f0, 0.2f0, 0.2f0) : RGB{Float32}(1.0f0, 1.0f0, 1.0f0)
+    for (p1, p2) in preset.segments
+        x1, y1 = _to_raster_xy(p1, ifs.limits, width, height)
+        x2, y2 = _to_raster_xy(p2, ifs.limits, width, height)
+        _draw_line!(img, x1, y1, x2, y2, line_color)
+    end
+    return img
+end
+
+function _overlay_axes!(
+    img::AbstractMatrix{Gray{Float32}},
+    ifs;
+    width::Int,
+    height::Int,
+)
+    _draw_axes_on_raster!(img, ifs.limits, width, height, Gray{Float32}(1.0f0))
+    return img
+end
+
+function _overlay_axes!(
+    img::AbstractMatrix{RGB{Float32}},
+    ifs;
+    width::Int,
+    height::Int,
+)
+    _draw_axes_on_raster!(img, ifs.limits, width, height, RGB{Float32}(0.42f0, 0.45f0, 0.50f0))
+    return img
+end
+
+function _render_transformations_image(
+    ifs;
+    width::Int=1200,
+    height::Int=1200,
+    show_base::Bool=false,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+    polygon_limits_iterations::Integer=1,
+    color::Bool=true,
+    axis::Bool=false,
+    alpha::Bool=false,
+)
+    raster_ifs = _build_polygon_raster_ifs(ifs;
+                                           initial_polygon_spec=initial_polygon_spec,
+                                           polygon_limits_iterations=polygon_limits_iterations)
+
+    seed = _render_initial_polygon_seed_image(raster_ifs;
+                                              width=width,
+                                              height=height,
+                                              initial_polygon_spec=initial_polygon_spec)
+    img = iterate_image(raster_ifs, seed; colors=color)
+    if show_base
+        _overlay_initial_polygon!(img, raster_ifs;
+                                  width=width,
+                                  height=height,
+                                  initial_polygon_spec=initial_polygon_spec,
+                                  color=color)
+    end
+    if axis
+        _overlay_axes!(img, raster_ifs; width=width, height=height)
+    end
+    return alpha ? _apply_alpha_mask(img) : img
+end
+
 function _render_transformations_png_impl(
     ifs;
     outpath::AbstractString="media/affine_maps.png",
@@ -305,16 +607,20 @@ function _render_transformations_png_impl(
     height::Int=1200,
     show_base::Bool=false,
     initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+    polygon_limits_iterations::Integer=1,
     color::Bool=true,
     axis::Bool=false,
+    alpha::Bool=false,
 )
     img = _render_transformations_image(ifs;
                                         width=width,
                                         height=height,
                                         show_base=show_base,
                                         initial_polygon_spec=initial_polygon_spec,
+                                        polygon_limits_iterations=polygon_limits_iterations,
                                         color=color,
-                                        axis=axis)
+                                        axis=axis,
+                                        alpha=alpha)
 
     final_outpath = _normalize_media_outpath(outpath)
     save(final_outpath, img)
@@ -328,8 +634,10 @@ function render_transformations_png(
     height::Int=1200,
     show_base::Bool=false,
     initial_polygon::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+    polygon_limits_iterations::Integer=1,
     color::Bool=true,
     axis::Bool=false,
+    alpha::Bool=false,
 )
     return _render_transformations_png_impl(ifs;
                                             outpath=outpath,
@@ -337,8 +645,10 @@ function render_transformations_png(
                                             height=height,
                                             show_base=show_base,
                                             initial_polygon_spec=initial_polygon,
+                                            polygon_limits_iterations=polygon_limits_iterations,
                                             color=color,
-                                            axis=axis)
+                                            axis=axis,
+                                            alpha=alpha)
 end
 
 const _render_transformations_png_from_base_l_svg = render_transformations_png

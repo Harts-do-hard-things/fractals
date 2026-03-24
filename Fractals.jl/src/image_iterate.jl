@@ -55,8 +55,25 @@ function _to_grayscale_matrix(img::AbstractMatrix)
     return Float32.(Gray.(img))
 end
 
+function _validate_iterate_image_input(img::AbstractMatrix)
+    if eltype(img) <: Colorant && !(color_type(eltype(img)) <: Gray)
+        throw(ArgumentError("iterate_image requires a grayscale source image. Convert colored input to Gray first."))
+    end
+    return img
+end
+
 function _limits_from_points(points::Vector{SVector{2,Float64}})
     return compute_limits(points)
+end
+
+@inline function _normalize_polygon_limits_mode(polygon_limits_mode::Symbol)
+    if polygon_limits_mode == :default
+        @warn "polygon_limits_mode=:default is treated as :geometry for image_source=:polygon."
+        return :geometry
+    elseif polygon_limits_mode in (:ifs, :geometry)
+        return polygon_limits_mode
+    end
+    throw(ArgumentError("Invalid polygon_limits_mode '$polygon_limits_mode'. Supported: :geometry, :ifs, :default"))
 end
 
 struct ImageSourceRequest
@@ -68,6 +85,7 @@ struct ImageSourceRequest
     deterministic_iters::Int
     inverse_iters::Int
     polygon_limits_mode::Symbol
+    polygon_limits_iterations::Int
     show_divergence_scale::Bool
     initial_polygon_spec::InitialPolygonPreset
     backend::Symbol
@@ -88,39 +106,60 @@ end
 function _resolve_image_source_from_file(req::ImageSourceRequest)
     isnothing(req.image_path) && throw(ArgumentError("image_path is required when image_source=:file"))
     isfile(req.image_path) || throw(ArgumentError("image_path '$(req.image_path)' does not exist"))
-    return _to_grayscale_matrix(load(req.image_path))
+    img = load(req.image_path)
+    _validate_iterate_image_input(img)
+    return (; ifs=req.ifs, image=_to_grayscale_matrix(img))
 end
 
 function _resolve_image_source_from_chaos(req::ImageSourceRequest)
     tifs = IFS(req.ifs.name, req.ifs.docs, copy(req.ifs.points), req.ifs.maps, req.ifs.weights, req.ifs.limits)
     iterate!(tifs; warmup=req.warmup)
-    return make_image(tifs; resolution=req.resolution, backend=req.backend)
+    return (; ifs=req.ifs, image=make_image(tifs; resolution=req.resolution, backend=req.backend))
 end
 
 function _resolve_image_source_from_point_deterministic(req::ImageSourceRequest)
     tifs = deterministic_iterate(req.ifs, req.deterministic_iters; warmup=req.warmup)
-    return make_image(tifs; resolution=req.resolution, backend=req.backend)
+    return (; ifs=req.ifs, image=make_image(tifs; resolution=req.resolution, backend=req.backend))
 end
 
 function _resolve_image_source_from_inverse(req::ImageSourceRequest)
-    return rasterize_image_inversely(req.ifs, req.inverse_iters, req.ifs.limits;
-                                     resolution=req.resolution,
-                                     show_divergence_scale=req.show_divergence_scale,
-                                     backend=req.backend)
+    return (; ifs=req.ifs,
+            image=rasterize_image_inversely(req.ifs, req.inverse_iters, req.ifs.limits;
+                                            resolution=req.resolution,
+                                            show_divergence_scale=req.show_divergence_scale,
+                                            backend=req.backend))
 end
 
 function _resolve_image_source_from_polygon(req::ImageSourceRequest)
-    if req.polygon_limits_mode == :default
-        @warn "polygon_limits_mode=:default is treated as :ifs for image_source=:polygon."
-    elseif req.polygon_limits_mode != :ifs
-        throw(ArgumentError("Invalid polygon_limits_mode '$(req.polygon_limits_mode)'. Supported: :ifs, :default"))
+    limits_mode = _normalize_polygon_limits_mode(req.polygon_limits_mode)
+    raster_ifs = limits_mode == :geometry ?
+        _build_polygon_raster_ifs(req.ifs;
+                                  initial_polygon_spec=req.initial_polygon_spec,
+                                  polygon_limits_iterations=req.polygon_limits_iterations) :
+        req.ifs
+    seed = _render_initial_polygon_seed_image(raster_ifs;
+                                              width=req.resolution[2],
+                                              height=req.resolution[1],
+                                              initial_polygon_spec=req.initial_polygon_spec)
+    return (; ifs=raster_ifs, image=_to_grayscale_matrix(seed))
+end
+
+function _occupied_bbox(img::AbstractMatrix)
+    xmin = typemax(Int)
+    xmax = typemin(Int)
+    ymin = typemax(Int)
+    ymax = typemin(Int)
+    found = false
+    @inbounds for y in axes(img, 1), x in axes(img, 2)
+        if Float32(gray(img[y, x])) > 0f0
+            xmin = min(xmin, x)
+            xmax = max(xmax, x)
+            ymin = min(ymin, y)
+            ymax = max(ymax, y)
+            found = true
+        end
     end
-    return _to_grayscale_matrix(_render_transformations_image(req.ifs;
-                                                              width=req.resolution[2],
-                                                              height=req.resolution[1],
-                                                              show_base=false,
-                                                              initial_polygon_spec=req.initial_polygon_spec,
-                                                              color=false))
+    return found ? (xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax) : nothing
 end
 
 const _IMAGE_SOURCE_DISPATCH = Dict{Symbol,Function}(
@@ -131,11 +170,41 @@ const _IMAGE_SOURCE_DISPATCH = Dict{Symbol,Function}(
     :polygon => _resolve_image_source_from_polygon,
 )
 
-function _resolve_image_source(req::ImageSourceRequest)
+function _resolve_image_source_context(req::ImageSourceRequest)
     handler = get(_IMAGE_SOURCE_DISPATCH, _validate_image_source(req.image_source), nothing)
     handler === nothing &&
         throw(ArgumentError("Invalid image_source '$(req.image_source)'. Supported: $(_image_source_names_text())"))
     return handler(req)
+end
+
+function _resolve_image_source_context(
+    ifs::IFS,
+    image_source::Symbol,
+    image_path::Union{Nothing,AbstractString},
+    resolution::Tuple{Int,Int},
+    warmup::Integer,
+    deterministic_iters::Integer,
+    inverse_iters::Integer,
+    polygon_limits_mode::Symbol,
+    polygon_limits_iterations::Integer,
+    show_divergence_scale::Bool,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+    backend::Symbol=:cpu
+)
+    return _resolve_image_source_context(ImageSourceRequest(
+        ifs,
+        image_source,
+        image_path,
+        resolution,
+        Int(warmup),
+        Int(deterministic_iters),
+        Int(inverse_iters),
+        polygon_limits_mode,
+        Int(polygon_limits_iterations),
+        show_divergence_scale,
+        _resolve_initial_polygon(initial_polygon_spec),
+        backend,
+    ))
 end
 
 function _resolve_image_source(
@@ -147,23 +216,23 @@ function _resolve_image_source(
     deterministic_iters::Integer,
     inverse_iters::Integer,
     polygon_limits_mode::Symbol,
+    polygon_limits_iterations::Integer,
     show_divergence_scale::Bool,
     initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
     backend::Symbol=:cpu
-)
-    return _resolve_image_source(ImageSourceRequest(
-        ifs,
-        image_source,
-        image_path,
-        resolution,
-        Int(warmup),
-        Int(deterministic_iters),
-        Int(inverse_iters),
-        polygon_limits_mode,
-        show_divergence_scale,
-        _resolve_initial_polygon(initial_polygon_spec),
-        backend,
-    ))
+)::AbstractMatrix
+    return _resolve_image_source_context(ifs,
+                                         image_source,
+                                         image_path,
+                                         resolution,
+                                         warmup,
+                                         deterministic_iters,
+                                         inverse_iters,
+                                         polygon_limits_mode,
+                                         polygon_limits_iterations,
+                                         show_divergence_scale,
+                                         initial_polygon_spec,
+                                         backend).image
 end
 
 function _iterate_image_gpu(
@@ -266,6 +335,7 @@ function iterate_image(
     seed::Union{Nothing,Integer}=nothing,
     backend::Symbol=:cpu
 )
+    _validate_iterate_image_input(img)
     src = _to_grayscale_matrix(img)
     return _dispatch_backend(
         backend,

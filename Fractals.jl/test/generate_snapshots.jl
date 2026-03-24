@@ -21,12 +21,12 @@ function _write_snapshot(name::AbstractString, image)
 end
 
 transform_ifs = IFS(SMALL_EQ; npoints=50)
-transform_img = Fractals._render_transformations_image(transform_ifs;
-                                                       width=96,
-                                                       height=96,
-                                                       initial_polygon=:line_arrow,
-                                                       color=true,
-                                                       axis=true)
+transform_img = render(transform_ifs;
+                       method=RenderTransformations,
+                       resolution=(96, 96),
+                       initial_polygon=:line_arrow,
+                       color=true,
+                       axis=true).image
 _write_snapshot("transformations-line-arrow-color-axis", transform_img)
 
 inverse = render(SMALL_EQ;

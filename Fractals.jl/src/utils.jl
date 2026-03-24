@@ -168,3 +168,31 @@ end
     b = round(Int, clamp(c.b, 0.0f0, 1.0f0) * 255)
     return @sprintf("#%02X%02X%02X", r, g, b)
 end
+
+function _apply_alpha_mask(img::AbstractMatrix{Float32})
+    out = Matrix{GrayA{Float32}}(undef, size(img)...)
+    @inbounds for i in eachindex(img)
+        value = img[i]
+        out[i] = GrayA{Float32}(value, value > 0f0 ? 1f0 : 0f0)
+    end
+    return out
+end
+
+function _apply_alpha_mask(img::AbstractMatrix{Gray{Float32}})
+    out = Matrix{GrayA{Float32}}(undef, size(img)...)
+    @inbounds for i in eachindex(img)
+        value = Float32(img[i])
+        out[i] = GrayA{Float32}(value, value > 0f0 ? 1f0 : 0f0)
+    end
+    return out
+end
+
+function _apply_alpha_mask(img::AbstractMatrix{RGB{Float32}})
+    out = Matrix{RGBA{Float32}}(undef, size(img)...)
+    @inbounds for i in eachindex(img)
+        px = img[i]
+        a = (px.r > 0f0 || px.g > 0f0 || px.b > 0f0) ? 1f0 : 0f0
+        out[i] = RGBA{Float32}(px.r, px.g, px.b, a)
+    end
+    return out
+end

@@ -48,6 +48,36 @@ struct IFS
                   Tuple{Float64,Float64}}
 end
 
+@inline function _contractive_row(a::Real, b::Real, d::Real, e::Real)
+    aa = Float64(a)
+    bb = Float64(b)
+    dd = Float64(d)
+    ee = Float64(e)
+    return aa^2 + dd^2 < 1 &&
+           bb^2 + ee^2 < 1 &&
+           aa^2 + bb^2 + dd^2 + ee^2 < 1 + (aa * ee - dd * bb)^2
+end
+
+function _noncontractive_rows(eq::AbstractMatrix{<:Real})
+    failures = NamedTuple[]
+    for i in 1:size(eq, 1)
+        a, b, d, e = eq[i, 1], eq[i, 2], eq[i, 3], eq[i, 4]
+        _contractive_row(a, b, d, e) && continue
+        push!(failures, (row=i, a=Float64(a), b=Float64(b), d=Float64(d), e=Float64(e)))
+    end
+    return failures
+end
+
+function _format_contractivity_failure(failure)
+    return "row $(failure.row) is not contractive for coefficients (a=$(failure.a), b=$(failure.b), d=$(failure.d), e=$(failure.e))"
+end
+
+function _validate_contractivity(eq::AbstractMatrix{<:Real}; context::AbstractString="IFS equation matrix")
+    failures = _noncontractive_rows(eq)
+    isempty(failures) || throw(ArgumentError("$context contains non-contractive affine maps: $(_format_contractivity_failure(first(failures)))."))
+    return nothing
+end
+
 function Base.show(io::IO, f::IFS)
     println(io, "IFS: $(f.name)")
     if !isempty(f.docs)
@@ -104,6 +134,81 @@ function _validate_eq_matrix(eq::AbstractMatrix{<:Real})
     end
 
     return nothing
+end
+
+function _resolve_nmaps(rng::AbstractRNG, nmaps::Integer)
+    nmaps > 0 || throw(ArgumentError("nmaps must be > 0, got $nmaps"))
+    return Int(nmaps)
+end
+
+function _resolve_nmaps(rng::AbstractRNG, nmaps::UnitRange{Int})
+    isempty(nmaps) && throw(ArgumentError("nmaps range must be non-empty"))
+    minimum(nmaps) > 0 || throw(ArgumentError("nmaps range must contain only positive values, got $nmaps"))
+    return rand(rng, nmaps)
+end
+
+function _sample_contractive_row(rng::AbstractRNG; linear_range::Real=0.95, translation_range::Real=1.0, max_tries::Integer=10_000)
+    linear_range > 0 || throw(ArgumentError("linear_range must be > 0, got $linear_range"))
+    translation_range >= 0 || throw(ArgumentError("translation_range must be >= 0, got $translation_range"))
+    max_tries > 0 || throw(ArgumentError("max_tries must be > 0, got $max_tries"))
+
+    for _ in 1:max_tries
+        a = rand(rng) * 2 * linear_range - linear_range
+        b = rand(rng) * 2 * linear_range - linear_range
+        d = rand(rng) * 2 * linear_range - linear_range
+        e = rand(rng) * 2 * linear_range - linear_range
+        _contractive_row(a, b, d, e) || continue
+        c = rand(rng) * 2 * translation_range - translation_range
+        f = rand(rng) * 2 * translation_range - translation_range
+        return (a, b, d, e, c, f)
+    end
+
+    throw(ArgumentError("Unable to sample a contractive affine map within max_tries=$max_tries"))
+end
+
+function random_eq(;
+                   nmaps::Union{Integer,UnitRange{Int}}=2:4,
+                   translation_range::Real=1.0,
+                   with_probs::Bool=true,
+                   rng::AbstractRNG=Random.default_rng(),
+                   max_tries::Integer=10_000)
+    n = _resolve_nmaps(rng, nmaps)
+    ncols = with_probs ? 7 : 6
+    eq = Matrix{Float64}(undef, n, ncols)
+    for i in 1:n
+        a, b, d, e, c, f = _sample_contractive_row(rng;
+                                                   translation_range=translation_range,
+                                                   max_tries=max_tries)
+        eq[i, 1] = a
+        eq[i, 2] = b
+        eq[i, 3] = d
+        eq[i, 4] = e
+        eq[i, 5] = c
+        eq[i, 6] = f
+    end
+    if with_probs
+        probs = rand(rng, n)
+        probs ./= sum(probs)
+        eq[:, 7] .= probs
+    end
+    return eq
+end
+
+function random_ifs(;
+                    npoints::Integer=DEFAULT_SAMPLES,
+                    name::AbstractString="",
+                    docs::AbstractString="",
+                    nmaps::Union{Integer,UnitRange{Int}}=2:4,
+                    translation_range::Real=1.0,
+                    with_probs::Bool=true,
+                    rng::AbstractRNG=Random.default_rng(),
+                    max_tries::Integer=10_000)
+    eq = random_eq(; nmaps=nmaps,
+                   translation_range=translation_range,
+                   with_probs=with_probs,
+                   rng=rng,
+                   max_tries=max_tries)
+    return IFS(eq; npoints=npoints, name=name, docs=docs)
 end
 
 # --------------------------------

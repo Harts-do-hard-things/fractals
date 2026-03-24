@@ -10,6 +10,15 @@ function make_pixelate_map(limits;
     xmin, xmax = xlim
     ymin, ymax = ylim
 
+    if xmin == xmax
+        xmin -= 0.5
+        xmax += 0.5
+    end
+    if ymin == ymax
+        ymin -= 0.5
+        ymax += 0.5
+    end
+
     r = min(rows, cols)
     sx = r / (xmax - xmin)
     sy = r / (ymax - ymin)

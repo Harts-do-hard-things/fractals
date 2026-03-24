@@ -151,8 +151,35 @@ function parse_ifs_definitions_file(path::AbstractString)
     return parse_ifs_definitions_string(read(path, String))
 end
 
+function _split_valid_ifs_definitions(defs::Vector{IFSDefinition})
+    valid = IFSDefinition[]
+    invalid = NamedTuple[]
+    for d in defs
+        failures = _noncontractive_rows(d.eq)
+        if isempty(failures)
+            push!(valid, d)
+        else
+            push!(invalid, (definition=d, failures=failures))
+        end
+    end
+    return valid, invalid
+end
+
+function _warn_skipped_invalid_ifs(source::AbstractString, invalid)
+    for entry in invalid
+        @warn "Skipping non-contractive IFS definition '$(entry.definition.name)' from $source: $(_format_contractivity_failure(first(entry.failures)))."
+    end
+    return nothing
+end
+
+function _validated_ifs_definitions(defs::Vector{IFSDefinition}; source::AbstractString="input")
+    valid, invalid = _split_valid_ifs_definitions(defs)
+    isempty(invalid) || _warn_skipped_invalid_ifs(source, invalid)
+    return valid
+end
+
 function parse_ifs_string(input::AbstractString; npoints::Integer=DEFAULT_SAMPLES)
-    defs = parse_ifs_definitions_string(input)
+    defs = _validated_ifs_definitions(parse_ifs_definitions_string(input); source="input")
     out = Vector{IFS}(undef, length(defs))
     @inbounds for i in eachindex(defs)
         d = defs[i]
@@ -162,7 +189,7 @@ function parse_ifs_string(input::AbstractString; npoints::Integer=DEFAULT_SAMPLE
 end
 
 function parse_ifs_file(path::AbstractString; npoints::Integer=DEFAULT_SAMPLES)
-    defs = parse_ifs_definitions_file(path)
+    defs = _validated_ifs_definitions(parse_ifs_definitions_file(path); source=path)
     out = Vector{IFS}(undef, length(defs))
     @inbounds for i in eachindex(defs)
         d = defs[i]
@@ -170,4 +197,3 @@ function parse_ifs_file(path::AbstractString; npoints::Integer=DEFAULT_SAMPLES)
     end
     return out
 end
-

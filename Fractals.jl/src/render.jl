@@ -7,6 +7,7 @@ function render_chaos(
     npoints::Union{Nothing,Integer}             = nothing,
     warmup::Integer                             = DEFAULT_WARMUP,
     color::Bool                                 = false,
+    alpha::Bool                                 = false,
     resolution::Tuple{Int,Int}                  = RESOLUTION,
     outpath::AbstractString                     = "media/render.png",
     backend::Symbol                             = :cpu,
@@ -26,6 +27,9 @@ function render_chaos(
     if color
         img = iterate_image(ifs, img; colors=true, backend=backend)
     end
+    if alpha
+        img = _apply_alpha_mask(img)
+    end
 
     final_outpath = _normalize_media_outpath(outpath)
     save(final_outpath, img)
@@ -38,6 +42,7 @@ function render_point_deterministic(
     warmup::Integer                             = DEFAULT_WARMUP,
     iterations::Integer                         = 1,
     color::Bool                                 = false,
+    alpha::Bool                                 = false,
     resolution::Tuple{Int,Int}                  = RESOLUTION,
     outpath::AbstractString                     = "media/render.png",
     backend::Symbol                             = :cpu,
@@ -58,6 +63,9 @@ function render_point_deterministic(
     if color
         img = iterate_image(ifs, img; colors=true, backend=backend)
     end
+    if alpha
+        img = _apply_alpha_mask(img)
+    end
 
     final_outpath = _normalize_media_outpath(outpath)
     save(final_outpath, img)
@@ -71,6 +79,7 @@ function render_inverse(
     iterations::Integer                         = 8,
     show_divergence_scale::Bool                 = true,
     color::Bool                                 = false,
+    alpha::Bool                                 = false,
     resolution::Tuple{Int,Int}                  = RESOLUTION,
     outpath::AbstractString                     = "media/render.png",
     backend::Symbol                             = :cpu,
@@ -93,6 +102,9 @@ function render_inverse(
     if color
         img = iterate_image(ifs, img; colors=true, backend=backend)
     end
+    if alpha
+        img = _apply_alpha_mask(img)
+    end
 
     final_outpath = _normalize_media_outpath(outpath)
     save(final_outpath, img)
@@ -104,17 +116,22 @@ function _render_image_iterate_impl(
     npoints::Union{Nothing,Integer}             = nothing,
     warmup::Integer                             = DEFAULT_WARMUP,
     iterations::Integer                         = 1,
+    color::Bool                                 = false,
+    alpha::Bool                                 = false,
     image_source::Symbol                        = :polygon,
     image_path::Union{Nothing,AbstractString}   = nothing,
     image_iterations::Integer                   = 1,
-    polygon_limits_mode::Symbol                 = :ifs,
+    polygon_limits_mode::Symbol                 = :geometry,
+    polygon_limits_iterations::Union{Nothing,Integer} = nothing,
     initial_polygon_spec::Symbol                = :default,
+    show_divergence_scale::Bool                 = true,
+    show_base::Bool                             = false,
+    axis::Bool                                  = false,
     resolution::Tuple{Int,Int}                  = RESOLUTION,
     outpath::AbstractString                     = "media/render.png",
     backend::Symbol                             = :cpu,
     ifs_index::Union{Nothing,Integer}           = nothing,
     ifs_name::Union{Nothing,AbstractString}     = nothing,
-    # color is intentionally absent — ImageIterate is grayscale-only
     input_fn                                    = readline,
 )
     isnothing(npoints) || npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
@@ -124,23 +141,51 @@ function _render_image_iterate_impl(
     resolution[1] > 0 && resolution[2] > 0 || throw(ArgumentError("resolution must be positive, got $resolution"))
     backend in (:cpu, :gpu, :auto) || throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
     _validate_image_source(image_source)
-    polygon_limits_mode in (:ifs, :default) ||
-        throw(ArgumentError("Invalid polygon_limits_mode '$polygon_limits_mode'. Supported: :ifs, :default"))
+    polygon_limits_mode in (:geometry, :ifs, :default) ||
+        throw(ArgumentError("Invalid polygon_limits_mode '$polygon_limits_mode'. Supported: :geometry, :ifs, :default"))
+    isnothing(polygon_limits_iterations) || polygon_limits_iterations >= 0 ||
+        throw(ArgumentError("polygon_limits_iterations must be >= 0, got $polygon_limits_iterations"))
     preset = _resolve_initial_polygon(initial_polygon_spec)
     image_source == :file && isnothing(image_path) &&
         throw(ArgumentError("image_path is required when image_source=:file"))
+    image_source != :polygon && !isnothing(polygon_limits_iterations) &&
+        throw(ArgumentError("polygon_limits_iterations is only supported when image_source=:polygon for method=ImageIterate"))
+    image_source != :polygon && show_base &&
+        throw(ArgumentError("show_base is only supported when image_source=:polygon for method=ImageIterate"))
+    image_source != :polygon && axis &&
+        throw(ArgumentError("axis is only supported when image_source=:polygon for method=ImageIterate"))
 
     ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index, ifs_name=ifs_name, input_fn=input_fn)
-    img = _resolve_image_source(ifs, image_source, image_path, resolution, warmup,
-                                iterations, iterations,
-                                polygon_limits_mode, true, preset, backend)
-    for _ in 1:image_iterations
-        img = iterate_image(ifs, img; colors=false, backend=backend)
+    normalized_polygon_limits_mode = image_source == :polygon ? _normalize_polygon_limits_mode(polygon_limits_mode) : polygon_limits_mode
+    resolved_polygon_limits_iterations = isnothing(polygon_limits_iterations) ? image_iterations : Int(polygon_limits_iterations)
+    source = _resolve_image_source_context(ifs, image_source, image_path, resolution, warmup,
+                                           iterations, iterations,
+                                           normalized_polygon_limits_mode, resolved_polygon_limits_iterations,
+                                           show_divergence_scale, preset, backend)
+    raster_ifs = source.ifs
+    img = source.image
+    for pass in 1:image_iterations
+        img = iterate_image(raster_ifs, img; colors=(color && pass == image_iterations), backend=backend)
+    end
+    if image_source == :polygon && show_base
+        _overlay_initial_polygon!(img, raster_ifs;
+                                  width=resolution[2],
+                                  height=resolution[1],
+                                  initial_polygon_spec=preset,
+                                  color=color)
+    end
+    if image_source == :polygon && axis
+        _overlay_axes!(img, raster_ifs;
+                       width=resolution[2],
+                       height=resolution[1])
+    end
+    if alpha
+        img = _apply_alpha_mask(img)
     end
 
     final_outpath = _normalize_media_outpath(outpath)
     save(final_outpath, img)
-    return (ifs=ifs, image=img, outpath=final_outpath, method=:image_iterate)
+    return (ifs=raster_ifs, image=img, outpath=final_outpath, method=:image_iterate)
 end
 
 function render_image_iterate(
@@ -148,11 +193,17 @@ function render_image_iterate(
     npoints::Union{Nothing,Integer}             = nothing,
     warmup::Integer                             = DEFAULT_WARMUP,
     iterations::Integer                         = 1,
+    color::Bool                                 = false,
+    alpha::Bool                                 = false,
     image_source::Symbol                        = :polygon,
     image_path::Union{Nothing,AbstractString}   = nothing,
     image_iterations::Integer                   = 1,
-    polygon_limits_mode::Symbol                 = :ifs,
+    polygon_limits_mode::Symbol                 = :geometry,
+    polygon_limits_iterations::Union{Nothing,Integer} = nothing,
     initial_polygon::Symbol                     = :default,
+    show_divergence_scale::Bool                 = true,
+    show_base::Bool                             = false,
+    axis::Bool                                  = false,
     resolution::Tuple{Int,Int}                  = RESOLUTION,
     outpath::AbstractString                     = "media/render.png",
     backend::Symbol                             = :cpu,
@@ -164,11 +215,17 @@ function render_image_iterate(
                                       npoints=npoints,
                                       warmup=warmup,
                                       iterations=iterations,
+                                      color=color,
+                                      alpha=alpha,
                                       image_source=image_source,
                                       image_path=image_path,
                                       image_iterations=image_iterations,
                                       polygon_limits_mode=polygon_limits_mode,
+                                      polygon_limits_iterations=polygon_limits_iterations,
                                       initial_polygon_spec=initial_polygon,
+                                      show_divergence_scale=show_divergence_scale,
+                                      show_base=show_base,
+                                      axis=axis,
                                       resolution=resolution,
                                       outpath=outpath,
                                       backend=backend,
@@ -183,7 +240,9 @@ function _render_transformations_impl(
     show_base::Bool                             = false,
     axis::Bool                                  = false,
     color::Bool                                 = true,
+    alpha::Bool                                 = false,
     initial_polygon_spec::Symbol                = :default,
+    polygon_limits_iterations::Integer          = 1,
     resolution::Tuple{Int,Int}                  = RESOLUTION,
     outpath::AbstractString                     = "media/render.png",
     ifs_index::Union{Nothing,Integer}           = nothing,
@@ -192,6 +251,8 @@ function _render_transformations_impl(
 )
     isnothing(npoints) || npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
     resolution[1] > 0 && resolution[2] > 0 || throw(ArgumentError("resolution must be positive, got $resolution"))
+    polygon_limits_iterations >= 0 ||
+        throw(ArgumentError("polygon_limits_iterations must be >= 0, got $polygon_limits_iterations"))
     preset = _resolve_initial_polygon(initial_polygon_spec)
 
     ifs = _resolve_render_input(input; npoints=npoints, ifs_index=ifs_index, ifs_name=ifs_name, input_fn=input_fn)
@@ -200,8 +261,10 @@ function _render_transformations_impl(
                                         height=resolution[1],
                                         show_base=show_base,
                                         initial_polygon_spec=preset,
+                                        polygon_limits_iterations=polygon_limits_iterations,
                                         color=color,
-                                        axis=axis)
+                                        axis=axis,
+                                        alpha=alpha)
     final_outpath = _normalize_media_outpath(outpath)
     save(final_outpath, img)
     return (ifs=ifs, image=img, outpath=final_outpath, method=:render_transformations)
@@ -213,7 +276,9 @@ function render_transformations(
     show_base::Bool                             = false,
     axis::Bool                                  = false,
     color::Bool                                 = true,
+    alpha::Bool                                 = false,
     initial_polygon::Symbol                     = :default,
+    polygon_limits_iterations::Integer          = 1,
     resolution::Tuple{Int,Int}                  = RESOLUTION,
     outpath::AbstractString                     = "media/render.png",
     ifs_index::Union{Nothing,Integer}           = nothing,
@@ -225,7 +290,9 @@ function render_transformations(
                                         show_base=show_base,
                                         axis=axis,
                                         color=color,
+                                        alpha=alpha,
                                         initial_polygon_spec=initial_polygon,
+                                        polygon_limits_iterations=polygon_limits_iterations,
                                         resolution=resolution,
                                         outpath=outpath,
                                         ifs_index=ifs_index,
@@ -281,8 +348,8 @@ function _resolve_render_input(
     input_fn=readline  # _select_ifs_definition is defined in interactive.jl
 )
     resolved_npoints = isnothing(npoints) ? DEFAULT_SAMPLES : npoints
-    defs = isfile(input) ? parse_ifs_definitions_file(input) :
-                           parse_ifs_definitions_string(input)
+    defs = isfile(input) ? _validated_ifs_definitions(parse_ifs_definitions_file(input); source=input) :
+                           _validated_ifs_definitions(parse_ifs_definitions_string(input); source="input")
 
     isempty(defs) && throw(ArgumentError("No IFS definitions found in input"))
     selected = _select_ifs_definition(defs; ifs_index=ifs_index, ifs_name=ifs_name, input_fn=input_fn)
@@ -298,6 +365,8 @@ function render(
     method::Union{RenderMethod,Symbol,AbstractString} = Chaos,
     npoints::Union{Nothing,Integer}                   = nothing,
     warmup::Integer                                   = DEFAULT_WARMUP,
+    color::Union{Nothing,Bool}                        = nothing,
+    alpha::Bool                                       = false,
     resolution::Tuple{Int,Int}                        = RESOLUTION,
     outpath::AbstractString                           = "media/render.png",
     backend::Symbol                                   = :cpu,
@@ -309,11 +378,8 @@ function render(
     parsed_method = _parse_render_method(method)
     render_method = parsed_method == Parallel ? Chaos : parsed_method
 
-    if render_method == ImageIterate && get(kwargs, :color, false) == true
-        throw(ArgumentError("color=true is not supported for method=ImageIterate. ImageIterate is grayscale-only."))
-    end
-
-    shared = (; npoints, warmup, resolution, outpath, backend, ifs_index, ifs_name, input_fn)
+    shared_color = isnothing(color) ? false : color
+    shared = (; npoints, warmup, color=shared_color, alpha, resolution, outpath, backend, ifs_index, ifs_name, input_fn)
 
     if render_method == Chaos
         return render_chaos(input; shared..., kwargs...)
@@ -324,8 +390,9 @@ function render(
     elseif render_method == ImageIterate
         return render_image_iterate(input; shared..., kwargs...)
     else  # RenderTransformations — warmup and backend are not forwarded (unused)
+        transform_color = isnothing(color) ? true : color
         return render_transformations(input;
-                                      npoints, resolution, outpath,
+                                      npoints, color=transform_color, alpha, resolution, outpath,
                                       ifs_index, ifs_name, input_fn,
                                       kwargs...)
     end
