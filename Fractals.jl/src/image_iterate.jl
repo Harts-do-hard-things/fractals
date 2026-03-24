@@ -108,7 +108,9 @@ function _resolve_image_source_from_file(req::ImageSourceRequest)
     isfile(req.image_path) || throw(ArgumentError("image_path '$(req.image_path)' does not exist"))
     img = load(req.image_path)
     _validate_iterate_image_input(img)
-    return (; ifs=req.ifs, image=_to_grayscale_matrix(img))
+    source_limits = _read_png_source_limits(req.image_path)
+    source_ifs = isnothing(source_limits) ? req.ifs : _ifs_with_limits(req.ifs, source_limits)
+    return (; ifs=source_ifs, image=_to_grayscale_matrix(img))
 end
 
 function _resolve_image_source_from_chaos(req::ImageSourceRequest)

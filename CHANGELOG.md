@@ -9,9 +9,10 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
 ### Added
 - `interpolate_eq_matrix(...)` and `interpolate_ifs(...)` helpers for animation-oriented transform interpolation.
 - `render_interpolation_frames(...)` for deterministic transformation-frame rendering into numbered PNG sequences.
+- PNG outputs now embed source-limits metadata so `image_source=:file` can reuse the original pixel-to-world framing when that metadata is present.
 
 ### Changed
-- Breaking API change: `render_transformations_svg` and `render_transformations_png` now always project using `ifs.limits`; `render_transformations_png(...; limits_mode=...)` is no longer supported.
+- Breaking API change: transformation renders no longer accept `limits_mode`; PNG now frames from derived polygon limits by default, and SVG now uses the same derived polygon limits behavior via `polygon_limits_iterations`.
 - Transformation axis overlays now render within the existing `ifs.limits` projection instead of affecting the visible framing.
 
 ## [1.0.0] - 2026-03-02

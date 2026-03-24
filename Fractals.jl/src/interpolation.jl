@@ -184,7 +184,10 @@ function render_interpolation_frames(
                                             color=get(kwargs, :color, false),
                                             axis=get(kwargs, :axis, false),
                                             alpha=get(kwargs, :alpha, false))
-        save(path, img)
+        source_limits = _render_transformations_effective_ifs(ifs;
+                                                              initial_polygon_spec=get(kwargs, :initial_polygon, :default),
+                                                              polygon_limits_iterations=get(kwargs, :polygon_limits_iterations, 1)).limits
+        _save_image_with_source_limits(path, img, source_limits)
         push!(paths, path)
     end
 

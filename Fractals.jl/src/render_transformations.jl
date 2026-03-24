@@ -224,6 +224,16 @@ function _build_polygon_raster_ifs(
     return IFS(ifs.name, ifs.docs, copy(ifs.points), ifs.maps, ifs.weights, limits)
 end
 
+@inline function _render_transformations_effective_ifs(
+    ifs;
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+    polygon_limits_iterations::Integer=1,
+)
+    return _build_polygon_raster_ifs(ifs;
+                                     initial_polygon_spec=initial_polygon_spec,
+                                     polygon_limits_iterations=polygon_limits_iterations)
+end
+
 function _collect_transformed_base_segments(
     ifs;
     show_base::Bool=false,
@@ -254,14 +264,18 @@ function _render_transformations_svg_impl(
     height::Int=1200,
     show_base::Bool=false,
     initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+    polygon_limits_iterations::Integer=1,
     stroke_width::Real=2.0,
     axis::Bool=false,
 )
+    svg_ifs = _build_polygon_raster_ifs(ifs;
+                                        initial_polygon_spec=initial_polygon_spec,
+                                        polygon_limits_iterations=polygon_limits_iterations)
     _, base_segments, transformed_by_map, _ =
         _collect_transformed_base_segments(ifs; show_base=show_base, initial_polygon_spec=initial_polygon_spec)
     colors = _map_colors(length(transformed_by_map))
 
-    sx, sy, ox, oy = _projection_from_limits(ifs.limits, width, height)
+    sx, sy, ox, oy = _projection_from_limits(svg_ifs.limits, width, height)
     lines = String[]
 
     if show_base
@@ -338,6 +352,7 @@ function render_transformations_svg(
     height::Int=1200,
     show_base::Bool=false,
     initial_polygon::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+    polygon_limits_iterations::Integer=1,
     stroke_width::Real=2.0,
     axis::Bool=false,
 )
@@ -347,6 +362,7 @@ function render_transformations_svg(
                                             height=height,
                                             show_base=show_base,
                                             initial_polygon_spec=initial_polygon,
+                                            polygon_limits_iterations=polygon_limits_iterations,
                                             stroke_width=stroke_width,
                                             axis=axis)
 end
@@ -578,9 +594,9 @@ function _render_transformations_image(
     axis::Bool=false,
     alpha::Bool=false,
 )
-    raster_ifs = _build_polygon_raster_ifs(ifs;
-                                           initial_polygon_spec=initial_polygon_spec,
-                                           polygon_limits_iterations=polygon_limits_iterations)
+    raster_ifs = _render_transformations_effective_ifs(ifs;
+                                                       initial_polygon_spec=initial_polygon_spec,
+                                                       polygon_limits_iterations=polygon_limits_iterations)
 
     seed = _render_initial_polygon_seed_image(raster_ifs;
                                               width=width,
@@ -612,6 +628,9 @@ function _render_transformations_png_impl(
     axis::Bool=false,
     alpha::Bool=false,
 )
+    raster_ifs = _render_transformations_effective_ifs(ifs;
+                                                       initial_polygon_spec=initial_polygon_spec,
+                                                       polygon_limits_iterations=polygon_limits_iterations)
     img = _render_transformations_image(ifs;
                                         width=width,
                                         height=height,
@@ -623,7 +642,7 @@ function _render_transformations_png_impl(
                                         alpha=alpha)
 
     final_outpath = _normalize_media_outpath(outpath)
-    save(final_outpath, img)
+    _save_image_with_source_limits(final_outpath, img, raster_ifs.limits)
     return final_outpath
 end
 

@@ -32,7 +32,7 @@ function render_chaos(
     end
 
     final_outpath = _normalize_media_outpath(outpath)
-    save(final_outpath, img)
+    _save_image_with_source_limits(final_outpath, img, ifs.limits)
     return (ifs=ifs, image=img, outpath=final_outpath, method=:chaos)
 end
 
@@ -68,7 +68,7 @@ function render_point_deterministic(
     end
 
     final_outpath = _normalize_media_outpath(outpath)
-    save(final_outpath, img)
+    _save_image_with_source_limits(final_outpath, img, rendered_ifs.limits)
     return (ifs=rendered_ifs, image=img, outpath=final_outpath, method=:point_deterministic)
 end
 
@@ -107,7 +107,7 @@ function render_inverse(
     end
 
     final_outpath = _normalize_media_outpath(outpath)
-    save(final_outpath, img)
+    _save_image_with_source_limits(final_outpath, img, ifs.limits)
     return (ifs=ifs, image=img, outpath=final_outpath, method=:inverse)
 end
 
@@ -184,7 +184,7 @@ function _render_image_iterate_impl(
     end
 
     final_outpath = _normalize_media_outpath(outpath)
-    save(final_outpath, img)
+    _save_image_with_source_limits(final_outpath, img, raster_ifs.limits)
     return (ifs=raster_ifs, image=img, outpath=final_outpath, method=:image_iterate)
 end
 
@@ -265,8 +265,11 @@ function _render_transformations_impl(
                                         color=color,
                                         axis=axis,
                                         alpha=alpha)
+    raster_ifs = _render_transformations_effective_ifs(ifs;
+                                                       initial_polygon_spec=preset,
+                                                       polygon_limits_iterations=polygon_limits_iterations)
     final_outpath = _normalize_media_outpath(outpath)
-    save(final_outpath, img)
+    _save_image_with_source_limits(final_outpath, img, raster_ifs.limits)
     return (ifs=ifs, image=img, outpath=final_outpath, method=:render_transformations)
 end
 

@@ -52,6 +52,211 @@ function _normalize_media_outpath(outpath::AbstractString)
     return final
 end
 
+const _PNG_SIGNATURE = UInt8[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+const _PNG_SOURCE_LIMITS_KEYWORD = "fractals.source_limits"
+const _PNG_SOURCE_LIMITS_VERSION = 1
+const _PNG_CRC32_TABLE = let table = Vector{UInt32}(undef, 256)
+    for i in 0:255
+        crc = UInt32(i)
+        for _ in 1:8
+            if isodd(crc)
+                crc = (crc >> 1) ⊻ 0xedb88320
+            else
+                crc >>= 1
+            end
+        end
+        table[i + 1] = crc
+    end
+    table
+end
+
+@inline function _has_png_extension(path::AbstractString)
+    return lowercase(splitext(String(path))[2]) == ".png"
+end
+
+@inline function _limits_tuple(
+    x1::Real,
+    x2::Real,
+    y1::Real,
+    y2::Real,
+)
+    return ((Float64(x1), Float64(x2)), (Float64(y1), Float64(y2)))
+end
+
+function _serialize_source_limits_payload(limits)
+    return JSON3.write((
+        version=_PNG_SOURCE_LIMITS_VERSION,
+        x=[limits[1][1], limits[1][2]],
+        y=[limits[2][1], limits[2][2]],
+    ))
+end
+
+function _deserialize_source_limits_payload(payload::AbstractString)
+    obj = JSON3.read(payload)
+    version = get(obj, :version, get(obj, "version", nothing))
+    version == _PNG_SOURCE_LIMITS_VERSION ||
+        throw(ArgumentError("Unsupported source limits metadata version '$version'"))
+
+    x = get(obj, :x, get(obj, "x", nothing))
+    y = get(obj, :y, get(obj, "y", nothing))
+    (x === nothing || y === nothing || length(x) != 2 || length(y) != 2) &&
+        throw(ArgumentError("Invalid source limits metadata payload"))
+
+    return _limits_tuple(x[1], x[2], y[1], y[2])
+end
+
+@inline function _png_read_u32be(bytes::AbstractVector{UInt8}, pos::Int)
+    return (UInt32(bytes[pos]) << 24) |
+           (UInt32(bytes[pos + 1]) << 16) |
+           (UInt32(bytes[pos + 2]) << 8) |
+           UInt32(bytes[pos + 3])
+end
+
+function _png_write_u32be(value::UInt32)
+    return UInt8[
+        UInt8((value >> 24) & 0xff),
+        UInt8((value >> 16) & 0xff),
+        UInt8((value >> 8) & 0xff),
+        UInt8(value & 0xff),
+    ]
+end
+
+function _png_crc32(bytes::AbstractVector{UInt8})
+    crc = 0xffffffff % UInt32
+    for b in bytes
+        idx = Int(((crc ⊻ UInt32(b)) & 0xff) + 0x01)
+        crc = (crc >> 8) ⊻ _PNG_CRC32_TABLE[idx]
+    end
+    return ~crc
+end
+
+@inline function _is_png_bytes(bytes::AbstractVector{UInt8})
+    length(bytes) >= length(_PNG_SIGNATURE) || return false
+    return bytes[1:length(_PNG_SIGNATURE)] == _PNG_SIGNATURE
+end
+
+function _parse_png_chunks(bytes::AbstractVector{UInt8})
+    _is_png_bytes(bytes) || throw(ArgumentError("File is not a valid PNG"))
+    chunks = NamedTuple[]
+    pos = length(_PNG_SIGNATURE) + 1
+
+    while pos + 11 <= length(bytes)
+        raw_start = pos
+        len = Int(_png_read_u32be(bytes, pos))
+        type_start = pos + 4
+        data_start = pos + 8
+        data_end = data_start + len - 1
+        crc_end = data_end + 4
+        crc_end <= length(bytes) || throw(ArgumentError("Truncated PNG chunk"))
+
+        chunk_type = String(Char.(bytes[type_start:type_start + 3]))
+        chunk_data = len == 0 ? UInt8[] : Vector{UInt8}(bytes[data_start:data_end])
+        raw = Vector{UInt8}(bytes[raw_start:crc_end])
+        push!(chunks, (type=chunk_type, data=chunk_data, raw=raw))
+
+        pos = crc_end + 1
+        chunk_type == "IEND" && break
+    end
+
+    isempty(chunks) && throw(ArgumentError("PNG contains no chunks"))
+    return chunks
+end
+
+function _png_text_keyword_and_value(data::AbstractVector{UInt8})
+    nul = findfirst(==(0x00), data)
+    nul === nothing && return nothing
+    keyword = String(Char.(data[1:nul-1]))
+    value = String(Char.(data[nul + 1:end]))
+    return keyword => value
+end
+
+function _png_make_text_chunk(keyword::AbstractString, value::AbstractString)
+    keyword_bytes = Vector{UInt8}(codeunits(String(keyword)))
+    value_bytes = Vector{UInt8}(codeunits(String(value)))
+    data = UInt8[keyword_bytes; 0x00; value_bytes]
+    type_bytes = UInt8[0x74, 0x45, 0x58, 0x74] # tEXt
+    crc = _png_crc32(UInt8[type_bytes; data])
+    return UInt8[_png_write_u32be(UInt32(length(data))); type_bytes; data; _png_write_u32be(crc)]
+end
+
+function _embed_png_text_chunk(path::AbstractString, keyword::AbstractString, value::AbstractString)
+    bytes = read(path)
+    chunks = _parse_png_chunks(bytes)
+    out = copy(_PNG_SIGNATURE)
+    inserted = false
+
+    for chunk in chunks
+        keep = true
+        if chunk.type == "tEXt"
+            pair = _png_text_keyword_and_value(chunk.data)
+            if !isnothing(pair) && first(pair) == keyword
+                keep = false
+            end
+        end
+
+        if keep
+            append!(out, chunk.raw)
+        end
+
+        if !inserted && chunk.type == "IHDR"
+            append!(out, _png_make_text_chunk(keyword, value))
+            inserted = true
+        end
+    end
+
+    inserted || throw(ArgumentError("PNG is missing IHDR chunk"))
+    write(path, out)
+    return path
+end
+
+function _read_png_text_chunk(path::AbstractString, keyword::AbstractString)
+    _has_png_extension(path) || return nothing
+    isfile(path) || return nothing
+
+    try
+        chunks = _parse_png_chunks(read(path))
+        for chunk in chunks
+            chunk.type == "tEXt" || continue
+            pair = _png_text_keyword_and_value(chunk.data)
+            if !isnothing(pair) && first(pair) == keyword
+                return last(pair)
+            end
+        end
+    catch err
+        @warn "Failed to read PNG metadata from '$path'; falling back to default limits." exception=(err, catch_backtrace())
+    end
+
+    return nothing
+end
+
+function _read_png_source_limits(path::AbstractString)
+    payload = _read_png_text_chunk(path, _PNG_SOURCE_LIMITS_KEYWORD)
+    isnothing(payload) && return nothing
+
+    try
+        return _deserialize_source_limits_payload(payload)
+    catch err
+        @warn "Failed to parse source limits metadata from '$path'; falling back to default limits." exception=(err, catch_backtrace())
+        return nothing
+    end
+end
+
+function _save_image_with_source_limits(
+    outpath::AbstractString,
+    img,
+    limits,
+)
+    save(outpath, img)
+    if _has_png_extension(outpath)
+        _embed_png_text_chunk(outpath, _PNG_SOURCE_LIMITS_KEYWORD, _serialize_source_limits_payload(limits))
+    end
+    return outpath
+end
+
+function _ifs_with_limits(ifs, limits)
+    return IFS(ifs.name, ifs.docs, copy(ifs.points), ifs.maps, ifs.weights, limits)
+end
+
 @inline function _initial_polygon_names_text()
     return join(string.(supported_initial_polygons()), ", ")
 end

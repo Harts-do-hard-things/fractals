@@ -9,6 +9,7 @@ using Colors
 using Random
 using Base.Threads
 using Printf
+using JSON3
 
 include("config.jl")                 # constants, RenderMethod enum, polygon presets
 include("utils.jl")                  # shared utilities: path helpers, color maps, GPU stub

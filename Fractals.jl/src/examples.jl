@@ -33,7 +33,7 @@ function main(; eq=EISENSTEIN,
 
     final_outpath = _normalize_media_outpath(outpath)
     println("Saving to $final_outpath")
-    save(final_outpath, img)
+    _save_image_with_source_limits(final_outpath, img, ifs.limits)
 
     println("Done.")
 end

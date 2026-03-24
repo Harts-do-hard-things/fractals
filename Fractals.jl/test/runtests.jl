@@ -1210,7 +1210,7 @@ end
     end
 end
 
-@testset "Transformation SVG And PNG Diverge As Expected" begin
+@testset "Transformation SVG Uses PNG-Derived Limits" begin
     function line_endpoints_from_svg(svg_text::AbstractString)
         m = match(r"<line x1=\"([^\"]+)\" y1=\"([^\"]+)\" x2=\"([^\"]+)\" y2=\"([^\"]+)\"", svg_text)
         m === nothing && error("No SVG line found")
@@ -1234,6 +1234,7 @@ end
         @test isfile(svg_path)
         svg_text = read(svg_path, String)
         got1, got2 = line_endpoints_from_svg(svg_text)
+        @test got1 != got2
 
         png_path = render_transformations_png(ifs;
                                               outpath=joinpath(tmp, "rot.png"),
@@ -1244,7 +1245,45 @@ end
         @test isfile(png_path)
         img = load(png_path)
         @test count(_is_drawn_pixel, img) > 0
-        @test got1 != got2
+
+        svg_legacy_path = render_transformations_svg(ifs;
+                                                     outpath=joinpath(tmp, "rot_legacy.svg"),
+                                                     width=width,
+                                                     height=height,
+                                                     initial_polygon=:line,
+                                                     polygon_limits_iterations=0)
+        @test isfile(svg_legacy_path)
+        svg_legacy_text = read(svg_legacy_path, String)
+        legacy1, legacy2 = line_endpoints_from_svg(svg_legacy_text)
+
+        @test (got1, got2) != (legacy1, legacy2)
+    end
+end
+
+@testset "Transformation SVG Polygon Limits Iterations Affect Framing" begin
+    eq = reshape([1.0 0.0 0.0 1.0 0.0 10.0 1.0], 1, 7)
+    ifs = IFS(eq; npoints=10)
+
+    mktempdir() do tmp
+        zero_iter_path = render_transformations_svg(ifs;
+                                                    outpath=joinpath(tmp, "limits0.svg"),
+                                                    width=320,
+                                                    height=320,
+                                                    initial_polygon=:line,
+                                                    polygon_limits_iterations=0)
+        one_iter_path = render_transformations_svg(ifs;
+                                                   outpath=joinpath(tmp, "limits1.svg"),
+                                                   width=320,
+                                                   height=320,
+                                                   initial_polygon=:line,
+                                                   polygon_limits_iterations=1)
+        @test isfile(zero_iter_path)
+        @test isfile(one_iter_path)
+        @test read(zero_iter_path, String) != read(one_iter_path, String)
+
+        @test_throws ArgumentError render_transformations_svg(ifs;
+                                                              outpath=joinpath(tmp, "never_write_bad_limits.svg"),
+                                                              polygon_limits_iterations=-1)
     end
 end
 
@@ -1777,6 +1816,61 @@ end
         @test_throws ArgumentError Fractals._resolve_image_source(ifs, :file, nothing, res, 5, 1, 2, :ifs, 1, true, initial_polygon(), :cpu)
         @test_throws ArgumentError Fractals._resolve_image_source(ifs, :file, joinpath(tmp, "missing.png"), res, 5, 1, 2, :ifs, 1, true, initial_polygon(), :cpu)
         @test_throws ArgumentError Fractals._resolve_image_source(ifs, :polygon, nothing, res, 5, 1, 2, :bad_mode, 1, true, initial_polygon(), :cpu)
+    end
+end
+
+@testset "PNG Source Limits Metadata" begin
+    mktempdir() do tmp
+        res = (32, 32)
+        src = fill(Gray{Float32}(0.0f0), res...)
+        src[8:24, 8:24] .= Gray{Float32}(1.0f0)
+        tagged_path = joinpath(tmp, "tagged.png")
+        plain_path = joinpath(tmp, "plain.png")
+        tagged_limits = ((-1.0, 1.0), (-1.0, 1.0))
+
+        Fractals._save_image_with_source_limits(tagged_path, src, tagged_limits)
+        save(plain_path, src)
+
+        @test isfile(tagged_path)
+        @test Fractals._read_png_source_limits(tagged_path) == tagged_limits
+        @test Fractals._read_png_source_limits(plain_path) === nothing
+        @test load(tagged_path) == src
+
+        ifs = IFS(reshape([0.5 0.0 0.0 0.5 0.0 10.0 1.0], 1, 7); npoints=10)
+        tagged_ctx = Fractals._resolve_image_source_context(ifs, :file, tagged_path, res, 5, 1, 2, :ifs, 1, true, initial_polygon(), :cpu)
+        plain_ctx = Fractals._resolve_image_source_context(ifs, :file, plain_path, res, 5, 1, 2, :ifs, 1, true, initial_polygon(), :cpu)
+
+        @test tagged_ctx.ifs.limits == tagged_limits
+        @test plain_ctx.ifs.limits == ifs.limits
+
+        tagged_iter = iterate_image(tagged_ctx.ifs, tagged_ctx.image; backend=:cpu)
+        plain_iter = iterate_image(plain_ctx.ifs, plain_ctx.image; backend=:cpu)
+        @test tagged_iter != plain_iter
+    end
+end
+
+@testset "Render Outputs Embed Source Limits Metadata" begin
+    mktempdir() do tmp
+        chaos_out = render(SMALL_EQ;
+                           method=:chaos,
+                           npoints=200,
+                           resolution=(32, 32),
+                           outpath=joinpath(tmp, "chaos_meta.png"))
+        @test Fractals._read_png_source_limits(chaos_out.outpath) == chaos_out.ifs.limits
+
+        base_ifs = IFS(SMALL_EQ; npoints=50)
+        transform_out = render(base_ifs;
+                               method=:render_transformations,
+                               initial_polygon=:line,
+                               polygon_limits_iterations=2,
+                               resolution=(64, 64),
+                               outpath=joinpath(tmp, "transform_meta.png"))
+        expected_limits = Fractals._render_transformations_effective_ifs(
+            transform_out.ifs;
+            initial_polygon_spec=initial_polygon(:line),
+            polygon_limits_iterations=2,
+        ).limits
+        @test Fractals._read_png_source_limits(transform_out.outpath) == expected_limits
     end
 end
 
