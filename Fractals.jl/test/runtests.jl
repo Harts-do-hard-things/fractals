@@ -8,6 +8,10 @@ using Colors
 using JSON3
 using Printf
 
+if !isdefined(Main, :AnimateImageIterateScript)
+    include(joinpath(@__DIR__, "..", "bin", "animate_image_iterate.jl"))
+end
+
 function _env_flag(name::AbstractString)::Bool
     value = get(ENV, name, "")
     lowercase(strip(value)) in ("1", "true", "yes", "on")
@@ -185,11 +189,18 @@ end
     midpoint = interpolate_eq_matrix(left6, right7, 0.5)
     @test size(midpoint) == (2, 7)
     @test midpoint[:, 1:6] ≈ [
-        0.5  0.5  -0.5  0.5  0.0  0.5
+        sqrt(0.5)  sqrt(0.5)  -sqrt(0.5)  sqrt(0.5)  0.0  0.5
         0.75 0.0   0.0  0.75 1.5  0.0
     ]
     @test midpoint[:, 7] ≈ [0.5, 0.5]
     @test isapprox(sum(midpoint[:, 7]), 1.0; atol=1e-12)
+
+    midpoint_linear = interpolate_eq_matrix(left6, right7, 0.5; interpolation_mode=:linear)
+    @test midpoint_linear[:, 1:6] ≈ [
+        0.5  0.5  -0.5  0.5  0.0  0.5
+        0.75 0.0   0.0  0.75 1.5  0.0
+    ]
+    @test midpoint_linear[:, 7] ≈ [0.5, 0.5]
 
     @test interpolate_eq_matrix(left6, right7, 0.0) ≈ [
         1.0  0.0  0.0  1.0  0.0  0.0  0.8
@@ -204,15 +215,19 @@ end
     @test length(blended.points) == 12
     @test blended.name == "Interpolated(Left -> Right)"
     @test occursin("Interpolated IFS at t=0.25", blended.docs)
-    # Verify the blended map transforms points correctly (t=0.25 linear blend):
-    # left map 1 is identity; right map 1 maps (x,y)→(-y, x+1). Blended: A*x+b.
-    @test blended.maps[1](SVector{2,Float64}(1.0, 0.0)) ≈ SVector{2,Float64}(0.75, 0.0)
-    @test blended.maps[1](SVector{2,Float64}(0.0, 1.0)) ≈ SVector{2,Float64}(0.25, 1.0)
+    @test blended.maps[1](SVector{2,Float64}(1.0, 0.0)) ≈
+        SVector{2,Float64}(cospi(0.125), -sinpi(0.125) + 0.25)
+    @test blended.maps[1](SVector{2,Float64}(0.0, 1.0)) ≈
+        SVector{2,Float64}(sinpi(0.125), cospi(0.125) + 0.25)
     @test collect(blended.weights) ≈ [0.65, 0.35]
     @test blended.limits[1][1] ≈ 0.75 * left_ifs.limits[1][1] + 0.25 * right_ifs.limits[1][1]
     @test blended.limits[1][2] ≈ 0.75 * left_ifs.limits[1][2] + 0.25 * right_ifs.limits[1][2]
     @test blended.limits[2][1] ≈ 0.75 * left_ifs.limits[2][1] + 0.25 * right_ifs.limits[2][1]
     @test blended.limits[2][2] ≈ 0.75 * left_ifs.limits[2][2] + 0.25 * right_ifs.limits[2][2]
+
+    blended_linear = interpolate_ifs(left_ifs, right_ifs, 0.25; interpolation_mode=:linear)
+    @test blended_linear.maps[1](SVector{2,Float64}(1.0, 0.0)) ≈ SVector{2,Float64}(0.75, 0.0)
+    @test blended_linear.maps[1](SVector{2,Float64}(0.0, 1.0)) ≈ SVector{2,Float64}(0.25, 1.0)
 
     right_locked = interpolate_ifs(left_ifs, right_ifs, 0.5; limits_mode=:right, npoints=3, name="Blend", docs="manual docs")
     @test length(right_locked.points) == 3
@@ -222,11 +237,22 @@ end
 
     @test_throws ArgumentError interpolate_eq_matrix(left6, right7[:, 1:6], -0.1)
     @test_throws ArgumentError interpolate_eq_matrix(left6, ones(3, 6), 0.5)
+    @test_throws ArgumentError interpolate_eq_matrix(left6, right7, 0.5; interpolation_mode=:bad)
     @test_throws ArgumentError interpolate_ifs(left_ifs, right_ifs, 0.5; limits_mode=:bad)
+    @test_throws ArgumentError interpolate_ifs(left_ifs, right_ifs, 0.5; interpolation_mode=:bad)
     @test_throws ArgumentError interpolate_ifs(left_ifs, right_ifs, 0.5; npoints=-1)
 
     recomputed = interpolate_ifs(left_ifs, right_ifs, 0.5; limits_mode=:recompute)
     @test recomputed.limits == refresh_limits(recomputed; source=:maps).limits
+
+    shear_left = [
+        1.0  0.2  0.0  1.0  0.0  0.0
+    ]
+    shear_right = [
+        0.9  0.4  0.1  0.8  1.0  2.0
+    ]
+    @test interpolate_eq_matrix(shear_left, shear_right, 0.5) ≈
+          interpolate_eq_matrix(shear_left, shear_right, 0.5; interpolation_mode=:linear)
 end
 
 @testset "Limits Refresh And Staleness" begin
@@ -436,6 +462,69 @@ end
             @test generated_gif.format == :gif
             @test isfile(generated_gif.outpath)
             @test filesize(generated_gif.outpath) > 0
+        else
+            @test_skip "ffmpeg available"
+        end
+    end
+end
+
+@testset "ImageIterate Animation Script" begin
+    script = Main.AnimateImageIterateScript
+
+    _nontinted_pixels(img) = count(px -> abs(Float32(red(px)) - Float32(green(px))) < 1f-4 &&
+                                        abs(Float32(green(px)) - Float32(blue(px))) < 1f-4, img)
+    _tinted_pixels(img) = count(px -> !(abs(Float32(red(px)) - Float32(green(px))) < 1f-4 &&
+                                        abs(Float32(green(px)) - Float32(blue(px))) < 1f-4), img)
+
+    mktempdir() do tmp
+        seed = fill(GrayA{Float32}(0.15f0, 0.0f0), 20, 20)
+        seed[7:14, 7:14] .= GrayA{Float32}(0.85f0, 1.0f0)
+        seed_path = joinpath(tmp, "seed_graya.png")
+        save(seed_path, seed)
+
+        ifs = IFS(SMALL_EQ; npoints=1)
+        frames = script.render_image_iterate_build_frames(ifs, seed_path;
+                                                          frames_per_map=2,
+                                                          outdir=joinpath(tmp, "frames"),
+                                                          basename="image_iter_anim")
+
+        @test frames.basename == "image_iter_anim"
+        @test frames.stage_ranges == [1:2, 3:4]
+        @test length(frames.paths) == 4
+        @test all(isfile, frames.paths)
+        @test size(frames.final_image) == (20, 20)
+        @test _tinted_pixels(frames.final_image) > 0
+
+        first_frame = load(first(frames.paths))
+        last_frame = load(last(frames.paths))
+        @test size(first_frame) == (20, 20)
+        @test size(last_frame) == (20, 20)
+        @test first_frame != last_frame
+        @test _nontinted_pixels(first_frame) > 0
+
+        bad_seed = fill(Gray{Float32}(0.5f0), 8, 8)
+        bad_seed_path = joinpath(tmp, "seed_gray.png")
+        save(bad_seed_path, bad_seed)
+        err = _capture_exception(() -> script.render_image_iterate_build_frames(ifs, bad_seed_path;
+                                                                                frames_per_map=2,
+                                                                                outdir=joinpath(tmp, "bad_frames"),
+                                                                                basename="bad_anim"))
+        @test err isa ArgumentError
+        @test occursin("GrayA", sprint(showerror, err))
+
+        if !isnothing(Sys.which("ffmpeg"))
+            result = script.create_animation([
+                "--input", "Fractals.jl/data/Default.ifs",
+                "--image-path", seed_path,
+                "--frames-per-map", "1",
+                "--out-dir", joinpath(tmp, "cli_frames"),
+                "--basename", "cli_anim",
+                "--out", joinpath(tmp, "cli_anim.gif"),
+                "--fps", "6",
+            ])
+            @test isfile(result.gif.outpath)
+            @test filesize(result.gif.outpath) > 0
+            @test length(result.frames.paths) == 3
         else
             @test_skip "ffmpeg available"
         end

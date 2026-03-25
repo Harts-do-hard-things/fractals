@@ -240,11 +240,13 @@ mid_ifs = interpolate_ifs(IFS(start_eq; npoints=2_000),
 ```
 
 Interpolation behavior:
-- `interpolate_eq_matrix(left, right, t)` accepts compatible 6- or 7-column equation matrices and returns a normalized 7-column matrix.
+- `interpolate_eq_matrix(left, right, t; interpolation_mode=:rotation_scale)` accepts compatible 6- or 7-column equation matrices and returns a normalized 7-column matrix.
 - 6-column inputs derive normalized weights from affine determinants before interpolation.
-- `interpolate_ifs(left, right, t)` blends map coefficients, translations, normalized weights, and by default also blends `ifs.limits` with `limits_mode=:interpolate`.
+- By default, `interpolation_mode=:rotation_scale` interpolates each map's 2x2 linear part as rotation plus isotropic scale, with automatic fallback to coefficient-wise linear interpolation for map pairs that do not fit that model cleanly.
+- `interpolation_mode=:linear` preserves the previous coefficient-wise linear behavior.
+- `interpolate_ifs(left, right, t; interpolation_mode=:rotation_scale)` blends map coefficients, translations, normalized weights, and by default also blends `ifs.limits` with `limits_mode=:interpolate`.
 - `limits_mode=:left|:right|:recompute` is available when a fixed or freshly sampled camera box is preferred.
-- `render_interpolation_frames(left, right; frames, outdir, basename, render_method=RenderTransformations, ...)` writes deterministic numbered PNG frames such as `dragon_0001.png`.
+- `render_interpolation_frames(left, right; frames, outdir, basename, render_method=RenderTransformations, interpolation_mode=:rotation_scale, ...)` writes deterministic numbered PNG frames such as `dragon_0001.png`.
 - `export_animation(:gif|:mp4; frames_dir, basename, outpath, fps=12)` converts those numbered PNG frames into an animation artifact via `ffmpeg`.
 - Current supported frame render methods are `RenderTransformations` and `Chaos`.
 
@@ -259,6 +261,7 @@ frames = render_interpolation_frames(start, finish;
                                      outdir="media/frames",
                                      basename="dragon_morph",
                                      render_method=Chaos,
+                                     interpolation_mode=:rotation_scale,
                                      resolution=(512, 512),
                                      warmup=20)
 

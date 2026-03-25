@@ -62,17 +62,109 @@ function _interpolate_limits(
     )
 end
 
-"""
-    interpolate_eq_matrix(left, right, t)
+@inline function _normalize_interpolation_mode(mode::Symbol)
+    normalized = Symbol(lowercase(String(mode)))
+    normalized in (:rotation_scale, :linear) ||
+        throw(ArgumentError("Invalid interpolation_mode '$mode'. Supported: :rotation_scale, :linear"))
+    return normalized
+end
 
-Linearly interpolate between two compatible IFS equation matrices and return a
-normalized 7-column matrix. Six-column inputs derive a probability column from
-their affine determinants before interpolation.
+@inline function _normalize_interpolation_mode(mode::AbstractString)
+    return _normalize_interpolation_mode(Symbol(strip(mode)))
+end
+
+function _linearly_interpolate_eq_matrix(
+    left_eq::AbstractMatrix{<:Real},
+    right_eq::AbstractMatrix{<:Real},
+    α::Float64,
+)
+    out = (1 - α) .* Float64.(left_eq) .+ α .* Float64.(right_eq)
+    total = sum(out[:, 7])
+    total > 0 || throw(ArgumentError("Interpolated probability column must have positive total weight"))
+    out[:, 7] ./= total
+    return out
+end
+
+function _rotation_scale_parameters(
+    A::AbstractMatrix{<:Real};
+    atol::Float64=1e-8,
+    rtol::Float64=1e-6,
+)
+    c1 = SVector{2,Float64}(A[1, 1], A[2, 1])
+    c2 = SVector{2,Float64}(A[1, 2], A[2, 2])
+    s1 = norm(c1)
+    s2 = norm(c2)
+    max_scale = max(s1, s2)
+    max_scale > atol || return nothing
+
+    tol = max(atol, rtol * max_scale)
+    abs(s1 - s2) <= tol || return nothing
+    abs(dot(c1, c2)) <= max(atol, rtol * max_scale^2) || return nothing
+
+    scale = 0.5 * (s1 + s2)
+    detA = det(Matrix{Float64}(A))
+    detA >= -max(atol, rtol * scale^2) || return nothing
+
+    R = Matrix{Float64}(A) ./ scale
+    isapprox(R' * R, Matrix{Float64}(I, 2, 2); atol=1e-6, rtol=1e-6) || return nothing
+    isapprox(det(R), 1.0; atol=1e-6, rtol=1e-6) || return nothing
+
+    angle = atan(R[2, 1], R[1, 1])
+    return (scale=scale, angle=angle)
+end
+
+@inline function _shortest_angle_delta(left::Float64, right::Float64)
+    return mod(right - left + pi, 2pi) - pi
+end
+
+function _rotation_scale_matrix(scale::Float64, angle::Float64)
+    c = cos(angle)
+    s = sin(angle)
+    return scale .* [c -s; s c]
+end
+
+function _interpolate_linear_block!(
+    out::AbstractMatrix{Float64},
+    left_eq::AbstractMatrix{Float64},
+    right_eq::AbstractMatrix{Float64},
+    α::Float64,
+)
+    for i in 1:size(out, 1)
+        leftA = @view left_eq[i, 1:4]
+        rightA = @view right_eq[i, 1:4]
+        leftM = reshape(collect(leftA), 2, 2)'
+        rightM = reshape(collect(rightA), 2, 2)'
+        left_params = _rotation_scale_parameters(leftM)
+        right_params = _rotation_scale_parameters(rightM)
+
+        if isnothing(left_params) || isnothing(right_params)
+            continue
+        end
+
+        scale = (1 - α) * left_params.scale + α * right_params.scale
+        angle = left_params.angle + α * _shortest_angle_delta(left_params.angle, right_params.angle)
+        interp = _rotation_scale_matrix(scale, angle)
+        out[i, 1] = interp[1, 1]
+        out[i, 2] = interp[1, 2]
+        out[i, 3] = interp[2, 1]
+        out[i, 4] = interp[2, 2]
+    end
+    return out
+end
+
+"""
+    interpolate_eq_matrix(left, right, t; interpolation_mode=:rotation_scale)
+
+Interpolate between two compatible IFS equation matrices and return a normalized
+7-column matrix. Six-column inputs derive a probability column from their affine
+determinants before interpolation.
 """
 function interpolate_eq_matrix(
     left::AbstractMatrix{<:Real},
     right::AbstractMatrix{<:Real},
     t::Real,
+    ;
+    interpolation_mode::Union{Symbol,AbstractString}=:rotation_scale,
 )
     0 <= t <= 1 || throw(ArgumentError("Interpolation parameter t must be in [0, 1], got $t"))
     size(left, 1) == size(right, 1) ||
@@ -84,18 +176,18 @@ function interpolate_eq_matrix(
         throw(ArgumentError("Interpolation requires matching equation matrix shapes, got $(size(left_eq)) and $(size(right_eq))"))
 
     α = Float64(t)
-    out = (1 - α) .* left_eq .+ α .* right_eq
-    total = sum(out[:, 7])
-    total > 0 || throw(ArgumentError("Interpolated probability column must have positive total weight"))
-    out[:, 7] ./= total
+    mode = _normalize_interpolation_mode(interpolation_mode)
+    out = _linearly_interpolate_eq_matrix(left_eq, right_eq, α)
+    mode == :rotation_scale && _interpolate_linear_block!(out, left_eq, right_eq, α)
     return out
 end
 
 """
-    interpolate_ifs(left, right, t; npoints, name, docs, limits_mode)
+    interpolate_ifs(left, right, t; npoints, name, docs, limits_mode, interpolation_mode=:rotation_scale)
 
 Build an interpolated IFS suitable for animation or transitional rendering.
-Map coefficients, translations, and normalized weights are blended linearly.
+The linear 2x2 map components default to rotation+scale interpolation with
+linear fallback; translations and normalized weights remain linearly blended.
 By default, viewport limits are also interpolated to avoid frame-to-frame jitter.
 """
 function interpolate_ifs(
@@ -106,12 +198,14 @@ function interpolate_ifs(
     name::AbstractString="",
     docs::AbstractString="",
     limits_mode::Symbol=:interpolate,
+    interpolation_mode::Union{Symbol,AbstractString}=:rotation_scale,
 )
     length(left.maps) == length(right.maps) ||
         throw(ArgumentError("Interpolation requires the same number of transforms, got $(length(left.maps)) and $(length(right.maps))"))
     npoints >= 0 || throw(ArgumentError("npoints must be >= 0, got $npoints"))
 
-    eq = interpolate_eq_matrix(_eq_matrix_for_interpolation(left), _eq_matrix_for_interpolation(right), t)
+    eq = interpolate_eq_matrix(_eq_matrix_for_interpolation(left), _eq_matrix_for_interpolation(right), t;
+                               interpolation_mode=interpolation_mode)
     maps, weights = _build_maps_and_weights(eq)
     α = Float64(t)
 
@@ -150,6 +244,7 @@ function render_interpolation_frames(
     t_end::Real=1.0,
     render_method::Union{RenderMethod,Symbol,AbstractString}=RenderTransformations,
     limits_mode::Symbol=:interpolate,
+    interpolation_mode::Union{Symbol,AbstractString}=:rotation_scale,
     npoints::Integer=min(length(left.points), length(right.points)),
     name::AbstractString="",
     docs::AbstractString="",
@@ -174,7 +269,8 @@ function render_interpolation_frames(
                               npoints=npoints,
                               name=name,
                               docs=docs,
-                              limits_mode=limits_mode)
+                              limits_mode=limits_mode,
+                              interpolation_mode=interpolation_mode)
         path = joinpath(outdir, @sprintf("%s_%04d.png", basename, i))
         _render_interpolation_frame(ifs, parsed_method, path; npoints=npoints, kwargs...)
         push!(paths, path)

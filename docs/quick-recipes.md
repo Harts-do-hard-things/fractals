@@ -167,6 +167,7 @@ render(mid;
 ```
 
 Use `interpolate_eq_matrix(...)` when you want the blended 7-column equation matrix directly.
+By default, interpolation uses a rotation-plus-uniform-scale path for each map's 2x2 linear part, with automatic fallback to plain linear blending when needed. Pass `interpolation_mode=:linear` to force the previous coefficient-wise behavior.
 
 ## Recipe: Render Deterministic Animation Frames
 
@@ -181,6 +182,7 @@ frames = render_interpolation_frames(start, finish;
                                      outdir="media/frames",
                                      basename="recipe_anim",
                                      render_method=Chaos,
+                                     interpolation_mode=:rotation_scale,
                                      resolution=(512, 512),
                                      warmup=20)
 

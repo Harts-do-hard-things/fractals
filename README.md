@@ -112,6 +112,7 @@ result = render(EISENSTEIN;
 `interpolate_eq_matrix(...)` and `interpolate_ifs(...)` provide transform interpolation primitives for animation-oriented workflows.
 `render_interpolation_frames(...)` renders deterministic numbered PNG frame sequences into a chosen directory for animation workflows. Interpolated frame rendering currently supports `Chaos` and `RenderTransformations`.
 `export_animation(:gif|:mp4; ...)` converts those numbered PNG frames into GIF or MP4 artifacts via `ffmpeg`.
+Interpolation defaults to per-map rotation+uniform-scale blending for the 2x2 linear part, with automatic fallback to coefficient-wise linear blending when a map pair is not well represented by that model. Use `interpolation_mode=:linear` to force the previous behavior.
 For `method=:point_deterministic` and `method=:inverse`, use `iterations=...` to control iteration depth.
 For `.ifs` files with multiple definitions, select one with `ifs_index=...` or `ifs_name=...`.
 
