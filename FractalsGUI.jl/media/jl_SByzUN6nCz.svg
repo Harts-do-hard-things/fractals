@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 520" style="background: transparent;" fill="none">
-  <line x1="32.140" y1="28.615" x2="492.385" y2="28.615" stroke="#C721DD" stroke-width="2.00" />
-  <line x1="492.385" y1="28.615" x2="492.385" y2="488.860" stroke="#C721DD" stroke-width="2.00" />
-  <line x1="492.385" y1="488.860" x2="32.140" y2="488.860" stroke="#C721DD" stroke-width="2.00" />
-  <line x1="32.140" y1="488.860" x2="32.140" y2="28.615" stroke="#C721DD" stroke-width="2.00" />
-  <line x1="108.848" y1="105.322" x2="108.848" y2="412.152" stroke="#C721DD" stroke-width="2.00" />
-  <line x1="108.848" y1="412.152" x2="287.832" y2="412.152" stroke="#C721DD" stroke-width="2.00" />
-</svg>
