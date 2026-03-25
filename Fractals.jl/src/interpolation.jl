@@ -161,8 +161,8 @@ function render_interpolation_frames(
     0 <= t_end <= 1 || throw(ArgumentError("t_end must be in [0, 1], got $t_end"))
 
     parsed_method = _parse_render_method(render_method)
-    parsed_method == RenderTransformations ||
-        throw(ArgumentError("render_interpolation_frames currently supports method=RenderTransformations only"))
+    parsed_method in (Chaos, RenderTransformations) ||
+        throw(ArgumentError("render_interpolation_frames currently supports method=Chaos or method=RenderTransformations only"))
 
     mkpath(outdir)
     ts = collect(Float64, frames == 1 ? [Float64(t_start)] : LinRange(Float64(t_start), Float64(t_end), frames))
@@ -176,6 +176,26 @@ function render_interpolation_frames(
                               docs=docs,
                               limits_mode=limits_mode)
         path = joinpath(outdir, @sprintf("%s_%04d.png", basename, i))
+        _render_interpolation_frame(ifs, parsed_method, path; npoints=npoints, kwargs...)
+        push!(paths, path)
+    end
+
+    return (
+        outdir=String(outdir),
+        paths=paths,
+        ts=ts,
+        render_method=_render_method_symbol(parsed_method),
+    )
+end
+
+function _render_interpolation_frame(
+    ifs::IFS,
+    render_method::RenderMethod,
+    outpath::AbstractString;
+    npoints::Integer,
+    kwargs...,
+)
+    if render_method == RenderTransformations
         img = _render_transformations_image(ifs;
                                             width=get(kwargs, :resolution, RESOLUTION)[2],
                                             height=get(kwargs, :resolution, RESOLUTION)[1],
@@ -187,16 +207,28 @@ function render_interpolation_frames(
         source_limits = _render_transformations_effective_ifs(ifs;
                                                               initial_polygon_spec=get(kwargs, :initial_polygon, :default),
                                                               polygon_limits_iterations=get(kwargs, :polygon_limits_iterations, 1)).limits
-        _save_image_with_source_limits(path, img, source_limits)
-        push!(paths, path)
+        _save_image_with_source_limits(outpath, img, source_limits)
+        return nothing
     end
 
-    return (
-        outdir=String(outdir),
-        paths=paths,
-        ts=ts,
-        render_method=_render_method_symbol(parsed_method),
-    )
+    warmup = get(kwargs, :warmup, DEFAULT_WARMUP)
+    color = get(kwargs, :color, false)
+    alpha = get(kwargs, :alpha, false)
+    resolution = get(kwargs, :resolution, RESOLUTION)
+    backend = get(kwargs, :backend, :cpu)
+
+    iterate!(ifs; warmup=warmup)
+    img = make_image(ifs; resolution=resolution, backend=backend)
+
+    if color
+        img = iterate_image(ifs, img; colors=true, backend=backend)
+    end
+    if alpha
+        img = _apply_alpha_mask(img)
+    end
+
+    _save_image_with_source_limits(outpath, img, ifs.limits)
+    return nothing
 end
 
 function _animation_frame_pattern(basename::AbstractString)
@@ -266,7 +298,7 @@ function export_animation(
     if format == :gif
         palette_path = joinpath(dirname(final_outpath), "$(Base.Filesystem.basename(final_outpath)).palette.png")
         try
-            _run_ffmpeg(`$ffmpeg -y -framerate $fps -i $input_pattern -vf palettegen $palette_path`)
+            _run_ffmpeg(`$ffmpeg -y -framerate $fps -i $input_pattern -vf palettegen -frames:v 1 $palette_path`)
             _run_ffmpeg(`$ffmpeg -y -framerate $fps -i $input_pattern -i $palette_path -lavfi paletteuse $final_outpath`)
         finally
             isfile(palette_path) && rm(palette_path; force=true)

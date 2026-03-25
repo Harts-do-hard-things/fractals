@@ -246,7 +246,7 @@ Interpolation behavior:
 - `limits_mode=:left|:right|:recompute` is available when a fixed or freshly sampled camera box is preferred.
 - `render_interpolation_frames(left, right; frames, outdir, basename, render_method=RenderTransformations, ...)` writes deterministic numbered PNG frames such as `dragon_0001.png`.
 - `export_animation(:gif|:mp4; frames_dir, basename, outpath, fps=12)` converts those numbered PNG frames into an animation artifact via `ffmpeg`.
-- Current scope is intentionally narrow: `render_method=RenderTransformations` only, which keeps the first animation frame pipeline deterministic and easy to test.
+- Current supported frame render methods are `RenderTransformations` and `Chaos`.
 
 ```julia
 using Fractals
@@ -258,11 +258,9 @@ frames = render_interpolation_frames(start, finish;
                                      frames=5,
                                      outdir="media/frames",
                                      basename="dragon_morph",
-                                     render_method=RenderTransformations,
+                                     render_method=Chaos,
                                      resolution=(512, 512),
-                                     color=true,
-                                     initial_polygon=:line_arrow,
-                                     axis=true)
+                                     warmup=20)
 
 gif = export_animation(:gif;
                        frames_dir="media/frames",
@@ -284,7 +282,15 @@ julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/export_gif.jl --fr
 julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/export_mp4.jl --frames-dir media/frames --basename dragon_morph --out media/dragon_morph.mp4 --fps 12
 ```
 
-`ffmpeg` must be installed and available on `PATH`. The helper expects deterministic frame names in the form `basename_0001.png`, `basename_0002.png`, and so on.
+`ffmpeg` must be installed and available on `PATH`. On common systems:
+
+```bash
+sudo apt-get install ffmpeg
+brew install ffmpeg
+winget install Gyan.FFmpeg
+```
+
+The helper expects deterministic frame names in the form `basename_0001.png`, `basename_0002.png`, and so on.
 
 ### Parse from file and render interactively
 

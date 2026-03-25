@@ -180,16 +180,14 @@ frames = render_interpolation_frames(start, finish;
                                      frames=4,
                                      outdir="media/frames",
                                      basename="recipe_anim",
-                                     render_method=RenderTransformations,
+                                     render_method=Chaos,
                                      resolution=(512, 512),
-                                     color=true,
-                                     initial_polygon=:line_arrow,
-                                     axis=true)
+                                     warmup=20)
 
 println.(frames.paths)
 ```
 
-This first frame-renderer path currently targets `RenderTransformations` only, with deterministic file names like `recipe_anim_0001.png`.
+Interpolated frame rendering currently supports `Chaos` and `RenderTransformations`, with deterministic file names like `recipe_anim_0001.png`.
 
 Convert those frames into an animation artifact with `ffmpeg`:
 
@@ -221,4 +219,12 @@ julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/export_mp4.jl \
   --basename recipe_anim \
   --out media/recipe_anim.mp4 \
   --fps 12
+```
+
+Install `ffmpeg` separately before using the export step:
+
+```bash
+sudo apt-get install ffmpeg
+brew install ffmpeg
+winget install Gyan.FFmpeg
 ```

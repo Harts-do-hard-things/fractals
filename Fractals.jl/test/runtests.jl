@@ -294,6 +294,31 @@ end
         @test all(size(img) == (24, 24) for img in imgs)
     end
 
+    mktempdir() do tmp
+        result = render_interpolation_frames(left, right;
+                                             frames=3,
+                                             outdir=tmp,
+                                             basename="chaos_anim",
+                                             render_method=Chaos,
+                                             resolution=(24, 24),
+                                             npoints=250,
+                                             warmup=5)
+
+        @test result.outdir == tmp
+        @test result.render_method == :chaos
+        @test result.paths == [
+            joinpath(tmp, "chaos_anim_0001.png"),
+            joinpath(tmp, "chaos_anim_0002.png"),
+            joinpath(tmp, "chaos_anim_0003.png"),
+        ]
+        @test result.ts ≈ [0.0, 0.5, 1.0]
+        @test all(isfile, result.paths)
+
+        imgs = load.(result.paths)
+        @test all(size(img) == (24, 24) for img in imgs)
+        @test any(any(_is_drawn_pixel, img) for img in imgs)
+    end
+
     mismatch = IFS([
         0.5  0.0  0.0  0.5  0.0  0.0
         0.5  0.0  0.0  0.5  0.5  0.0
@@ -303,8 +328,21 @@ end
     mktempdir() do tmp
         @test_throws ArgumentError render_interpolation_frames(left, right; frames=0, outdir=tmp)
         @test_throws ArgumentError render_interpolation_frames(left, right; frames=2, outdir=tmp, basename=" ")
-        @test_throws ArgumentError render_interpolation_frames(left, right; frames=2, outdir=tmp, render_method=Chaos)
         @test_throws ArgumentError render_interpolation_frames(left, mismatch; frames=2, outdir=tmp)
+
+        unsupported = (
+            PointDeterministic,
+            ImageIterate,
+            Inverse,
+        )
+        for method in unsupported
+            err = _capture_exception(() -> render_interpolation_frames(left, right;
+                                                                       frames=2,
+                                                                       outdir=tmp,
+                                                                       render_method=method))
+            @test err isa ArgumentError
+            @test occursin("supports method=Chaos or method=RenderTransformations", sprint(showerror, err))
+        end
     end
 end
 
@@ -374,6 +412,30 @@ end
             @test mp4_result.format == :mp4
             @test isfile(mp4_result.outpath)
             @test filesize(mp4_result.outpath) > 0
+
+            left = IFS([
+                0.5  -0.5   0.5   0.5   0.0   0.0
+               -0.5  -0.5   0.5  -0.5   1.0   0.0
+            ]; npoints=250, name="left")
+            right = IFS([
+                0.5   0.0   0.0   0.5   0.0   0.0   0.3
+                0.0   0.5  -0.5   0.0   1.0   0.0   0.7
+            ]; npoints=250, name="right")
+            generated_frames = render_interpolation_frames(left, right;
+                                                           frames=3,
+                                                           outdir=joinpath(tmp, "generated_frames"),
+                                                           basename="chaos_anim",
+                                                           render_method=Chaos,
+                                                           resolution=(24, 24),
+                                                           warmup=5)
+            generated_gif = export_animation(:gif;
+                                             frames_dir=generated_frames.outdir,
+                                             basename="chaos_anim",
+                                             outpath=joinpath(tmp, "nested", "chaos_anim.gif"),
+                                             fps=6)
+            @test generated_gif.format == :gif
+            @test isfile(generated_gif.outpath)
+            @test filesize(generated_gif.outpath) > 0
         else
             @test_skip "ffmpeg available"
         end

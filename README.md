@@ -25,6 +25,15 @@ The package includes:
 julia --project=Fractals.jl -e "using Pkg; Pkg.instantiate()"
 ```
 
+For GIF/MP4 export, install `ffmpeg` separately and ensure it is on `PATH`.
+Common installs:
+
+```bash
+sudo apt-get install ffmpeg
+brew install ffmpeg
+winget install Gyan.FFmpeg
+```
+
 ### 2. Generate a fractal image
 
 ```powershell
@@ -101,7 +110,7 @@ result = render(EISENSTEIN;
 `render`, `make_image`, `iterate_image`, and `rasterize_image_inversely` support `backend=:cpu|:gpu|:auto` (`:gpu` requires CUDA support, `:auto` falls back to CPU when unavailable).
 `rasterize_image_inversely` also supports `mode=:exact|:preview` (`:exact` is default and parity-oriented).
 `interpolate_eq_matrix(...)` and `interpolate_ifs(...)` provide transform interpolation primitives for animation-oriented workflows.
-`render_interpolation_frames(...)` renders deterministic numbered PNG frame sequences into a chosen directory for transformation-preview animation workflows.
+`render_interpolation_frames(...)` renders deterministic numbered PNG frame sequences into a chosen directory for animation workflows. Interpolated frame rendering currently supports `Chaos` and `RenderTransformations`.
 `export_animation(:gif|:mp4; ...)` converts those numbered PNG frames into GIF or MP4 artifacts via `ffmpeg`.
 For `method=:point_deterministic` and `method=:inverse`, use `iterations=...` to control iteration depth.
 For `.ifs` files with multiple definitions, select one with `ifs_index=...` or `ifs_name=...`.
