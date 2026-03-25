@@ -1,5 +1,6 @@
 using Test
 using FractalsGUI
+import Gtk
 
 @testset "Matrix Normalization" begin
     eq6 = [
@@ -175,4 +176,17 @@ end
     @test occursin("Template", state.fractal_placeholder_text)
     @test isfile(state.svg_temp_path)
     @test occursin("<svg", state.svg_string)
+end
+
+@testset "Function Row Uses Render Color Icon" begin
+    eq = [
+        0.5 -0.5 0.5 0.5 0.0 0.0 0.5
+        0.5 0.5 -0.5 0.5 0.5 0.5 0.5
+    ]
+    row_ui = FractalsGUI._build_function_row(eq, 1)
+    label = Gtk.get_gtk_property(row_ui.color_icon, :label, String)
+    @test occursin("foreground=\"", label)
+    @test occursin("●", label)
+    @test occursin(FractalsGUI._function_color_hex(1, 2), label)
+    @test !haskey(Dict(pairs(row_ui)), :color_btn)
 end
