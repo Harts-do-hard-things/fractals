@@ -21,6 +21,7 @@ Options:
   --ifs-index <int>        Select IFS by index from an .ifs file
   --ifs-name <name>        Select IFS by name from an .ifs file
   --frames-per-map <int>   Interpolation frames per map stage (default 8)
+  --interpolation-mode <m> Map interpolation mode: rotation_scale|linear (default rotation_scale)
   --fps <n>                GIF frame rate (default 12)
   --basename <name>        Frame basename (default image_iterate_build)
   --out-dir <path>         Output frames directory (default media/frames)
@@ -126,17 +127,18 @@ function _gray_to_rgb(img::AbstractMatrix{Float32})
     return out
 end
 
-function _interpolate_map(map::AffineMap{Float64}, t::Real)
-    α = Float64(t)
-    I2 = SMatrix{2,2,Float64,4}(1.0, 0.0, 0.0, 1.0)
-    A = (1 - α) .* I2 .+ α .* map.A
-    b = α .* map.b
-    return AffineMap(A, b)
-end
-
-function _single_map_ifs(ifs::IFS, map_index::Integer, t::Real)
-    map = _interpolate_map(ifs.maps[map_index], t)
-    return IFS([map], Weights([1.0]); npoints=1, name=ifs.name, docs=ifs.docs, limits=ifs.limits)
+function _single_map_ifs(
+    ifs::IFS,
+    map_index::Integer,
+    t::Real;
+    interpolation_mode::Union{Symbol,AbstractString}=:rotation_scale,
+)
+    map = ifs.maps[map_index]
+    left_eq = reshape([1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0], 1, 7)
+    right_eq = reshape([map.A[1, 1], map.A[1, 2], map.A[2, 1], map.A[2, 2], map.b[1], map.b[2], 1.0], 1, 7)
+    eq = Fractals.interpolate_eq_matrix(left_eq, right_eq, t; interpolation_mode=interpolation_mode)
+    maps, weights = Fractals._build_maps_and_weights(eq)
+    return IFS(maps, weights; npoints=1, name=ifs.name, docs=ifs.docs, limits=ifs.limits)
 end
 
 function _single_map_layer(
@@ -144,8 +146,9 @@ function _single_map_layer(
     foreground::AbstractMatrix{Float32},
     map_index::Integer,
     t::Real,
+    interpolation_mode::Union{Symbol,AbstractString}=:rotation_scale,
 )
-    layer_ifs = _single_map_ifs(ifs, map_index, t)
+    layer_ifs = _single_map_ifs(ifs, map_index, t; interpolation_mode=interpolation_mode)
     return Fractals._iterate_image_single_map(layer_ifs, foreground, 1)
 end
 
@@ -173,6 +176,7 @@ function render_image_iterate_build_frames(
     frames_per_map::Integer=8,
     outdir::AbstractString=joinpath("media", "frames"),
     basename::AbstractString="image_iterate_build",
+    interpolation_mode::Union{Symbol,AbstractString}=:rotation_scale,
 )
     frames_per_map > 0 || throw(ArgumentError("frames_per_map must be > 0, got $frames_per_map"))
     !isempty(strip(String(basename))) || throw(ArgumentError("basename must be non-empty"))
@@ -193,7 +197,7 @@ function render_image_iterate_build_frames(
         ts = frames_per_map == 1 ? (1.0,) : Tuple(LinRange(0.0, 1.0, frames_per_map))
         for t in ts
             frame = copy(completed)
-            layer = _single_map_layer(ifs, foreground, map_index, t)
+            layer = _single_map_layer(ifs, foreground, map_index, t, interpolation_mode)
             _composite_tinted_layer!(frame, layer, Fractals._map_color_rgb(map_index, map_colors))
             path = joinpath(String(outdir), @sprintf("%s_%04d.png", basename, frame_index))
             Fractals._save_image_with_source_limits(path, frame, ifs.limits)
@@ -201,7 +205,7 @@ function render_image_iterate_build_frames(
             frame_index += 1
         end
 
-        final_layer = _single_map_layer(ifs, foreground, map_index, 1.0)
+        final_layer = _single_map_layer(ifs, foreground, map_index, 1.0, interpolation_mode)
         _composite_tinted_layer!(completed, final_layer, Fractals._map_color_rgb(map_index, map_colors))
         push!(stage_ranges, stage_start:(frame_index - 1))
     end
@@ -227,6 +231,7 @@ function create_animation(args=ARGS)
     ifs_index = haskey(opts, "ifs-index") ? parse(Int, opts["ifs-index"]) : nothing
     ifs_name = get(opts, "ifs-name", nothing)
     frames_per_map = parse(Int, get(opts, "frames-per-map", "8"))
+    interpolation_mode = get(opts, "interpolation-mode", "rotation_scale")
     fps = parse(Float64, get(opts, "fps", "12"))
     outdir = get(opts, "out-dir", joinpath("media", "frames"))
     basename = get(opts, "basename", "image_iterate_build")
@@ -236,7 +241,8 @@ function create_animation(args=ARGS)
     frames = render_image_iterate_build_frames(ifs, image_path;
                                                frames_per_map=frames_per_map,
                                                outdir=outdir,
-                                               basename=basename)
+                                               basename=basename,
+                                               interpolation_mode=interpolation_mode)
     gif = export_animation(:gif;
                            frames_dir=frames.outdir,
                            basename=frames.basename,

@@ -1861,6 +1861,62 @@ end
         end
     end
 
+    @testset "Imported Python Data File" begin
+        @info "Imported Python Data File"
+
+        imported_path = joinpath(dirname(@__FILE__), "..", "data", "imported_from_python.ifs")
+        imported_defs = Fractals.parse_ifs_definitions_file(imported_path)
+        imported_names = [String(def.name) for def in imported_defs]
+
+        @test imported_names == [
+            "Flowsnake",
+            "Heighway",
+            "TwinDragon",
+            "GoldenDragon",
+            "Z2 Dragon",
+            "LevyC",
+            "Z2 Levy",
+            "Terdragon",
+            "Z2 Golden Dragon",
+            "Pentigree",
+            "Pentadentrite",
+            "KochFlake",
+            "Kochawave",
+            "DurerPentagon",
+        ]
+
+        defs_by_name = Dict(String(def.name) => def for def in imported_defs)
+
+        @test size(defs_by_name["Flowsnake"].eq) == (7, 6)
+        @test size(defs_by_name["Heighway"].eq) == (2, 6)
+        @test size(defs_by_name["Terdragon"].eq) == (3, 6)
+        @test size(defs_by_name["Pentigree"].eq) == (6, 6)
+        @test size(defs_by_name["Pentadentrite"].eq) == (6, 6)
+        @test size(defs_by_name["DurerPentagon"].eq) == (4, 6)
+
+        @test defs_by_name["Heighway"].eq ≈ [
+            0.5 -0.5 0.5 0.5 0.0 0.0
+            -0.5 -0.5 0.5 -0.5 1.0 0.0
+        ]
+
+        @test defs_by_name["Pentigree"].eq[1:2, :] ≈ [
+            0.309016994375 -0.224513988290 0.224513988290 0.309016994375 0.0 0.0
+            -0.118033988750 -0.363271264003 0.363271264003 -0.118033988750 0.309016994375 0.224513988290
+        ]
+
+        @test defs_by_name["Pentadentrite"].eq[4:5, :] ≈ [
+            -0.233977061461 0.258209017515 -0.258209017515 -0.233977061461 0.719645709553 0.489158183710
+            0.173268480388 0.302316383479 -0.302316383479 0.173268480388 0.485668648091 0.230949166195
+        ]
+
+        @test defs_by_name["Z2 Golden Dragon"].eq ≈ [
+            0.623665256330 -0.403371701830 0.403371701830 0.623665256330 0.0 0.0
+            -0.623665256330 0.403371701830 -0.403371701830 -0.623665256330 0.0 -0.0
+            -0.376334743670 -0.403371701830 0.403371701830 -0.376334743670 1.0 0.0
+            0.376334743670 0.403371701830 -0.403371701830 0.376334743670 -1.0 0.0
+        ]
+    end
+
     @testset "Render Image Iterate API: polygon overlays and alpha" begin
         mktempdir() do tmp
             rot_eq = reshape([cos(pi / 6) sin(pi / 6) -sin(pi / 6) cos(pi / 6) 0.0 0.0 1.0], 1, 7)
