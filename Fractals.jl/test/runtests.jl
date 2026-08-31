@@ -2043,6 +2043,46 @@ end
 
             Fractals.main(eq=SMALL_EQ, npoints=1000, outpath="media/main_output.png")
             @test isfile(joinpath("media", "main_output.png"))
+
+            @testset "_prompt_int enforces min and narrows catch" begin
+                @test Fractals._prompt_int("p", 5; input_fn=() -> "0", min=1) == 5
+                @test Fractals._prompt_int("p", 5; input_fn=() -> "-3", min=1) == 5
+                @test Fractals._prompt_int("p", 5; input_fn=() -> "abc") == 5
+                @test Fractals._prompt_int("p", 5; input_fn=() -> "7", min=1) == 7
+                @test Fractals._prompt_choice("p", 3, 1; input_fn=() -> "xyz") == 1
+            end
+
+            @testset "Zero width falls back to default, no crash" begin
+                queued = ["", "", "", "0", "", ""]
+                idx = Ref(0)
+                fake_input = () -> (idx[] += 1; idx[] <= length(queued) ? queued[idx[]] : "")
+                zero_selected = prompt_ifs_and_render(ifs_path; npoints=100, resolution=(32, 32),
+                                                      outpath="media/prompt_zero_width.png", input_fn=fake_input)
+                @test zero_selected isa IFS
+                out_path = joinpath("media", "prompt_zero_width.png")
+                @test isfile(out_path)
+                @test size(load(out_path)) == (32, 32)
+            end
+
+            @testset "Overwrite confirmation" begin
+                target = joinpath("media", "prompt_output.png")
+                before_bytes = read(target)
+
+                queued_no = ["", "", "", "", "", "", "n"]
+                idx_no = Ref(0)
+                fake_input_no = () -> (idx_no[] += 1; idx_no[] <= length(queued_no) ? queued_no[idx_no[]] : "")
+                declined = prompt_ifs_and_render(ifs_path; npoints=100, resolution=(32, 32),
+                                                 outpath="media/prompt_output.png", input_fn=fake_input_no)
+                @test declined === nothing
+                @test read(target) == before_bytes
+
+                queued_yes = ["", "", "", "", "", "", "y"]
+                idx_yes = Ref(0)
+                fake_input_yes = () -> (idx_yes[] += 1; idx_yes[] <= length(queued_yes) ? queued_yes[idx_yes[]] : "")
+                accepted = prompt_ifs_and_render(ifs_path; npoints=100, resolution=(32, 32),
+                                                 outpath="media/prompt_output.png", input_fn=fake_input_yes)
+                @test accepted isa IFS
+            end
         finally
             cd(old)
         end

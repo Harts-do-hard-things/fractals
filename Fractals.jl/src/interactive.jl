@@ -1,22 +1,34 @@
 # NOTE: This file must be included after ifsparser.jl (calls parse_ifs_file) and after all
-# render-method files (prompt_ifs_and_render calls iterate!, deterministic_iterate, make_image,
-# _normalize_media_outpath). It must be included BEFORE render.jl — render.jl's
-# _resolve_render_input(AbstractString) calls _select_ifs_definition defined here.
+# render-method files (prompt_ifs_and_render calls _normalize_media_outpath). It must be
+# included BEFORE render.jl — render.jl's _resolve_render_input(AbstractString) calls
+# _select_ifs_definition defined here.
+#
+# prompt_ifs_and_render also calls render_chaos/render_point_deterministic, which are
+# defined *later* in render.jl. This is safe: Julia resolves function calls at call time,
+# not at `include` time, and by the time anyone actually invokes prompt_ifs_and_render the
+# whole module (including render.jl) has finished loading. Same reasoning already applies
+# to the reverse direction above.
 
 # -------------------------------------------------
 # Prompt primitives (injectable stdin)
 # -------------------------------------------------
 
-function _prompt_int(msg::AbstractString, default::Int; input_fn=readline)
+function _prompt_int(msg::AbstractString, default::Int; input_fn=readline, min::Union{Nothing,Int}=nothing)
     print(msg)
     line = input_fn()
     isempty(strip(line)) && return default
-    try
-        return parse(Int, strip(line))
-    catch
+    parsed = try
+        parse(Int, strip(line))
+    catch e
+        e isa ArgumentError || rethrow()
         println("Invalid number, using default $default")
         return default
     end
+    if !isnothing(min) && parsed < min
+        println("Value must be >= $min, using default $default")
+        return default
+    end
+    return parsed
 end
 
 function _prompt_string(msg::AbstractString, default::AbstractString; input_fn=readline)
@@ -35,7 +47,8 @@ function _prompt_choice(msg::AbstractString, n::Int, default::Int; input_fn=read
         if 1 <= choice <= n
             return choice
         end
-    catch
+    catch e
+        e isa ArgumentError || rethrow()
     end
     println("Invalid choice, using default $default")
     return default
@@ -87,11 +100,7 @@ function _select_ifs_definition(
 
     println(choices)
     print("No ifs_index/ifs_name provided. Render [1] $(defs[1].name)? [y/N]: ")
-    answer = try
-        lowercase(strip(input_fn()))
-    catch
-        ""
-    end
+    answer = lowercase(strip(input_fn()))
 
     if answer in ("y", "yes")
         return defs[1]
@@ -131,24 +140,27 @@ function prompt_ifs_and_render(path::AbstractString;
     println("  [3] point deterministic (deterministic_iterate, n=1)")
     method = _prompt_choice("Select method [1-3] (default 1): ", 3, 1; input_fn=input_fn)
 
-    npoints = _prompt_int("Number of points (default $(npoints)): ", npoints; input_fn=input_fn)
-    width   = _prompt_int("Image width (default $(resolution[2])): ", resolution[2]; input_fn=input_fn)
-    height  = _prompt_int("Image height (default $(resolution[1])): ", resolution[1]; input_fn=input_fn)
+    npoints = _prompt_int("Number of points (default $(npoints)): ", npoints; input_fn=input_fn, min=1)
+    width   = _prompt_int("Image width (default $(resolution[2])): ", resolution[2]; input_fn=input_fn, min=1)
+    height  = _prompt_int("Image height (default $(resolution[1])): ", resolution[1]; input_fn=input_fn, min=1)
     outpath = _prompt_string("Output path (default $(outpath)): ", outpath; input_fn=input_fn)
 
-    ifs = IFS(ifs.maps, ifs.weights; npoints=npoints, name=ifs.name, docs=ifs.docs, limits=ifs.limits)
-
-    if method == 1
-        iterate!(ifs)
-    elseif method == 2
-        iterate_parallel!(ifs)
-    else
-        ifs = deterministic_iterate(ifs, 1)
+    final_outpath = _normalize_media_outpath(outpath)
+    if isfile(final_outpath)
+        print("File '$(final_outpath)' already exists. Overwrite? [y/N]: ")
+        answer = lowercase(strip(input_fn()))
+        if !(answer in ("y", "yes"))
+            println("Not overwriting existing file. Aborting render.")
+            return nothing
+        end
     end
 
-    final_outpath = _normalize_media_outpath(outpath)
-    img = make_image(ifs; resolution=(height, width))
-    _save_image_with_source_limits(final_outpath, img, ifs.limits)
-    println("Saved image to $(final_outpath)")
-    return ifs
+    result = if method == 3
+        render_point_deterministic(ifs; npoints=npoints, resolution=(height, width), outpath=final_outpath)
+    else
+        render_chaos(ifs; npoints=npoints, resolution=(height, width), outpath=final_outpath)
+    end
+
+    println("Saved image to $(result.outpath)")
+    return result.ifs
 end
