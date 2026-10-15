@@ -72,6 +72,16 @@ jobs:
           FRACTALS_RUN_CLI_BENCH_TESTS: "0"
         run: julia --startup-file=no --project=Fractals.jl Fractals.jl/test/runtests.jl
 
+      - name: Instantiate DrWatson project
+        shell: bash
+        run: julia --startup-file=no --project=. -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Smoke-test DrWatson project render
+        shell: bash
+        env:
+          FRACTALS_OUTPUT_ROOT: ${{ runner.temp }}/fractals-output
+        run: julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input Fractals.jl/data/Default.ifs --ifs-index 1 --npoints 2000 --resolution 64x64
+
   gui-test:
     name: GUI Tests / ubuntu-latest / Julia 1.12
     runs-on: ubuntu-latest

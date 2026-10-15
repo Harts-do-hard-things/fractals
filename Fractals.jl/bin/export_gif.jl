@@ -6,7 +6,7 @@ function _usage()
     println(
         """
 Usage:
-  export_gif.jl --frames-dir <dir> --basename <name> --out <path> [--fps <n>] [--ffmpeg <cmd>]
+  export_gif.jl --frames-dir <dir> --basename <name> [--out <path>] [--fps <n>] [--ffmpeg <cmd>]
 """
     )
 end
@@ -36,7 +36,6 @@ function main(args=ARGS)
     outpath = get(opts, "out", nothing)
     isnothing(frames_dir) && throw(ArgumentError("--frames-dir is required"))
     isnothing(basename) && throw(ArgumentError("--basename is required"))
-    isnothing(outpath) && throw(ArgumentError("--out is required"))
     fps = parse(Float64, get(opts, "fps", "12"))
     ffmpeg_cmd = get(opts, "ffmpeg", "ffmpeg")
     result = export_animation(:gif;

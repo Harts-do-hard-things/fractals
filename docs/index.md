@@ -7,7 +7,7 @@ Fractals.jl provides fast tools for rendering 2D iterated function system fracta
 - Use the high-level `render(...)` API for most workflows.
 - Use the render methods in this order: `Chaos`, `PointDeterministic`, `ImageIterate`, `Inverse`, `RenderTransformations`.
 - `Parallel` is a compatibility alias for `Chaos` and may be deprecated in a future release.
-- Save outputs to `media/` (default behavior).
+- Output is saved under DrWatson's `plotsdir()` (`<repo>/plots/` with `--project=.`), auto-named with `savename` when `outpath` is omitted, never overwritten (`safesave` backups), and tagged with provenance (git commit + parameters). See the README's "Output Files" section.
 
 ## Render Methods At A Glance
 

@@ -330,6 +330,12 @@ deps = ["ArgTools", "FileWatching", "LibCURL", "NetworkOptions"]
 uuid = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
 version = "1.7.0"
 
+[[deps.DrWatson]]
+deps = ["Dates", "FileIO", "JLD2", "LibGit2", "MacroTools", "Pkg", "Random", "Requires", "Scratch", "UnPack"]
+git-tree-sha1 = "5b6632df14cf24fc2cdb805aab24147001463336"
+uuid = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
+version = "2.19.1"
+
 [[deps.EpollShim_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "8a4be429317c42cfae6a7fc03c31bad1970c310d"
@@ -389,7 +395,7 @@ uuid = "a3f928ae-7b40-5064-980b-68af3947d34b"
 version = "2.17.1+0"
 
 [[deps.Fractals]]
-deps = ["Colors", "Dates", "DelimitedFiles", "FileIO", "Images", "JSON3", "LinearAlgebra", "Printf", "Random", "StaticArrays", "Statistics", "StatsBase", "TOML"]
+deps = ["Colors", "Dates", "DelimitedFiles", "DrWatson", "FileIO", "Images", "JSON3", "LinearAlgebra", "Printf", "Random", "StaticArrays", "Statistics", "StatsBase", "TOML"]
 path = "../Fractals.jl"
 uuid = "c711514a-ad55-41be-9602-f6ed5533a69e"
 version = "1.0.0"

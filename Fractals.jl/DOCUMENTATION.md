@@ -38,7 +38,7 @@ result = render(HEIGHWAY_DRAGON;
                 backend=:cpu,
                 npoints=200_000,
                 resolution=(1024, 1024),
-                outpath="media/render.png")
+                outpath="render.png")
 
 println(result.outpath)
 ```
@@ -117,7 +117,7 @@ out = render(EISENSTEIN;
              npoints=250_000,
              backend=:cpu,
              resolution=(1024, 1024),
-             outpath="media/render_chaos.png")
+             outpath="render_chaos.png")
 ```
 
 ### `PointDeterministic`
@@ -141,7 +141,7 @@ out = render(EISENSTEIN;
              npoints=500,
              backend=:cpu,
              resolution=(800, 800),
-             outpath="media/render_point_deterministic.png")
+             outpath="render_point_deterministic.png")
 ```
 
 ### `ImageIterate`
@@ -170,7 +170,7 @@ out = render(EISENSTEIN;
              initial_polygon=:equilateral_triangle,
              backend=:cpu,
              resolution=(800, 800),
-             outpath="media/render_image_iterate.png")
+             outpath="render_image_iterate.png")
 ```
 
 ### `Inverse`
@@ -193,29 +193,29 @@ out = render(EISENSTEIN;
              iterations=6,
              backend=:cpu,
              resolution=(800, 800),
-             outpath="media/render_inverse.png")
+             outpath="render_inverse.png")
 ```
 
 ### Basic render
 
 ```julia
-using Fractals, FileIO
+using Fractals, DrWatson
 
 ifs = IFS(HEIGHWAY_DRAGON; npoints=200_000)
 iterate!(ifs)
 img = make_image(ifs; resolution=(1024, 1024))
-save("media/dragon.png", img)
+safesave(output_dir("dragon.png"), img)  # DrWatson: mkpath + keep existing file as _#1
 ```
 
 ### Point deterministic preview
 
 ```julia
-using Fractals, FileIO
+using Fractals, DrWatson
 
 ifs = IFS(EISENSTEIN; npoints=200)
 expanded = deterministic_iterate(ifs, 2)
 img = make_image(expanded; resolution=(800, 800))
-save("media/expanded.png", img)
+safesave(output_dir("expanded.png"), img)
 ```
 
 ### Transform interpolation for animation prep
@@ -256,7 +256,7 @@ finish = IFS(finish_eq; npoints=2_000, name="finish")
 
 frames = render_interpolation_frames(start, finish;
                                      frames=5,
-                                     outdir="media/frames",
+                                     outdir="frames",
                                      basename="dragon_morph",
                                      render_method=RenderTransformations,
                                      resolution=(512, 512),
@@ -265,23 +265,23 @@ frames = render_interpolation_frames(start, finish;
                                      axis=true)
 
 gif = export_animation(:gif;
-                       frames_dir="media/frames",
+                       frames_dir="frames",
                        basename="dragon_morph",
-                       outpath="media/dragon_morph.gif",
+                       outpath="dragon_morph.gif",
                        fps=12)
 
 mp4 = export_animation(:mp4;
-                       frames_dir="media/frames",
+                       frames_dir="frames",
                        basename="dragon_morph",
-                       outpath="media/dragon_morph.mp4",
+                       outpath="dragon_morph.mp4",
                        fps=12)
 ```
 
 Shell helpers are also available:
 
 ```bash
-julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/export_gif.jl --frames-dir media/frames --basename dragon_morph --out media/dragon_morph.gif --fps 12
-julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/export_mp4.jl --frames-dir media/frames --basename dragon_morph --out media/dragon_morph.mp4 --fps 12
+julia --startup-file=no --project=. Fractals.jl/bin/export_gif.jl --frames-dir frames --basename dragon_morph --out dragon_morph.gif --fps 12
+julia --startup-file=no --project=. Fractals.jl/bin/export_mp4.jl --frames-dir frames --basename dragon_morph --out dragon_morph.mp4 --fps 12
 ```
 
 `ffmpeg` must be installed and available on `PATH`. The helper expects deterministic frame names in the form `basename_0001.png`, `basename_0002.png`, and so on.
@@ -291,6 +291,34 @@ julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/export_mp4.jl --fr
 ```julia
 using Fractals
 prompt_ifs_and_render("my_fractals.ifs")
+```
+
+## Output Files
+
+Saving is managed with [DrWatson](https://juliadynamics.github.io/DrWatson.jl/stable/) (`src/output.jl`):
+
+- `outpath`/`outdir`/`frames_dir` arguments accept `nothing` (auto-named), a relative path (resolved under
+  `output_dir()`; a leading `plots/` is not duplicated), or an absolute path (used as given).
+- `output_dir(args...)` is DrWatson's `plotsdir(args...)` for the active project, unless overridden by
+  `with_output_root(f, root)` (scoped) or the `FRACTALS_OUTPUT_ROOT` environment variable; overrides write to
+  `<root>/plots/`.
+- Auto-generated names come from `savename(prefix, params, ext)`: the prefix is the sanitized IFS name (`ifs` when
+  unnamed) and the parameters are the content-defining render settings (`false`/`nothing` values omitted).
+- Every save goes through `safesave`, so an existing file is moved to `name_#1.ext` instead of being overwritten.
+- PNGs embed two `tEXt` chunks: `fractals.source_limits` (used by `image_source=:file`) and `fractals.provenance`
+  (JSON: `gitcommit` from `gitdescribe`, `fractals_version`, `created`, and all render `params`). SVGs start with
+  an equivalent `<!-- fractals.provenance: ... -->` comment.
+
+```julia
+using Fractals
+
+out = render(EISENSTEIN; method=Chaos, npoints=100_000, resolution=(800, 800))
+out.outpath                    # .../plots/ifs_method=chaos_npoints=100000_resolution=800x800.png
+read_provenance(out.outpath)   # (version=1, gitcommit="v1.0.1-41-g...", params=(method="chaos", ...), ...)
+
+with_output_root(mktempdir()) do
+    render(EISENSTEIN; npoints=1_000, resolution=(64, 64))   # written to <tmp>/plots/
+end
 ```
 
 ## Core Types
@@ -490,13 +518,13 @@ Interpretation:
 Run benchmark with target comparison:
 
 ```powershell
-julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile all --repeats 3 --targets Fractals.jl/bench/perf_targets.toml
+julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl benchmark --profile all --repeats 3 --targets Fractals.jl/bench/perf_targets.toml
 ```
 
 Strict mode (non-zero exit when status is `fail`):
 
 ```powershell
-julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile all --repeats 3 --targets Fractals.jl/bench/perf_targets.toml --strict
+julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl benchmark --profile all --repeats 3 --targets Fractals.jl/bench/perf_targets.toml --strict
 ```
 
 CI policy:

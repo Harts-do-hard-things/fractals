@@ -154,3 +154,10 @@ NNData/training_data1.json
 
 .ctags
 tags
+
+# DrWatson project output (repo root and package-local runs) and legacy media/ dirs
+/plots
+/Fractals.jl/plots
+/FractalsGUI.jl/plots
+/Fractals.jl/media
+/Fractals.jl/test/media

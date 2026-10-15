@@ -10,8 +10,19 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
 - `interpolate_eq_matrix(...)` and `interpolate_ifs(...)` helpers for animation-oriented transform interpolation.
 - `render_interpolation_frames(...)` for deterministic transformation-frame rendering into numbered PNG sequences.
 - PNG outputs now embed source-limits metadata so `image_source=:file` can reuse the original pixel-to-world framing when that metadata is present.
+- DrWatson-managed output: the repo root is now a DrWatson project (`fractals`, with `scripts/`), and `Fractals` depends on DrWatson for saving.
+  - `output_dir(...)`, `with_output_root(f, root)`, and the `FRACTALS_OUTPUT_ROOT` environment variable control where files go.
+  - Omitting `outpath` names files with `savename` from the render parameters.
+  - All saves use `safesave`, so existing files are kept as `name_#N` backups.
+  - PNGs embed a `fractals.provenance` chunk (git commit, version, timestamp, parameters), readable with `read_provenance(path)`; SVGs carry it as a comment.
 
 ### Changed
+- Breaking: output moved from a working-directory-relative `media/` to DrWatson's `plotsdir()` (`<repo>/plots/` with `--project=.`).
+  - Relative paths keep their subdirectories under `plots/` instead of being flattened into `media/`, and absolute paths are now honored as given.
+  - `outpath` defaults are `nothing` (auto-named) instead of fixed names like `media/render.png`.
+  - `render_interpolation_frames` writes to `plots/frames/<savename>/` by default.
+  - `export_animation`'s `outpath` is optional (default `plots/animations/<basename>.<format>`).
+  - CLI `--out` defaults to an auto-generated name, and `batch-render --out-dir` defaults to `plots/batch`.
 - Breaking API change: transformation renders no longer accept `limits_mode`; PNG now frames from derived polygon limits by default, and SVG now uses the same derived polygon limits behavior via `polygon_limits_iterations`.
 - Transformation axis overlays now render within the existing `ifs.limits` projection instead of affecting the visible framing.
 

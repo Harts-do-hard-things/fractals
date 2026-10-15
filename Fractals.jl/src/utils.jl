@@ -37,21 +37,6 @@ function _parse_render_method(method::AbstractString)
     return _parse_render_method(Symbol(lowercase(strip(method))))
 end
 
-function _normalize_media_outpath(outpath::AbstractString)
-    raw = String(outpath)
-    media_prefix = string(DEFAULT_MEDIA_DIR, Base.Filesystem.path_separator)
-    normalized = normpath(raw)
-
-    if normalized == DEFAULT_MEDIA_DIR || startswith(normalized, media_prefix)
-        mkpath(dirname(normalized))
-        return normalized
-    end
-
-    final = joinpath(DEFAULT_MEDIA_DIR, basename(normalized))
-    mkpath(dirname(final))
-    return final
-end
-
 const _PNG_SIGNATURE = UInt8[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 const _PNG_SOURCE_LIMITS_KEYWORD = "fractals.source_limits"
 const _PNG_SOURCE_LIMITS_VERSION = 1
@@ -179,9 +164,10 @@ function _png_make_text_chunk(keyword::AbstractString, value::AbstractString)
     return UInt8[_png_write_u32be(UInt32(length(data))); type_bytes; data; _png_write_u32be(crc)]
 end
 
-function _embed_png_text_chunk(path::AbstractString, keyword::AbstractString, value::AbstractString)
+function _embed_png_text_chunks(path::AbstractString, text_chunks::AbstractVector{<:Pair})
     bytes = read(path)
     chunks = _parse_png_chunks(bytes)
+    keywords = Set(String(first(p)) for p in text_chunks)
     out = copy(_PNG_SIGNATURE)
     inserted = false
 
@@ -189,7 +175,7 @@ function _embed_png_text_chunk(path::AbstractString, keyword::AbstractString, va
         keep = true
         if chunk.type == "tEXt"
             pair = _png_text_keyword_and_value(chunk.data)
-            if !isnothing(pair) && first(pair) == keyword
+            if !isnothing(pair) && first(pair) in keywords
                 keep = false
             end
         end
@@ -199,7 +185,9 @@ function _embed_png_text_chunk(path::AbstractString, keyword::AbstractString, va
         end
 
         if !inserted && chunk.type == "IHDR"
-            append!(out, _png_make_text_chunk(keyword, value))
+            for (keyword, value) in text_chunks
+                append!(out, _png_make_text_chunk(keyword, value))
+            end
             inserted = true
         end
     end
@@ -239,18 +227,6 @@ function _read_png_source_limits(path::AbstractString)
         @warn "Failed to parse source limits metadata from '$path'; falling back to default limits." exception=(err, catch_backtrace())
         return nothing
     end
-end
-
-function _save_image_with_source_limits(
-    outpath::AbstractString,
-    img,
-    limits,
-)
-    save(outpath, img)
-    if _has_png_extension(outpath)
-        _embed_png_text_chunk(outpath, _PNG_SOURCE_LIMITS_KEYWORD, _serialize_source_limits_payload(limits))
-    end
-    return outpath
 end
 
 function _ifs_with_limits(ifs, limits)

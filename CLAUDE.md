@@ -4,10 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Two Julia packages for generating and rasterizing 2D IFS (iterated function system) fractals, supporting Julia 1.11 and 1.12 (CI uses 1.12):
+Two Julia packages for generating and rasterizing 2D IFS (iterated function system) fractals, supporting Julia 1.11 and 1.12 (CI uses 1.12). They sit inside a DrWatson scientific project:
 
-- `Fractals.jl/` — the core package (with an optional CUDA extension).
+- Repo root (`Project.toml`, name `fractals`) — the DrWatson project. It depends on DrWatson, the local `Fractals` package (via `[sources]` path), and the stdlibs/packages the `bin/` scripts load. Run renders, CLI commands, and `scripts/*.jl` (which start with `@quickactivate "fractals"`) with `--project=.`; output then lands in `<repo>/plots/`.
+- `Fractals.jl/` — the core package (with an optional CUDA extension). Tests and package development use `--project=Fractals.jl`.
 - `FractalsGUI.jl/` — a Gtk desktop GUI for editing IFS matrices and previewing transformation SVGs. Its `Manifest.toml` depends on `Fractals` by relative path (`../Fractals.jl`), so it always uses the working-tree version.
+
+Adding a dependency to `Fractals.jl/Project.toml` also requires re-resolving the root and `FractalsGUI.jl` manifests (`Pkg.resolve()` with each project active).
 
 User-facing docs: `README.md`, `Fractals.jl/DOCUMENTATION.md` (detailed API reference), `docs/` (MkDocs site: quick recipes, CLI, benchmarks, troubleshooting). `CHANGELOG.md` follows Keep a Changelog — add user-visible changes under `[Unreleased]`.
 
@@ -16,15 +19,16 @@ User-facing docs: `README.md`, `Fractals.jl/DOCUMENTATION.md` (detailed API refe
 Always pass `--startup-file=no` (CI does; a user `startup.jl` can break precompilation/tests — see `docs/troubleshooting.md`). Run from the repo root.
 
 ```bash
+julia --startup-file=no --project=. -e "using Pkg; Pkg.instantiate()"
 julia --startup-file=no --project=Fractals.jl -e "using Pkg; Pkg.instantiate()"
 julia --startup-file=no --project=Fractals.jl Fractals.jl/test/runtests.jl
 julia --startup-file=no --project=FractalsGUI.jl FractalsGUI.jl/test/runtests.jl
 julia --startup-file=no --project=FractalsGUI.jl FractalsGUI.jl/bin/gui.jl
 ```
 
-`Fractals.jl/test/runtests.jl` is a single large file of top-level `@testset`s with no filter mechanism; to iterate on one area, run the shared header (imports, `SMALL_EQ`, snapshot helpers at the top of the file) plus the relevant `@testset` in a REPL with `--project=Fractals.jl`.
+`Fractals.jl/test/runtests.jl` is a single large file of top-level `@testset`s with no filter mechanism; to iterate on one area, run the shared header (imports, `SMALL_EQ`, `FRACTALS_OUTPUT_ROOT` setup, snapshot helpers at the top of the file) plus the relevant `@testset` in a REPL with `--project=Fractals.jl`. The header points `FRACTALS_OUTPUT_ROOT` at a temp dir so tests never write into `plots/`; assert on paths with `output_dir(...)`, not literal directories.
 
-Opt-in test groups (off in CI): `FRACTALS_RUN_GPU_TESTS=1` (CUDA parity tests) and `FRACTALS_RUN_CLI_BENCH_TESTS=1` (CLI/benchmark integration tests).
+Opt-in test groups (off in CI): `FRACTALS_RUN_GPU_TESTS=1` (CUDA parity tests) and `FRACTALS_RUN_CLI_BENCH_TESTS=1` (CLI command and benchmark tests). CLI tests call `bin/fractals.jl` in-process via `_run_cli` (the script is loaded into a `FractalsCLI` module and only calls `exit` when run as a script); do not reintroduce per-command `julia` subprocesses, which made this group take many minutes.
 
 Snapshot tests compare against PNGs in `Fractals.jl/test/snapshots/`; on mismatch, actual/diff images are written to a temp dir. When render output changes intentionally, regenerate:
 
@@ -41,7 +45,8 @@ julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"J
 CLI (`render`, `batch-render`, `validate-ifs`, `benchmark`; see `docs/cli.md`):
 
 ```bash
-julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl help
+julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl help
+julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input Fractals.jl/data/Default.ifs --ifs-index 1 --resolution 512x512
 julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile small --repeats 3 --targets Fractals.jl/bench/perf_targets.toml
 ```
 
@@ -67,9 +72,15 @@ Render methods — each lives in its own file and is wrapped by a `render_*` fun
 `render(input; method=...)` in `render.jl` is the top-level entrypoint:
 - `input` can be an equation matrix, an `IFS`, or an `.ifs` path (choose a definition with `ifs_index`/`ifs_name`; otherwise you are prompted interactively).
 - `method` accepts the `RenderMethod` enum, a symbol, or a lowercase string.
-- Outputs are routed under `media/` (`_normalize_media_outpath`).
+- Each `render_*` saves through `_save_render_output`, passing its full `params` (recorded in provenance) and the `name_keys` subset used for the filename.
 
-PNG outputs embed source-limits metadata in a custom PNG text chunk (`utils.jl`, keyword `fractals.source_limits`). This lets `image_source=:file` reuse the original pixel-to-world framing, so save renders through `_save_image_with_source_limits`, not a bare `save`.
+Saving is DrWatson-managed in `output.jl`. Every file the package writes goes through it, so never call `save`/`write` directly in `src/`:
+- `_resolve_output_path(outpath, default_name)` handles all `outpath`/`outdir` arguments. `nothing` means auto-named, relative paths go under `output_dir()`, and absolute paths are used as-is.
+- `output_dir()` is DrWatson's `plotsdir()` for the active project. `with_output_root` (a ScopedValue) or `FRACTALS_OUTPUT_ROOT` override it.
+- `_output_name` builds `savename` filenames, `_save_image`/`_save_svg`/`_safesave_moved_file` write via `safesave` (existing files become `_#N` backups), and the wrapper types plug into DrWatson's `_wsave` extension point.
+- PNGs get two tEXt chunks (helpers in `utils.jl`):
+  - `fractals.source_limits` lets `image_source=:file` reuse the original pixel-to-world framing.
+  - `fractals.provenance` is JSON with the `gitdescribe` commit (cached for 2 s, since it scans the work tree), the version, a timestamp and the params; read it back with `read_provenance`.
 
 GPU backends:
 - `make_image`, `iterate_image`, `rasterize_image_inversely`, and `render` accept `backend=:cpu|:gpu|:auto`, routed through `_dispatch_backend` in `utils.jl`.

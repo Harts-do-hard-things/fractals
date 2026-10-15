@@ -1,4 +1,18 @@
 # --------------------------------
+# Output helper
+# --------------------------------
+
+# Resolve `outpath` (auto-naming from `name_keys` of `params` when `nothing`) and safesave the
+# image with source limits and full-parameter provenance. See output.jl.
+function _save_render_output(outpath, img, ifs::IFS, limits;
+                             method::Symbol, params::NamedTuple, name_keys::Tuple)
+    all_params = merge((; method, ifs_name=ifs.name), params)
+    name_params = merge((; method), NamedTuple{name_keys}(params))
+    final_outpath = _resolve_output_path(outpath, _output_name(ifs.name, name_params, "png"))
+    return _save_image(final_outpath, img, limits; params=all_params)
+end
+
+# --------------------------------
 # Method-specific render functions
 # --------------------------------
 
@@ -9,7 +23,7 @@ function render_chaos(
     color::Bool                                 = false,
     alpha::Bool                                 = false,
     resolution::Tuple{Int,Int}                  = RESOLUTION,
-    outpath::AbstractString                     = "media/render.png",
+    outpath::Union{Nothing,AbstractString}      = nothing,
     backend::Symbol                             = :cpu,
     ifs_index::Union{Nothing,Integer}           = nothing,
     ifs_name::Union{Nothing,AbstractString}     = nothing,
@@ -31,8 +45,10 @@ function render_chaos(
         img = _apply_alpha_mask(img)
     end
 
-    final_outpath = _normalize_media_outpath(outpath)
-    _save_image_with_source_limits(final_outpath, img, ifs.limits)
+    final_outpath = _save_render_output(outpath, img, ifs, ifs.limits;
+                                        method=:chaos,
+                                        params=(; npoints=length(ifs.points), warmup, resolution, color, alpha, backend),
+                                        name_keys=(:npoints, :resolution, :color, :alpha))
     return (ifs=ifs, image=img, outpath=final_outpath, method=:chaos)
 end
 
@@ -44,7 +60,7 @@ function render_point_deterministic(
     color::Bool                                 = false,
     alpha::Bool                                 = false,
     resolution::Tuple{Int,Int}                  = RESOLUTION,
-    outpath::AbstractString                     = "media/render.png",
+    outpath::Union{Nothing,AbstractString}      = nothing,
     backend::Symbol                             = :cpu,
     ifs_index::Union{Nothing,Integer}           = nothing,
     ifs_name::Union{Nothing,AbstractString}     = nothing,
@@ -67,8 +83,10 @@ function render_point_deterministic(
         img = _apply_alpha_mask(img)
     end
 
-    final_outpath = _normalize_media_outpath(outpath)
-    _save_image_with_source_limits(final_outpath, img, rendered_ifs.limits)
+    final_outpath = _save_render_output(outpath, img, ifs, rendered_ifs.limits;
+                                        method=:point_deterministic,
+                                        params=(; npoints=length(ifs.points), warmup, iterations, resolution, color, alpha, backend),
+                                        name_keys=(:npoints, :iterations, :resolution, :color, :alpha))
     return (ifs=rendered_ifs, image=img, outpath=final_outpath, method=:point_deterministic)
 end
 
@@ -81,7 +99,7 @@ function render_inverse(
     color::Bool                                 = false,
     alpha::Bool                                 = false,
     resolution::Tuple{Int,Int}                  = RESOLUTION,
-    outpath::AbstractString                     = "media/render.png",
+    outpath::Union{Nothing,AbstractString}      = nothing,
     backend::Symbol                             = :cpu,
     ifs_index::Union{Nothing,Integer}           = nothing,
     ifs_name::Union{Nothing,AbstractString}     = nothing,
@@ -106,8 +124,10 @@ function render_inverse(
         img = _apply_alpha_mask(img)
     end
 
-    final_outpath = _normalize_media_outpath(outpath)
-    _save_image_with_source_limits(final_outpath, img, ifs.limits)
+    final_outpath = _save_render_output(outpath, img, ifs, ifs.limits;
+                                        method=:inverse,
+                                        params=(; iterations, show_divergence_scale, resolution, color, alpha, backend),
+                                        name_keys=(:iterations, :resolution, :color, :alpha))
     return (ifs=ifs, image=img, outpath=final_outpath, method=:inverse)
 end
 
@@ -128,7 +148,7 @@ function _render_image_iterate_impl(
     show_base::Bool                             = false,
     axis::Bool                                  = false,
     resolution::Tuple{Int,Int}                  = RESOLUTION,
-    outpath::AbstractString                     = "media/render.png",
+    outpath::Union{Nothing,AbstractString}      = nothing,
     backend::Symbol                             = :cpu,
     ifs_index::Union{Nothing,Integer}           = nothing,
     ifs_name::Union{Nothing,AbstractString}     = nothing,
@@ -183,8 +203,15 @@ function _render_image_iterate_impl(
         img = _apply_alpha_mask(img)
     end
 
-    final_outpath = _normalize_media_outpath(outpath)
-    _save_image_with_source_limits(final_outpath, img, raster_ifs.limits)
+    final_outpath = _save_render_output(outpath, img, ifs, raster_ifs.limits;
+                                        method=:image_iterate,
+                                        params=(; npoints=length(ifs.points), warmup, iterations, image_source,
+                                                image_path, image_iterations,
+                                                polygon_limits_mode=normalized_polygon_limits_mode,
+                                                polygon_limits_iterations=resolved_polygon_limits_iterations,
+                                                initial_polygon=preset.name, show_divergence_scale, show_base,
+                                                axis, resolution, color, alpha, backend),
+                                        name_keys=(:image_source, :image_iterations, :resolution, :color, :alpha))
     return (ifs=raster_ifs, image=img, outpath=final_outpath, method=:image_iterate)
 end
 
@@ -205,7 +232,7 @@ function render_image_iterate(
     show_base::Bool                             = false,
     axis::Bool                                  = false,
     resolution::Tuple{Int,Int}                  = RESOLUTION,
-    outpath::AbstractString                     = "media/render.png",
+    outpath::Union{Nothing,AbstractString}      = nothing,
     backend::Symbol                             = :cpu,
     ifs_index::Union{Nothing,Integer}           = nothing,
     ifs_name::Union{Nothing,AbstractString}     = nothing,
@@ -244,7 +271,7 @@ function _render_transformations_impl(
     initial_polygon_spec::Symbol                = :default,
     polygon_limits_iterations::Integer          = 1,
     resolution::Tuple{Int,Int}                  = RESOLUTION,
-    outpath::AbstractString                     = "media/render.png",
+    outpath::Union{Nothing,AbstractString}      = nothing,
     ifs_index::Union{Nothing,Integer}           = nothing,
     ifs_name::Union{Nothing,AbstractString}     = nothing,
     input_fn                                    = readline,
@@ -268,8 +295,11 @@ function _render_transformations_impl(
     raster_ifs = _render_transformations_effective_ifs(ifs;
                                                        initial_polygon_spec=preset,
                                                        polygon_limits_iterations=polygon_limits_iterations)
-    final_outpath = _normalize_media_outpath(outpath)
-    _save_image_with_source_limits(final_outpath, img, raster_ifs.limits)
+    final_outpath = _save_render_output(outpath, img, ifs, raster_ifs.limits;
+                                        method=:render_transformations,
+                                        params=(; initial_polygon=preset.name, polygon_limits_iterations,
+                                                show_base, axis, resolution, color, alpha),
+                                        name_keys=(:initial_polygon, :resolution, :color, :alpha))
     return (ifs=ifs, image=img, outpath=final_outpath, method=:render_transformations)
 end
 
@@ -283,7 +313,7 @@ function render_transformations(
     initial_polygon::Symbol                     = :default,
     polygon_limits_iterations::Integer          = 1,
     resolution::Tuple{Int,Int}                  = RESOLUTION,
-    outpath::AbstractString                     = "media/render.png",
+    outpath::Union{Nothing,AbstractString}      = nothing,
     ifs_index::Union{Nothing,Integer}           = nothing,
     ifs_name::Union{Nothing,AbstractString}     = nothing,
     input_fn                                    = readline,
@@ -371,7 +401,7 @@ function render(
     color::Union{Nothing,Bool}                        = nothing,
     alpha::Bool                                       = false,
     resolution::Tuple{Int,Int}                        = RESOLUTION,
-    outpath::AbstractString                           = "media/render.png",
+    outpath::Union{Nothing,AbstractString}            = nothing,
     backend::Symbol                                   = :cpu,
     ifs_index::Union{Nothing,Integer}                 = nothing,
     ifs_name::Union{Nothing,AbstractString}           = nothing,

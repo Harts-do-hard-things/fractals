@@ -5,7 +5,6 @@
 const RESOLUTION = (1504, 2256)
 const DEFAULT_WARMUP = 50
 const DEFAULT_SAMPLES = 1_000_000
-const DEFAULT_MEDIA_DIR = "media"
 
 struct InitialPolygonPreset
     name::Symbol

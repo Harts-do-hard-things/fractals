@@ -144,7 +144,7 @@ function render_interpolation_frames(
     left::IFS,
     right::IFS;
     frames::Integer,
-    outdir::AbstractString=joinpath(DEFAULT_MEDIA_DIR, "frames"),
+    outdir::Union{Nothing,AbstractString}=nothing,
     basename::AbstractString="frame",
     t_start::Real=0.0,
     t_end::Real=1.0,
@@ -164,7 +164,13 @@ function render_interpolation_frames(
     parsed_method == RenderTransformations ||
         throw(ArgumentError("render_interpolation_frames currently supports method=RenderTransformations only"))
 
+    sequence_name = left.name == right.name ? left.name : string(left.name, "_to_", right.name)
+    outdir = _resolve_output_path(outdir,
+                                  joinpath("frames",
+                                           _output_name(sequence_name,
+                                                        (; frames, t_start, t_end, limits_mode), "")))
     mkpath(outdir)
+    gitcommit = _gitcommit()
     ts = collect(Float64, frames == 1 ? [Float64(t_start)] : LinRange(Float64(t_start), Float64(t_end), frames))
     paths = String[]
     sizehint!(paths, frames)
@@ -187,7 +193,13 @@ function render_interpolation_frames(
         source_limits = _render_transformations_effective_ifs(ifs;
                                                               initial_polygon_spec=get(kwargs, :initial_polygon, :default),
                                                               polygon_limits_iterations=get(kwargs, :polygon_limits_iterations, 1)).limits
-        _save_image_with_source_limits(path, img, source_limits)
+        params = (; method=:interpolation_frame, ifs_name=ifs.name, frame=i, frames, t, limits_mode,
+                  resolution=get(kwargs, :resolution, RESOLUTION),
+                  initial_polygon=get(kwargs, :initial_polygon, :default),
+                  color=get(kwargs, :color, false), alpha=get(kwargs, :alpha, false))
+        _save_image(path, img, source_limits;
+                    params=params,
+                    provenance=_provenance_payload(params; gitcommit=gitcommit))
         push!(paths, path)
     end
 
@@ -238,16 +250,19 @@ function _run_ffmpeg(cmd::Cmd)
 end
 
 """
-    export_animation(format; frames_dir, basename, outpath, fps=12, ffmpeg_cmd="ffmpeg")
+    export_animation(format; frames_dir, basename, outpath=nothing, fps=12, ffmpeg_cmd="ffmpeg")
 
 Convert a deterministic numbered PNG frame sequence such as `basename_0001.png`
 into a GIF or MP4 animation using `ffmpeg`.
+
+Relative `frames_dir`/`outpath` resolve under `output_dir()`; `outpath=nothing` writes
+`animations/<basename>.<format>`. An existing animation is kept as a `_#N` backup.
 """
 function export_animation(
     format::Symbol;
     frames_dir::AbstractString,
     basename::AbstractString,
-    outpath::AbstractString,
+    outpath::Union{Nothing,AbstractString}=nothing,
     fps::Real=12,
     ffmpeg_cmd::AbstractString="ffmpeg",
 )
@@ -255,29 +270,30 @@ function export_animation(
         throw(ArgumentError("Invalid animation format '$format'. Supported: :gif, :mp4"))
     fps > 0 || throw(ArgumentError("fps must be > 0, got $fps"))
 
-    frame_paths = _animation_frame_paths(frames_dir, basename)
+    resolved_frames_dir = _resolve_output_path(frames_dir, "frames")
+    frame_paths = _animation_frame_paths(resolved_frames_dir, basename)
     ffmpeg = _resolve_ffmpeg(ffmpeg_cmd)
 
-    final_outpath = normpath(String(outpath))
-    mkpath(dirname(final_outpath))
+    final_outpath = _resolve_output_path(outpath, joinpath("animations", "$(strip(String(basename))).$format"))
+    input_pattern = joinpath(resolved_frames_dir, "$(strip(String(basename)))_%04d.png")
 
-    input_pattern = joinpath(String(frames_dir), "$(strip(String(basename)))_%04d.png")
-
-    if format == :gif
-        palette_path = joinpath(dirname(final_outpath), "$(Base.Filesystem.basename(final_outpath)).palette.png")
-        try
+    # ffmpeg writes into a scratch directory; the finished file is then safesaved into place so an
+    # existing animation is kept as a `_#N` backup rather than overwritten.
+    mktempdir() do scratch
+        scratch_outpath = joinpath(scratch, "animation.$format")
+        if format == :gif
+            palette_path = joinpath(scratch, "palette.png")
             _run_ffmpeg(`$ffmpeg -y -framerate $fps -i $input_pattern -vf palettegen $palette_path`)
-            _run_ffmpeg(`$ffmpeg -y -framerate $fps -i $input_pattern -i $palette_path -lavfi paletteuse $final_outpath`)
-        finally
-            isfile(palette_path) && rm(palette_path; force=true)
+            _run_ffmpeg(`$ffmpeg -y -framerate $fps -i $input_pattern -i $palette_path -lavfi paletteuse $scratch_outpath`)
+        else
+            _run_ffmpeg(`$ffmpeg -y -framerate $fps -i $input_pattern -c:v libx264 -pix_fmt yuv420p $scratch_outpath`)
         end
-    else
-        _run_ffmpeg(`$ffmpeg -y -framerate $fps -i $input_pattern -c:v libx264 -pix_fmt yuv420p $final_outpath`)
+        _safesave_moved_file(final_outpath, scratch_outpath)
     end
 
     return (
         format=format,
-        frames_dir=String(frames_dir),
+        frames_dir=resolved_frames_dir,
         basename=strip(String(basename)),
         frame_paths=frame_paths,
         fps=Float64(fps),

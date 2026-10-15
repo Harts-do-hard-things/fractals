@@ -20,7 +20,7 @@ const EISENSTEIN = [
 
 function main(; eq=EISENSTEIN,
                npoints=1_000_000,
-               outpath="media/output.png")
+               outpath=nothing)
 
     println("Building IFS...")
     ifs = IFS(eq; npoints=npoints)
@@ -31,9 +31,10 @@ function main(; eq=EISENSTEIN,
     println("Rasterizing...")
     img = make_image(ifs)
 
-    final_outpath = _normalize_media_outpath(outpath)
+    params = (; method=:chaos, ifs_name=ifs.name, npoints, resolution=RESOLUTION)
+    final_outpath = _resolve_output_path(outpath, _output_name("main", params[(:method, :npoints)], "png"))
     println("Saving to $final_outpath")
-    _save_image_with_source_limits(final_outpath, img, ifs.limits)
+    _save_image(final_outpath, img, ifs.limits; params=params)
 
     println("Done.")
 end

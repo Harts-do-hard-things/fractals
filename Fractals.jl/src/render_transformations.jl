@@ -259,7 +259,7 @@ end
 
 function _render_transformations_svg_impl(
     ifs;
-    outpath::AbstractString="media/affine_maps.svg",
+    outpath::Union{Nothing,AbstractString}=nothing,
     width::Int=1200,
     height::Int=1200,
     show_base::Bool=false,
@@ -340,14 +340,17 @@ $body
 </svg>
 """
 
-    final_outpath = _normalize_media_outpath(outpath)
-    write(final_outpath, svg)
-    return final_outpath
+    params = (; method=:transformations_svg, ifs_name=ifs.name,
+              initial_polygon=_resolve_initial_polygon(initial_polygon_spec).name,
+              polygon_limits_iterations, show_base, axis, resolution=(height, width))
+    final_outpath = _resolve_output_path(outpath,
+                                         _output_name(ifs.name, params[(:method, :initial_polygon, :resolution)], "svg"))
+    return _save_svg(final_outpath, svg; params=params)
 end
 
 function render_transformations_svg(
     ifs;
-    outpath::AbstractString="media/affine_maps.svg",
+    outpath::Union{Nothing,AbstractString}=nothing,
     width::Int=1200,
     height::Int=1200,
     show_base::Bool=false,
@@ -618,7 +621,7 @@ end
 
 function _render_transformations_png_impl(
     ifs;
-    outpath::AbstractString="media/affine_maps.png",
+    outpath::Union{Nothing,AbstractString}=nothing,
     width::Int=1200,
     height::Int=1200,
     show_base::Bool=false,
@@ -641,14 +644,19 @@ function _render_transformations_png_impl(
                                         axis=axis,
                                         alpha=alpha)
 
-    final_outpath = _normalize_media_outpath(outpath)
-    _save_image_with_source_limits(final_outpath, img, raster_ifs.limits)
-    return final_outpath
+    params = (; method=:transformations_png, ifs_name=ifs.name,
+              initial_polygon=_resolve_initial_polygon(initial_polygon_spec).name,
+              polygon_limits_iterations, show_base, axis, resolution=(height, width), color, alpha)
+    final_outpath = _resolve_output_path(outpath,
+                                         _output_name(ifs.name,
+                                                      params[(:method, :initial_polygon, :resolution, :color, :alpha)],
+                                                      "png"))
+    return _save_image(final_outpath, img, raster_ifs.limits; params=params)
 end
 
 function render_transformations_png(
     ifs;
-    outpath::AbstractString="media/affine_maps.png",
+    outpath::Union{Nothing,AbstractString}=nothing,
     width::Int=1200,
     height::Int=1200,
     show_base::Bool=false,

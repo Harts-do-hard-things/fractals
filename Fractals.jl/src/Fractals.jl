@@ -10,9 +10,14 @@ using Random
 using Base.Threads
 using Printf
 using JSON3
+using Dates: now
+using Base.ScopedValues: ScopedValue, with
+import DrWatson
+using DrWatson: plotsdir, projectdir, savename, safesave, gitdescribe
 
 include("config.jl")                 # constants, RenderMethod enum, polygon presets
-include("utils.jl")                  # shared utilities: path helpers, color maps, GPU stub
+include("utils.jl")                  # shared utilities: PNG metadata, color maps, GPU stub
+include("output.jl")                 # DrWatson-managed output paths, naming, safesave, provenance
 include("types.jl")                  # AffineMap, IFS structs and constructors
 include("render_transformations.jl") # SVG/PNG visualization of affine maps
 include("chaos.jl")                  # iterate!, iterate_parallel!
@@ -71,6 +76,9 @@ export AffineMap,
        rasterize_image_inversely,
        initial_polygon,
        supported_initial_polygons,
+       output_dir,
+       with_output_root,
+       read_provenance,
        RESOLUTION,
        DEFAULT_WARMUP,
        DEFAULT_SAMPLES,

@@ -17,7 +17,7 @@ result = render("my_fractals.ifs";
                 ifs_index=2,
                 method=Chaos,
                 npoints=150_000,
-                outpath="media/recipe_file_index.png")
+                outpath="recipe_file_index.png")
 ```
 
 Use name selection from `.ifs`:
@@ -29,7 +29,7 @@ result = render("my_fractals.ifs";
                 ifs_name="Heighway Dragon",
                 method=Chaos,
                 npoints=150_000,
-                outpath="media/recipe_file_name.png")
+                outpath="recipe_file_name.png")
 ```
 
 If no `ifs_index`/`ifs_name` is provided and the file contains multiple definitions, `render(...)` prints available options and asks for confirmation before selecting index `1`.
@@ -61,7 +61,7 @@ result = render(eq;
                 backend=:cpu,
                 npoints=200_000,
                 resolution=(1024, 1024),
-                outpath="media/recipe_chaos.png")
+                outpath="recipe_chaos.png")
 
 println(result.outpath)
 ```
@@ -85,7 +85,7 @@ result = render(EISENSTEIN;
                 iterations=2,
                 backend=:cpu,
                 resolution=(900, 900),
-                outpath="media/recipe_point_deterministic.png")
+                outpath="recipe_point_deterministic.png")
 ```
 
 ## Recipe: ImageIterate
@@ -112,7 +112,7 @@ result = render(EISENSTEIN;
                 initial_polygon=:equilateral_triangle,
                 backend=:cpu,
                 resolution=(900, 900),
-                outpath="media/recipe_image_iterate.png")
+                outpath="recipe_image_iterate.png")
 ```
 
 The `:polygon` seed is produced via `render_transformations_png(...; show_base=false, initial_polygon=...)` and then read as grayscale.
@@ -136,7 +136,7 @@ result = render(EISENSTEIN;
                 iterations=6,
                 backend=:cpu,
                 resolution=(900, 900),
-                outpath="media/recipe_inverse.png")
+                outpath="recipe_inverse.png")
 ```
 
 ## Recipe: Interpolate Between Two IFS States
@@ -163,7 +163,7 @@ mid = interpolate_ifs(IFS(start_eq; npoints=5_000, name="start"),
 render(mid;
        method=RenderTransformations,
        resolution=(900, 900),
-       outpath="media/recipe_interpolated_transforms.png")
+       outpath="recipe_interpolated_transforms.png")
 ```
 
 Use `interpolate_eq_matrix(...)` when you want the blended 7-column equation matrix directly.
@@ -178,7 +178,7 @@ finish = IFS(finish_eq; npoints=5_000, name="finish")
 
 frames = render_interpolation_frames(start, finish;
                                      frames=4,
-                                     outdir="media/frames",
+                                     outdir="frames",
                                      basename="recipe_anim",
                                      render_method=RenderTransformations,
                                      resolution=(512, 512),
@@ -195,30 +195,30 @@ Convert those frames into an animation artifact with `ffmpeg`:
 
 ```julia
 gif = export_animation(:gif;
-                       frames_dir="media/frames",
+                       frames_dir="frames",
                        basename="recipe_anim",
-                       outpath="media/recipe_anim.gif",
+                       outpath="recipe_anim.gif",
                        fps=12)
 
 mp4 = export_animation(:mp4;
-                       frames_dir="media/frames",
+                       frames_dir="frames",
                        basename="recipe_anim",
-                       outpath="media/recipe_anim.mp4",
+                       outpath="recipe_anim.mp4",
                        fps=12)
 ```
 
 Equivalent helper scripts are available for shell workflows:
 
 ```bash
-julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/export_gif.jl \
-  --frames-dir media/frames \
+julia --startup-file=no --project=. Fractals.jl/bin/export_gif.jl \
+  --frames-dir frames \
   --basename recipe_anim \
-  --out media/recipe_anim.gif \
+  --out recipe_anim.gif \
   --fps 12
 
-julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/export_mp4.jl \
-  --frames-dir media/frames \
+julia --startup-file=no --project=. Fractals.jl/bin/export_mp4.jl \
+  --frames-dir frames \
   --basename recipe_anim \
-  --out media/recipe_anim.mp4 \
+  --out recipe_anim.mp4 \
   --fps 12
 ```

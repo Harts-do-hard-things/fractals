@@ -10,6 +10,9 @@ const SMALL_EQ = [
 
 mkpath(SNAPSHOT_DIR)
 
+# Only the fixtures below matter; send the renders' own output files to a scratch directory.
+ENV["FRACTALS_OUTPUT_ROOT"] = mktempdir()
+
 function _snapshot_path(name::AbstractString)
     return joinpath(SNAPSHOT_DIR, name * ".png")
 end
@@ -35,7 +38,7 @@ inverse = render(SMALL_EQ;
                  show_divergence_scale=false,
                  backend=:cpu,
                  resolution=(32, 32),
-                 outpath=joinpath("media", "snapshot_inverse.png"))
+                 outpath="snapshot_inverse.png")
 _write_snapshot("inverse-mask-small", inverse.image)
 
 image_iter = render(SMALL_EQ;
@@ -44,5 +47,5 @@ image_iter = render(SMALL_EQ;
                     image_iterations=2,
                     backend=:cpu,
                     resolution=(48, 48),
-                    outpath=joinpath("media", "snapshot_image_iterate.png"))
+                    outpath="snapshot_image_iterate.png")
 _write_snapshot("image-iterate-polygon-small", image_iter.image)

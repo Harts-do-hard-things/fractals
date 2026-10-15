@@ -1,6 +1,6 @@
 # NOTE: This file must be included after ifsparser.jl (calls parse_ifs_file) and after all
 # render-method files (prompt_ifs_and_render calls iterate!, deterministic_iterate, make_image,
-# _normalize_media_outpath). It must be included BEFORE render.jl — render.jl's
+# _save_image). It must be included BEFORE render.jl — render.jl's
 # _resolve_render_input(AbstractString) calls _select_ifs_definition defined here.
 
 # -------------------------------------------------
@@ -107,7 +107,7 @@ end
 function prompt_ifs_and_render(path::AbstractString;
                                npoints::Integer=DEFAULT_SAMPLES,
                                resolution::Tuple{Int,Int}=RESOLUTION,
-                               outpath::AbstractString="media/output.png",
+                               outpath::Union{Nothing,AbstractString}=nothing,
                                input_fn=readline)
     ifs_list = parse_ifs_file(path; npoints=npoints)
     if isempty(ifs_list)
@@ -134,7 +134,10 @@ function prompt_ifs_and_render(path::AbstractString;
     npoints = _prompt_int("Number of points (default $(npoints)): ", npoints; input_fn=input_fn)
     width   = _prompt_int("Image width (default $(resolution[2])): ", resolution[2]; input_fn=input_fn)
     height  = _prompt_int("Image height (default $(resolution[1])): ", resolution[1]; input_fn=input_fn)
-    outpath = _prompt_string("Output path (default $(outpath)): ", outpath; input_fn=input_fn)
+    default_outpath = isnothing(outpath) ? "" : String(outpath)
+    default_label = isnothing(outpath) ? "auto-named in $(output_dir())" : default_outpath
+    entered = _prompt_string("Output path (default $(default_label)): ", default_outpath; input_fn=input_fn)
+    outpath = isempty(entered) ? nothing : entered
 
     ifs = IFS(ifs.maps, ifs.weights; npoints=npoints, name=ifs.name, docs=ifs.docs, limits=ifs.limits)
 
@@ -146,9 +149,11 @@ function prompt_ifs_and_render(path::AbstractString;
         ifs = deterministic_iterate(ifs, 1)
     end
 
-    final_outpath = _normalize_media_outpath(outpath)
+    method_symbol = method == 3 ? :point_deterministic : :chaos
+    params = (; method=method_symbol, ifs_name=ifs.name, npoints, resolution=(height, width))
+    final_outpath = _resolve_output_path(outpath, _output_name(ifs.name, params[(:method, :npoints, :resolution)], "png"))
     img = make_image(ifs; resolution=(height, width))
-    _save_image_with_source_limits(final_outpath, img, ifs.limits)
+    _save_image(final_outpath, img, ifs.limits; params=params)
     println("Saved image to $(final_outpath)")
     return ifs
 end

@@ -8,6 +8,34 @@ using Colors
 using JSON3
 using Printf
 
+# Route all package output into a scratch directory so tests never write into the DrWatson
+# project's plots/.
+const TEST_OUTPUT_ROOT = mktempdir(; prefix="fractals_test_output_")
+ENV["FRACTALS_OUTPUT_ROOT"] = TEST_OUTPUT_ROOT
+
+# The CLI script, loaded once so CLI tests call it in-process instead of paying Julia startup
+# and package loading for a subprocess per command.
+module FractalsCLI
+include(joinpath(@__DIR__, "..", "bin", "fractals.jl"))
+end
+
+# Run `bin/fractals.jl` with `args` in-process, capturing output; `code` is the exit code the
+# script would return (exceptions → 2).
+function _run_cli(args::AbstractString...)
+    mktempdir() do tmp
+        out_path = joinpath(tmp, "stdout")
+        err_path = joinpath(tmp, "stderr")
+        code = open(out_path, "w") do out
+            open(err_path, "w") do err
+                redirect_stdio(stdout=out, stderr=err) do
+                    FractalsCLI.run_cli(String[args...])
+                end
+            end
+        end
+        return (code=code, stdout=read(out_path, String), stderr=read(err_path, String))
+    end
+end
+
 function _env_flag(name::AbstractString)::Bool
     value = get(ENV, name, "")
     lowercase(strip(value)) in ("1", "true", "yes", "on")
@@ -934,26 +962,86 @@ end
     end
 end
 
-@testset "Media Output Path" begin
+@testset "DrWatson Output Management" begin
     mktempdir() do d
-        old = pwd()
-        cd(d)
-        try
-            out1 = render(SMALL_EQ; method=Chaos, npoints=500, resolution=(16, 16), outpath="output.png")
-            @test out1.outpath == joinpath("media", "output.png")
-            @test isfile(out1.outpath)
+        plots = joinpath(abspath(d), "plots")
 
-            out2 = render(SMALL_EQ; method=Chaos, npoints=500, resolution=(16, 16), outpath=joinpath("media", "nested", "x.png"))
-            @test out2.outpath == joinpath("media", "nested", "x.png")
-            @test isfile(out2.outpath)
+        @testset "output root precedence" begin
+            withenv("FRACTALS_OUTPUT_ROOT" => nothing) do
+                @test output_dir() == Fractals.plotsdir()
+                @test output_dir("a", "b.png") == Fractals.plotsdir("a", "b.png")
+            end
+            withenv("FRACTALS_OUTPUT_ROOT" => d) do
+                @test output_dir("a.png") == joinpath(plots, "a.png")
+            end
+            other = mktempdir()
+            withenv("FRACTALS_OUTPUT_ROOT" => d) do
+                with_output_root(other) do
+                    @test output_dir() == joinpath(abspath(other), "plots")
+                end
+            end
+        end
 
-            out3 = render(SMALL_EQ; method=Chaos, npoints=500, resolution=(16, 16), outpath=joinpath("other", "path", "image.png"))
-            @test out3.outpath == joinpath("media", "image.png")
-            @test isfile(out3.outpath)
+        with_output_root(d) do
+            @testset "path resolution" begin
+                out1 = render(SMALL_EQ; method=Chaos, npoints=500, resolution=(16, 16), outpath="output.png")
+                @test out1.outpath == joinpath(plots, "output.png")
+                @test isfile(out1.outpath)
 
-            @test isdir("media")
-        finally
-            cd(old)
+                out2 = render(SMALL_EQ; method=Chaos, npoints=500, resolution=(16, 16), outpath=joinpath("nested", "x.png"))
+                @test out2.outpath == joinpath(plots, "nested", "x.png")
+                @test isfile(out2.outpath)
+
+                out3 = render(SMALL_EQ; method=Chaos, npoints=500, resolution=(16, 16), outpath=joinpath("plots", "y.png"))
+                @test out3.outpath == joinpath(plots, "y.png")
+
+                absolute = joinpath(d, "elsewhere", "z.png")
+                out4 = render(SMALL_EQ; method=Chaos, npoints=500, resolution=(16, 16), outpath=absolute)
+                @test out4.outpath == absolute
+                @test isfile(absolute)
+            end
+
+            @testset "savename auto-naming" begin
+                out = render(SMALL_EQ; method=Chaos, npoints=500, resolution=(16, 24))
+                @test dirname(out.outpath) == plots
+                @test basename(out.outpath) == "ifs_method=chaos_npoints=500_resolution=16x24.png"
+
+                named = IFS(SMALL_EQ; npoints=200, name="My Fractal!")
+                det = render(named; method=PointDeterministic, iterations=2, color=true, resolution=(16, 16))
+                @test basename(det.outpath) ==
+                      "My_Fractal_color=true_iterations=2_method=point_deterministic_npoints=200_resolution=16x16.png"
+
+                svg = render_transformations_svg(named; width=32, height=16)
+                @test basename(svg) ==
+                      "My_Fractal_initial_polygon=default_method=transformations_svg_resolution=16x32.svg"
+                @test startswith(read(svg, String), "<!-- fractals.provenance: ")
+            end
+
+            @testset "safesave keeps backups" begin
+                first_out = render(SMALL_EQ; method=Chaos, npoints=500, resolution=(16, 16), outpath="kept.png")
+                first_bytes = read(first_out.outpath)
+                second_out = render(SMALL_EQ; method=Chaos, npoints=600, resolution=(16, 16), outpath="kept.png")
+                @test second_out.outpath == first_out.outpath
+                backup = joinpath(plots, "kept_#1.png")
+                @test isfile(backup)
+                @test read(backup) == first_bytes
+                @test read_provenance(second_out.outpath).params.npoints == 600
+                @test read_provenance(backup).params.npoints == 500
+            end
+
+            @testset "provenance metadata" begin
+                out = render(SMALL_EQ; method=Inverse, iterations=2, resolution=(16, 16), outpath="prov.png")
+                prov = read_provenance(out.outpath)
+                @test prov.version == 1
+                @test prov.params.method == "inverse"
+                @test prov.params.iterations == 2
+                @test collect(prov.params.resolution) == [16, 16]
+                @test prov.params.backend == "cpu"
+                @test haskey(prov, :gitcommit)
+                @test prov.fractals_version == string(pkgversion(Fractals))
+                @test Fractals._read_png_source_limits(out.outpath) == out.ifs.limits
+                @test isnothing(read_provenance(joinpath(d, "missing.png")))
+            end
         end
     end
 end
@@ -1828,7 +1916,7 @@ end
         plain_path = joinpath(tmp, "plain.png")
         tagged_limits = ((-1.0, 1.0), (-1.0, 1.0))
 
-        Fractals._save_image_with_source_limits(tagged_path, src, tagged_limits)
+        Fractals._save_image(tagged_path, src, tagged_limits)
         save(plain_path, src)
 
         @test isfile(tagged_path)
@@ -1886,7 +1974,7 @@ end
                                initial_polygon=:line_arrow,
                                color=true,
                                axis=true,
-                               outpath=joinpath("media", "snapshot_transformations.png"))
+                               outpath="snapshot_transformations.png")
             _assert_matches_snapshot("transformations-line-arrow-color-axis", transform.image)
 
             inverse = render(SMALL_EQ;
@@ -1895,7 +1983,7 @@ end
                              show_divergence_scale=false,
                              backend=:cpu,
                              resolution=(32, 32),
-                             outpath=joinpath("media", "snapshot_inverse.png"))
+                             outpath="snapshot_inverse.png")
             _assert_matches_snapshot("inverse-mask-small", inverse.image)
 
             image_iter = render(SMALL_EQ;
@@ -1904,7 +1992,7 @@ end
                                 image_iterations=2,
                                 backend=:cpu,
                                 resolution=(48, 48),
-                                outpath=joinpath("media", "snapshot_image_iterate.png"))
+                                outpath="snapshot_image_iterate.png")
             _assert_matches_snapshot("image-iterate-polygon-small", image_iter.image)
         finally
             cd(old)
@@ -2012,7 +2100,7 @@ end
                                       method=:chaos,
                                       backend=:bad,
                                       resolution=(24, 24),
-                                      outpath=joinpath("media", "never_write_backend_bad.png"))
+                                      outpath="never_write_backend_bad.png")
 end
 
 @testset "Interactive And Main Entrypoints" begin
@@ -2035,14 +2123,14 @@ end
             write(stdin_path, input_lines)
             selected = open(stdin_path, "r") do io
                 redirect_stdin(io) do
-                    prompt_ifs_and_render(ifs_path; npoints=100, resolution=(32, 32), outpath="media/prompt_output.png")
+                    prompt_ifs_and_render(ifs_path; npoints=100, resolution=(32, 32), outpath="prompt_output.png")
                 end
             end
             @test selected isa IFS
-            @test isfile(joinpath("media", "prompt_output.png"))
+            @test isfile(output_dir("prompt_output.png"))
 
-            Fractals.main(eq=SMALL_EQ, npoints=1000, outpath="media/main_output.png")
-            @test isfile(joinpath("media", "main_output.png"))
+            Fractals.main(eq=SMALL_EQ, npoints=1000, outpath="main_output.png")
+            @test isfile(output_dir("main_output.png"))
         finally
             cd(old)
         end
@@ -2060,10 +2148,10 @@ end
                                warmup=5,
                                color=true,
                                resolution=(40, 40),
-                               outpath="media/render_chaos_color.png")
+                               outpath="render_chaos_color.png")
             @test size(out_chaos.image) == (40, 40)
             @test eltype(out_chaos.image) == RGB{Float32}
-            @test isfile(joinpath("media", "render_chaos_color.png"))
+            @test isfile(output_dir("render_chaos_color.png"))
 
             out_det = render(SMALL_EQ;
                              method=PointDeterministic,
@@ -2071,30 +2159,30 @@ end
                              iterations=1,
                              color=true,
                              resolution=(40, 40),
-                             outpath="media/render_det_color.png")
+                             outpath="render_det_color.png")
             @test size(out_det.image) == (40, 40)
             @test eltype(out_det.image) == RGB{Float32}
-            @test isfile(joinpath("media", "render_det_color.png"))
+            @test isfile(output_dir("render_det_color.png"))
 
             out_inv = render(SMALL_EQ;
                              method=Inverse,
                              iterations=2,
                              color=true,
                              resolution=(40, 40),
-                             outpath="media/render_inv_color.png")
+                             outpath="render_inv_color.png")
             @test size(out_inv.image) == (40, 40)
             @test eltype(out_inv.image) == RGB{Float32}
-            @test isfile(joinpath("media", "render_inv_color.png"))
+            @test isfile(output_dir("render_inv_color.png"))
 
             out_tf = render(SMALL_EQ;
                             method=RenderTransformations,
                             npoints=40,
                             color=true,
                             resolution=(40, 40),
-                            outpath="media/render_tf_color.png")
+                            outpath="render_tf_color.png")
             @test size(out_tf.image) == (40, 40)
             @test eltype(out_tf.image) == RGB{Float32}
-            @test isfile(joinpath("media", "render_tf_color.png"))
+            @test isfile(output_dir("render_tf_color.png"))
         finally
             cd(old)
         end
@@ -2120,7 +2208,7 @@ end
                                   color=false,
                                   alpha=true,
                                   resolution=(40, 40),
-                                  outpath=joinpath("media", "alpha_gray_$(method).png"),
+                                  outpath="alpha_gray_$(method).png",
                                   extra...)
                 @test size(gray_out.image) == (40, 40)
                 @test eltype(gray_out.image) == GrayA{Float32}
@@ -2132,7 +2220,7 @@ end
                                    color=true,
                                    alpha=true,
                                    resolution=(40, 40),
-                                   outpath=joinpath("media", "alpha_color_$(method).png"),
+                                   outpath="alpha_color_$(method).png",
                                    extra...)
                 @test size(color_out.image) == (40, 40)
                 @test eltype(color_out.image) == RGBA{Float32}
@@ -2145,12 +2233,10 @@ end
     end
 end
 
+# Opt-in: CLI tests run in-process (see _run_cli), so their cost is first-call compilation of
+# the CLI code paths rather than a Julia subprocess per command.
 if _env_flag("FRACTALS_RUN_CLI_BENCH_TESTS")
 @testset "CLI Commands" begin
-    script = abspath(joinpath(@__DIR__, "..", "bin", "fractals.jl"))
-    project = abspath(joinpath(@__DIR__, ".."))
-    jcmd = Base.julia_cmd()
-
     sample = """
     CLI_First {
       0.5 0.0 0.0 0.5 0.0 0.0 0.6
@@ -2171,123 +2257,153 @@ if _env_flag("FRACTALS_RUN_CLI_BENCH_TESTS")
     """
 
     mktempdir() do d
-        old = pwd()
-        cd(d)
-        try
-            ifs_path = joinpath(d, "cli.ifs")
-            write(ifs_path, sample)
+        ifs_path = joinpath(d, "cli.ifs")
+        write(ifs_path, sample)
+        invalid_ifs_path = joinpath(d, "cli_invalid.ifs")
+        write(invalid_ifs_path, invalid_sample)
 
-            invalid_ifs_path = joinpath(d, "cli_invalid.ifs")
-            write(invalid_ifs_path, invalid_sample)
-            @testset "CLI Validate And Render" begin
-                @info "CLI Validate And Render: starting"
-                validate_out = read(`$jcmd --startup-file=no --project=$project $script validate-ifs --input $ifs_path`, String)
-                @test occursin("Definitions: 2", validate_out)
-                @test occursin("CLI_First", validate_out)
+        @testset "help and unknown commands" begin
+            help = _run_cli("help")
+            @test help.code == 0
+            @test occursin("batch-render", help.stdout)
+            @test _run_cli().code == 1
+            unknown = _run_cli("no-such-command")
+            @test unknown.code == 2
+            @test occursin("Unknown command", unknown.stderr)
+        end
 
-                bad_validate = run(pipeline(`$jcmd --startup-file=no --project=$project $script validate-ifs --input $invalid_ifs_path`; stdout=devnull, stderr=devnull); wait=false)
-                wait(bad_validate)
-                @test !success(bad_validate)
+        @testset "validate-ifs" begin
+            valid = _run_cli("validate-ifs", "--input", ifs_path)
+            @test valid.code == 0
+            @test occursin("Definitions: 2", valid.stdout)
+            @test occursin("CLI_First", valid.stdout)
 
-                render_out = read(`$jcmd --startup-file=no --project=$project $script render --input $ifs_path --ifs-index 2 --npoints 2000 --resolution 32x32 --out media/cli_single.png`, String)
-                @test occursin("Rendered", render_out)
-                @test isfile(joinpath("media", "cli_single.png"))
+            invalid = _run_cli("validate-ifs", "--input", invalid_ifs_path)
+            @test invalid.code == 2
+            @test occursin("Invalid definitions: 1", invalid.stderr)
+            @test occursin("CLI_Bad", invalid.stderr)
 
-                render_tf_out = read(`$jcmd --startup-file=no --project=$project $script render --input $ifs_path --ifs-index 1 --method RenderTransformations --color true --initial-polygon line_arrow --resolution 24x24 --out media/cli_transformations.png`, String)
-                @test occursin("Rendered", render_tf_out)
-                tf_img = load(joinpath("media", "cli_transformations.png"))
-                @test count(px -> _is_drawn_pixel(px) && (red(px) != green(px) || green(px) != blue(px)), tf_img) > 0
+            @test _run_cli("validate-ifs", "--input", joinpath(d, "missing_file.ifs")).code == 2
+        end
 
-                render_inverse_out = read(`$jcmd --startup-file=no --project=$project $script render --input $ifs_path --ifs-index 1 --method Inverse --iterations 2 --show-divergence-scale false --resolution 24x24 --out media/cli_inverse_mask.png`, String)
-                @test occursin("Rendered", render_inverse_out)
-                inverse_img = load(joinpath("media", "cli_inverse_mask.png"))
-                @test eltype(inverse_img) <: Gray
-                @test all(px -> Float32(px.val) == 0 || Float32(px.val) == 1, inverse_img)
+        @testset "render" begin
+            single = _run_cli("render", "--input", ifs_path, "--ifs-index", "2", "--npoints", "2000",
+                              "--resolution", "32x32", "--out", "cli_single.png")
+            @test single.code == 0
+            @test occursin("Rendered", single.stdout)
+            @test isfile(output_dir("cli_single.png"))
 
-                batch_out = read(`$jcmd --startup-file=no --project=$project $script batch-render --input $ifs_path --method Inverse --iterations 2 --show-divergence-scale false --resolution 24x24 --out-dir media/batch`, String)
-                @test occursin("Batch rendering 2 definitions", batch_out)
-                @test isfile(joinpath("media", "batch", "01_cli_first.png"))
-                @test isfile(joinpath("media", "batch", "02_cli_second.png"))
-                batch_img = load(joinpath("media", "batch", "01_cli_first.png"))
-                @test eltype(batch_img) <: Gray
-                @test all(px -> Float32(px.val) == 0 || Float32(px.val) == 1, batch_img)
+            auto = _run_cli("render", "--input", ifs_path, "--ifs-index", "1", "--npoints", "500",
+                            "--resolution", "16x16")
+            @test auto.code == 0
+            @test isfile(output_dir("CLI_First_method=chaos_npoints=500_resolution=16x16.png"))
 
-                batch_tf_out = read(`$jcmd --startup-file=no --project=$project $script batch-render --input $ifs_path --method RenderTransformations --color true --initial-polygon line_arrow --resolution 24x24 --out-dir media/batch_transformations`, String)
-                @test occursin("Batch rendering 2 definitions", batch_tf_out)
-                batch_tf_img = load(joinpath("media", "batch_transformations", "01_cli_first.png"))
-                @test count(px -> _is_drawn_pixel(px) && (red(px) != green(px) || green(px) != blue(px)), batch_tf_img) > 0
+            tf = _run_cli("render", "--input", ifs_path, "--ifs-index", "1", "--method", "RenderTransformations",
+                          "--color", "true", "--initial-polygon", "line_arrow", "--resolution", "24x24",
+                          "--out", "cli_transformations.png")
+            @test tf.code == 0
+            tf_img = load(output_dir("cli_transformations.png"))
+            @test count(px -> _is_drawn_pixel(px) && (red(px) != green(px) || green(px) != blue(px)), tf_img) > 0
 
-                batch_image_iterate_out = read(`$jcmd --startup-file=no --project=$project $script batch-render --input $ifs_path --method ImageIterate --image-source polygon --image-iterations 3 --color true --resolution 24x24 --out-dir media/batch_image_iterate`, String)
-                @test occursin("Batch rendering 2 definitions", batch_image_iterate_out)
-                @test isfile(joinpath("media", "batch_image_iterate", "01_cli_first.png"))
-                @test isfile(joinpath("media", "batch_image_iterate", "02_cli_second.png"))
-                batch_image_iterate_img = load(joinpath("media", "batch_image_iterate", "01_cli_first.png"))
-                @test eltype(batch_image_iterate_img) <: RGB
-                @test count(px -> Float32(gray(px)) > 0, batch_image_iterate_img) > 0
+            inverse = _run_cli("render", "--input", ifs_path, "--ifs-index", "1", "--method", "Inverse",
+                               "--iterations", "2", "--show-divergence-scale", "false", "--resolution", "24x24",
+                               "--out", "cli_inverse_mask.png")
+            @test inverse.code == 0
+            inverse_img = load(output_dir("cli_inverse_mask.png"))
+            @test eltype(inverse_img) <: Gray
+            @test all(px -> Float32(px.val) == 0 || Float32(px.val) == 1, inverse_img)
+        end
 
-                bad = run(`$jcmd --startup-file=no --project=$project $script validate-ifs --input missing_file.ifs`; wait=false)
-                wait(bad)
-                @test !success(bad)
-            end
+        @testset "batch-render" begin
+            batch = _run_cli("batch-render", "--input", ifs_path, "--method", "Inverse", "--iterations", "2",
+                             "--show-divergence-scale", "false", "--resolution", "24x24", "--out-dir", "batch")
+            @test batch.code == 0
+            @test occursin("Batch rendering 2 definitions", batch.stdout)
+            @test isfile(output_dir("batch", "01_cli_first.png"))
+            @test isfile(output_dir("batch", "02_cli_second.png"))
+            batch_img = load(output_dir("batch", "01_cli_first.png"))
+            @test eltype(batch_img) <: Gray
+            @test all(px -> Float32(px.val) == 0 || Float32(px.val) == 1, batch_img)
 
-            @testset "CLI Benchmarks" begin
-                @info "CLI Benchmarks: starting"
-                bench_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1`, String)
-                @test occursin("Benchmark suite", bench_out)
-                @test occursin("iterate!", bench_out)
-                @test occursin("alloc_mean=", bench_out)
+            batch_tf = _run_cli("batch-render", "--input", ifs_path, "--method", "RenderTransformations",
+                                "--color", "true", "--initial-polygon", "line_arrow", "--resolution", "24x24",
+                                "--out-dir", "batch_transformations")
+            @test batch_tf.code == 0
+            batch_tf_img = load(output_dir("batch_transformations", "01_cli_first.png"))
+            @test count(px -> _is_drawn_pixel(px) && (red(px) != green(px) || green(px) != blue(px)), batch_tf_img) > 0
 
-                bench_json = joinpath("benchmarks", "bench_small.json")
-                bench_out_json = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1 --json $bench_json`, String)
-                @test occursin("Wrote benchmark JSON", bench_out_json)
-                @test isfile(bench_json)
-                json_txt = read(bench_json, String)
-                @test occursin("\"results\"", json_txt)
-                @test occursin("\"small\"", json_txt)
-
-                payload = JSON3.read(json_txt)
-                @test haskey(payload.results, :small)
-                small = payload.results.small
-                for k in (:iterate!, Symbol("iterate_parallel!"), :make_image, :iterate_image, :rasterize_image_inversely)
-                    @test haskey(small, k)
-                    @test haskey(small[k], :min_s)
-                    @test haskey(small[k], :mean_s)
-                    @test haskey(small[k], :max_s)
-                    @test haskey(small[k], :mean_alloc_bytes)
-                    @test small[k].min_s >= 0
-                    @test small[k].mean_s >= 0
-                    @test small[k].max_s >= 0
-                    @test small[k].mean_alloc_bytes >= 0
-                end
-
-                bench_gpu_json = joinpath("benchmarks", "bench_small_gpu_lines.json")
-                bench_gpu_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1 --backend auto --include-gpu-bench --json $bench_gpu_json`, String)
-                @test occursin("Wrote benchmark JSON", bench_gpu_out)
-                gpu_payload = JSON3.read(read(bench_gpu_json, String))
-                gpu_small = gpu_payload.results.small
-                for k in (:make_image_gpu, :iterate_image_gpu, :rasterize_image_inversely_gpu_exact, :rasterize_image_inversely_gpu_preview)
-                    @test haskey(gpu_small, k)
-                    item = gpu_small[k]
-                    if haskey(item, :status)
-                        @test item.status == "skipped"
-                        @test haskey(item, :reason)
-                    else
-                        @test haskey(item, :mean_s)
-                        @test haskey(item, :mean_alloc_bytes)
-                    end
-                end
-
-                targets_path = abspath(joinpath(project, "bench", "perf_targets.toml"))
-                bench_targets_out = read(`$jcmd --startup-file=no --project=$project $script benchmark --profile small --repeats 1 --npoints 500 --resolution 12x12 --inverse-iterations 1 --targets $targets_path`, String)
-                @test occursin("Target comparison", bench_targets_out)
-                @test occursin("targets:", bench_targets_out)
-                @info "CLI Benchmarks: finished"
-            end
-        finally
-            cd(old)
+            batch_ii = _run_cli("batch-render", "--input", ifs_path, "--method", "ImageIterate",
+                                "--image-source", "polygon", "--image-iterations", "3", "--color", "true",
+                                "--resolution", "24x24", "--out-dir", "batch_image_iterate")
+            @test batch_ii.code == 0
+            @test isfile(output_dir("batch_image_iterate", "01_cli_first.png"))
+            @test isfile(output_dir("batch_image_iterate", "02_cli_second.png"))
+            batch_ii_img = load(output_dir("batch_image_iterate", "01_cli_first.png"))
+            @test eltype(batch_ii_img) <: RGB
+            @test count(px -> gray(Gray(px)) > 0, batch_ii_img) > 0
         end
     end
 end
+
+@testset "CLI Benchmarks" begin
+    mktempdir() do d
+        bench_args = ("benchmark", "--profile", "small", "--repeats", "1", "--npoints", "500",
+                      "--resolution", "12x12", "--inverse-iterations", "1")
+
+        bench = _run_cli(bench_args...)
+        @test bench.code == 0
+        @test occursin("Benchmark suite", bench.stdout)
+        @test occursin("iterate!", bench.stdout)
+        @test occursin("alloc_mean=", bench.stdout)
+
+        bench_json = joinpath(d, "benchmarks", "bench_small.json")
+        bench_with_json = _run_cli(bench_args..., "--json", bench_json)
+        @test bench_with_json.code == 0
+        @test occursin("Wrote benchmark JSON", bench_with_json.stdout)
+        @test isfile(bench_json)
+        json_txt = read(bench_json, String)
+        @test occursin("\"results\"", json_txt)
+        @test occursin("\"small\"", json_txt)
+
+        payload = JSON3.read(json_txt)
+        @test haskey(payload.results, :small)
+        small = payload.results.small
+        for k in (:iterate!, Symbol("iterate_parallel!"), :make_image, :iterate_image, :rasterize_image_inversely)
+            @test haskey(small, k)
+            @test haskey(small[k], :min_s)
+            @test haskey(small[k], :mean_s)
+            @test haskey(small[k], :max_s)
+            @test haskey(small[k], :mean_alloc_bytes)
+            @test small[k].min_s >= 0
+            @test small[k].mean_s >= 0
+            @test small[k].max_s >= 0
+            @test small[k].mean_alloc_bytes >= 0
+        end
+
+        bench_gpu_json = joinpath(d, "benchmarks", "bench_small_gpu_lines.json")
+        bench_gpu = _run_cli(bench_args..., "--backend", "auto", "--include-gpu-bench", "--json", bench_gpu_json)
+        @test bench_gpu.code == 0
+        @test occursin("Wrote benchmark JSON", bench_gpu.stdout)
+        gpu_small = JSON3.read(read(bench_gpu_json, String)).results.small
+        for k in (:make_image_gpu, :iterate_image_gpu, :rasterize_image_inversely_gpu_exact, :rasterize_image_inversely_gpu_preview)
+            @test haskey(gpu_small, k)
+            item = gpu_small[k]
+            if haskey(item, :status)
+                @test item.status == "skipped"
+                @test haskey(item, :reason)
+            else
+                @test haskey(item, :mean_s)
+                @test haskey(item, :mean_alloc_bytes)
+            end
+        end
+
+        targets_path = abspath(joinpath(@__DIR__, "..", "bench", "perf_targets.toml"))
+        bench_targets = _run_cli(bench_args..., "--targets", targets_path)
+        @test bench_targets.code == 0
+        @test occursin("Target comparison", bench_targets.stdout)
+        @test occursin("targets:", bench_targets.stdout)
+    end
+end
 else
-    @info "Skipping CLI Commands testset; set FRACTALS_RUN_CLI_BENCH_TESTS=1 to enable it."
+    @info "Skipping CLI Commands and CLI Benchmarks testsets; set FRACTALS_RUN_CLI_BENCH_TESTS=1 to enable them."
 end
