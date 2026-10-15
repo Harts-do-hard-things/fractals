@@ -5,7 +5,7 @@ function _anchored_projection_from_bbox(
     ymax::Float64,
     width::Int,
     height::Int;
-    margin=0.06,
+    margin = 0.06,
 )
     # Include the world origin so (0, 0) lands on the same pixel anchor
     # for every initial polygon preset.
@@ -36,22 +36,36 @@ function _anchored_projection_from_bbox(
     return s, s, ox, oy
 end
 
-function _fit_bounds(segments, width::Int, height::Int; margin=0.06)
-    xmin = Inf; xmax = -Inf; ymin = Inf; ymax = -Inf
+function _fit_bounds(segments, width::Int, height::Int; margin = 0.06)
+    xmin = Inf
+    xmax = -Inf
+    ymin = Inf
+    ymax = -Inf
     for (p1, p2) in segments
-        x1, y1 = p1; x2, y2 = p2
-        xmin = min(xmin, x1, x2); xmax = max(xmax, x1, x2)
-        ymin = min(ymin, y1, y2); ymax = max(ymax, y1, y2)
+        x1, y1 = p1
+        x2, y2 = p2
+        xmin = min(xmin, x1, x2)
+        xmax = max(xmax, x1, x2)
+        ymin = min(ymin, y1, y2)
+        ymax = max(ymax, y1, y2)
     end
     if !isfinite(xmin) || !isfinite(xmax) || !isfinite(ymin) || !isfinite(ymax)
         xmin, xmax, ymin, ymax = 0.0, 1.0, 0.0, 1.0
     end
-    return _anchored_projection_from_bbox(xmin, xmax, ymin, ymax, width, height; margin=margin)
+    return _anchored_projection_from_bbox(xmin, xmax, ymin, ymax, width, height; margin = margin)
 end
 
-function _projection_from_limits(limits, width::Int, height::Int; margin=0.06)
+function _projection_from_limits(limits, width::Int, height::Int; margin = 0.06)
     (xmin, xmax), (ymin, ymax) = limits
-    return _anchored_projection_from_bbox(Float64(xmin), Float64(xmax), Float64(ymin), Float64(ymax), width, height; margin=margin)
+    return _anchored_projection_from_bbox(
+        Float64(xmin),
+        Float64(xmax),
+        Float64(ymin),
+        Float64(ymax),
+        width,
+        height;
+        margin = margin,
+    )
 end
 
 @inline function _to_svg_xy(p::SVector{2,Float64}, sx, sy, ox, oy)
@@ -61,7 +75,7 @@ end
 end
 
 @inline function _to_raster_xy(p::SVector{2,Float64}, limits, width::Int, height::Int)
-    pmap = make_pixelate_map(limits; resolution=(height, width))
+    pmap = make_pixelate_map(limits; resolution = (height, width))
     return pmap(p)
 end
 
@@ -190,17 +204,18 @@ end
 
 function _limits_from_polygon_point_iterations(
     ifs;
-    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
-    polygon_limits_iterations::Integer=1,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol} = initial_polygon(),
+    polygon_limits_iterations::Integer = 1,
 )
-    polygon_limits_iterations >= 0 ||
-        throw(ArgumentError("polygon_limits_iterations must be >= 0, got $polygon_limits_iterations"))
+    polygon_limits_iterations >= 0 || throw(
+        ArgumentError("polygon_limits_iterations must be >= 0, got $polygon_limits_iterations"),
+    )
 
     preset = _resolve_initial_polygon(initial_polygon_spec)
     frontier = _select_extreme_polygon_points(_unique_polygon_points(preset.segments))
     retained = copy(frontier)
 
-    for _ in 1:polygon_limits_iterations
+    for _ = 1:polygon_limits_iterations
         next_points = SVector{2,Float64}[]
         for p in frontier, m in ifs.maps
             push!(next_points, m(p))
@@ -215,33 +230,38 @@ end
 
 function _build_polygon_raster_ifs(
     ifs;
-    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
-    polygon_limits_iterations::Integer=1,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol} = initial_polygon(),
+    polygon_limits_iterations::Integer = 1,
 )
-    limits = _limits_from_polygon_point_iterations(ifs;
-                                                   initial_polygon_spec=initial_polygon_spec,
-                                                   polygon_limits_iterations=polygon_limits_iterations)
+    limits = _limits_from_polygon_point_iterations(
+        ifs;
+        initial_polygon_spec = initial_polygon_spec,
+        polygon_limits_iterations = polygon_limits_iterations,
+    )
     return IFS(ifs.name, ifs.docs, copy(ifs.points), ifs.maps, ifs.weights, limits)
 end
 
 @inline function _render_transformations_effective_ifs(
     ifs;
-    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
-    polygon_limits_iterations::Integer=1,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol} = initial_polygon(),
+    polygon_limits_iterations::Integer = 1,
 )
-    return _build_polygon_raster_ifs(ifs;
-                                     initial_polygon_spec=initial_polygon_spec,
-                                     polygon_limits_iterations=polygon_limits_iterations)
+    return _build_polygon_raster_ifs(
+        ifs;
+        initial_polygon_spec = initial_polygon_spec,
+        polygon_limits_iterations = polygon_limits_iterations,
+    )
 end
 
 function _collect_transformed_base_segments(
     ifs;
-    show_base::Bool=false,
-    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+    show_base::Bool = false,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol} = initial_polygon(),
 )
     preset = _resolve_initial_polygon(initial_polygon_spec)
     base_segments = preset.segments
-    transformed_by_map = Vector{Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}}(undef, length(ifs.maps))
+    transformed_by_map =
+        Vector{Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}}(undef, length(ifs.maps))
     all_segments = Vector{Tuple{SVector{2,Float64},SVector{2,Float64}}}()
 
     if show_base
@@ -259,20 +279,25 @@ end
 
 function _render_transformations_svg_impl(
     ifs;
-    outpath::Union{Nothing,AbstractString}=nothing,
-    width::Int=1200,
-    height::Int=1200,
-    show_base::Bool=false,
-    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
-    polygon_limits_iterations::Integer=1,
-    stroke_width::Real=2.0,
-    axis::Bool=false,
+    outpath::Union{Nothing,AbstractString} = nothing,
+    width::Int = 1200,
+    height::Int = 1200,
+    show_base::Bool = false,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol} = initial_polygon(),
+    polygon_limits_iterations::Integer = 1,
+    stroke_width::Real = 2.0,
+    axis::Bool = false,
 )
-    svg_ifs = _build_polygon_raster_ifs(ifs;
-                                        initial_polygon_spec=initial_polygon_spec,
-                                        polygon_limits_iterations=polygon_limits_iterations)
-    _, base_segments, transformed_by_map, _ =
-        _collect_transformed_base_segments(ifs; show_base=show_base, initial_polygon_spec=initial_polygon_spec)
+    svg_ifs = _build_polygon_raster_ifs(
+        ifs;
+        initial_polygon_spec = initial_polygon_spec,
+        polygon_limits_iterations = polygon_limits_iterations,
+    )
+    _, base_segments, transformed_by_map, _ = _collect_transformed_base_segments(
+        ifs;
+        show_base = show_base,
+        initial_polygon_spec = initial_polygon_spec,
+    )
     colors = _map_colors(length(transformed_by_map))
 
     sx, sy, ox, oy = _projection_from_limits(svg_ifs.limits, width, height)
@@ -282,9 +307,17 @@ function _render_transformations_svg_impl(
         for (p1, p2) in base_segments
             x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
             x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
-            push!(lines,
-                  @sprintf("""  <line x1="%.3f" y1="%.3f" x2="%.3f" y2="%.3f" stroke="#222222" stroke-width="%.2f" opacity="0.65" />""",
-                           x1, y1, x2, y2, stroke_width))
+            push!(
+                lines,
+                @sprintf(
+                    """  <line x1="%.3f" y1="%.3f" x2="%.3f" y2="%.3f" stroke="#222222" stroke-width="%.2f" opacity="0.65" />""",
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    stroke_width
+                )
+            )
         end
     end
 
@@ -293,9 +326,18 @@ function _render_transformations_svg_impl(
         for (p1, p2) in transformed
             x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
             x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
-            push!(lines,
-                  @sprintf("""  <line x1="%.3f" y1="%.3f" x2="%.3f" y2="%.3f" stroke="%s" stroke-width="%.2f" />""",
-                           x1, y1, x2, y2, color, stroke_width))
+            push!(
+                lines,
+                @sprintf(
+                    """  <line x1="%.3f" y1="%.3f" x2="%.3f" y2="%.3f" stroke="%s" stroke-width="%.2f" />""",
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    color,
+                    stroke_width
+                )
+            )
         end
     end
 
@@ -307,28 +349,60 @@ function _render_transformations_svg_impl(
         if ymin <= 0.0 <= ymax
             x1, y1 = _to_svg_xy(SVector{2,Float64}(xmin, 0.0), sx, sy, ox, oy)
             x2, y2 = _to_svg_xy(SVector{2,Float64}(xmax, 0.0), sx, sy, ox, oy)
-            push!(lines,
-                  @sprintf("""  <line x1="%.3f" y1="%.3f" x2="%.3f" y2="%.3f" stroke="%s" stroke-width="1.00" opacity="0.8" data-role="axis-x" />""",
-                           x1, y1, x2, y2, axis_color))
-            for xtick in ceil(Int, xmin):floor(Int, xmax)
+            push!(
+                lines,
+                @sprintf(
+                    """  <line x1="%.3f" y1="%.3f" x2="%.3f" y2="%.3f" stroke="%s" stroke-width="1.00" opacity="0.8" data-role="axis-x" />""",
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    axis_color
+                )
+            )
+            for xtick = ceil(Int, xmin):floor(Int, xmax)
                 x, y = _to_svg_xy(SVector{2,Float64}(Float64(xtick), 0.0), sx, sy, ox, oy)
-                push!(lines,
-                      @sprintf("""  <line x1="%.3f" y1="%.3f" x2="%.3f" y2="%.3f" stroke="%s" stroke-width="1.00" opacity="0.8" data-role="axis-x-tick" />""",
-                               x, y - tick_half, x, y + tick_half, axis_color))
+                push!(
+                    lines,
+                    @sprintf(
+                        """  <line x1="%.3f" y1="%.3f" x2="%.3f" y2="%.3f" stroke="%s" stroke-width="1.00" opacity="0.8" data-role="axis-x-tick" />""",
+                        x,
+                        y - tick_half,
+                        x,
+                        y + tick_half,
+                        axis_color
+                    )
+                )
             end
         end
 
         if xmin <= 0.0 <= xmax
             x1, y1 = _to_svg_xy(SVector{2,Float64}(0.0, ymin), sx, sy, ox, oy)
             x2, y2 = _to_svg_xy(SVector{2,Float64}(0.0, ymax), sx, sy, ox, oy)
-            push!(lines,
-                  @sprintf("""  <line x1="%.3f" y1="%.3f" x2="%.3f" y2="%.3f" stroke="%s" stroke-width="1.00" opacity="0.8" data-role="axis-y" />""",
-                           x1, y1, x2, y2, axis_color))
-            for ytick in ceil(Int, ymin):floor(Int, ymax)
+            push!(
+                lines,
+                @sprintf(
+                    """  <line x1="%.3f" y1="%.3f" x2="%.3f" y2="%.3f" stroke="%s" stroke-width="1.00" opacity="0.8" data-role="axis-y" />""",
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    axis_color
+                )
+            )
+            for ytick = ceil(Int, ymin):floor(Int, ymax)
                 x, y = _to_svg_xy(SVector{2,Float64}(0.0, Float64(ytick)), sx, sy, ox, oy)
-                push!(lines,
-                      @sprintf("""  <line x1="%.3f" y1="%.3f" x2="%.3f" y2="%.3f" stroke="%s" stroke-width="1.00" opacity="0.8" data-role="axis-y-tick" />""",
-                               x - tick_half, y, x + tick_half, y, axis_color))
+                push!(
+                    lines,
+                    @sprintf(
+                        """  <line x1="%.3f" y1="%.3f" x2="%.3f" y2="%.3f" stroke="%s" stroke-width="1.00" opacity="0.8" data-role="axis-y-tick" />""",
+                        x - tick_half,
+                        y,
+                        x + tick_half,
+                        y,
+                        axis_color
+                    )
+                )
             end
         end
     end
@@ -340,47 +414,60 @@ $body
 </svg>
 """
 
-    params = (; method=:transformations_svg, ifs_name=ifs.name,
-              initial_polygon=_resolve_initial_polygon(initial_polygon_spec).name,
-              polygon_limits_iterations, show_base, axis, resolution=(height, width))
-    final_outpath = _resolve_output_path(outpath,
-                                         _output_name(ifs.name, params[(:method, :initial_polygon, :resolution)], "svg"))
-    return _save_svg(final_outpath, svg; params=params)
+    params = (;
+        method = :transformations_svg,
+        ifs_name = ifs.name,
+        initial_polygon = _resolve_initial_polygon(initial_polygon_spec).name,
+        polygon_limits_iterations,
+        show_base,
+        axis,
+        resolution = (height, width),
+    )
+    final_outpath = _resolve_output_path(
+        outpath,
+        _output_name(ifs.name, params[(:method, :initial_polygon, :resolution)], "svg"),
+    )
+    return _save_svg(final_outpath, svg; params = params)
 end
 
 function render_transformations_svg(
     ifs;
-    outpath::Union{Nothing,AbstractString}=nothing,
-    width::Int=1200,
-    height::Int=1200,
-    show_base::Bool=false,
-    initial_polygon::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
-    polygon_limits_iterations::Integer=1,
-    stroke_width::Real=2.0,
-    axis::Bool=false,
+    outpath::Union{Nothing,AbstractString} = nothing,
+    width::Int = 1200,
+    height::Int = 1200,
+    show_base::Bool = false,
+    initial_polygon::Union{InitialPolygonPreset,Symbol} = initial_polygon(),
+    polygon_limits_iterations::Integer = 1,
+    stroke_width::Real = 2.0,
+    axis::Bool = false,
 )
-    return _render_transformations_svg_impl(ifs;
-                                            outpath=outpath,
-                                            width=width,
-                                            height=height,
-                                            show_base=show_base,
-                                            initial_polygon_spec=initial_polygon,
-                                            polygon_limits_iterations=polygon_limits_iterations,
-                                            stroke_width=stroke_width,
-                                            axis=axis)
+    return _render_transformations_svg_impl(
+        ifs;
+        outpath = outpath,
+        width = width,
+        height = height,
+        show_base = show_base,
+        initial_polygon_spec = initial_polygon,
+        polygon_limits_iterations = polygon_limits_iterations,
+        stroke_width = stroke_width,
+        axis = axis,
+    )
 end
 
 function _draw_line!(
     img::AbstractMatrix{T},
-    x1::Real, y1::Real, x2::Real, y2::Real,
-    color::T
+    x1::Real,
+    y1::Real,
+    x2::Real,
+    y2::Real,
+    color::T,
 ) where {T}
     height, width = size(img)
     dx = x2 - x1
     dy = y2 - y1
     steps = max(abs(dx), abs(dy))
     n = max(1, ceil(Int, steps))
-    for k in 0:n
+    for k = 0:n
         t = k / n
         x = round(Int, x1 + t * dx)
         y = round(Int, y1 + t * dy)
@@ -411,7 +498,7 @@ function _draw_axes_on_image!(
         x1, y1 = _to_svg_xy(SVector{2,Float64}(xmin, 0.0), sx, sy, ox, oy)
         x2, y2 = _to_svg_xy(SVector{2,Float64}(xmax, 0.0), sx, sy, ox, oy)
         _draw_line!(img, x1, y1, x2, y2, axis_color)
-        for xtick in ceil(Int, xmin):floor(Int, xmax)
+        for xtick = ceil(Int, xmin):floor(Int, xmax)
             x, y = _to_svg_xy(SVector{2,Float64}(Float64(xtick), 0.0), sx, sy, ox, oy)
             _draw_line!(img, x, y - 3.0, x, y + 3.0, axis_color)
         end
@@ -421,7 +508,7 @@ function _draw_axes_on_image!(
         x1, y1 = _to_svg_xy(SVector{2,Float64}(0.0, ymin), sx, sy, ox, oy)
         x2, y2 = _to_svg_xy(SVector{2,Float64}(0.0, ymax), sx, sy, ox, oy)
         _draw_line!(img, x1, y1, x2, y2, axis_color)
-        for ytick in ceil(Int, ymin):floor(Int, ymax)
+        for ytick = ceil(Int, ymin):floor(Int, ymax)
             x, y = _to_svg_xy(SVector{2,Float64}(0.0, Float64(ytick)), sx, sy, ox, oy)
             _draw_line!(img, x - 3.0, y, x + 3.0, y, axis_color)
         end
@@ -435,7 +522,7 @@ function _draw_axes_on_raster!(
     height::Int,
     axis_color::T,
 ) where {T}
-    pmap = make_pixelate_map(limits; resolution=(height, width))
+    pmap = make_pixelate_map(limits; resolution = (height, width))
     inv_pmap = inv(pmap)
     corners = (
         inv_pmap(SVector{2,Float64}(1.0, 1.0)),
@@ -452,7 +539,7 @@ function _draw_axes_on_raster!(
         x1, y1 = pmap(SVector{2,Float64}(xmin, 0.0))
         x2, y2 = pmap(SVector{2,Float64}(xmax, 0.0))
         _draw_line!(img, x1, y1, x2, y2, axis_color)
-        for xtick in ceil(Int, xmin):floor(Int, xmax)
+        for xtick = ceil(Int, xmin):floor(Int, xmax)
             x, y = pmap(SVector{2,Float64}(Float64(xtick), 0.0))
             _draw_line!(img, x, y - 3.0, x, y + 3.0, axis_color)
         end
@@ -462,7 +549,7 @@ function _draw_axes_on_raster!(
         x1, y1 = pmap(SVector{2,Float64}(0.0, ymin))
         x2, y2 = pmap(SVector{2,Float64}(0.0, ymax))
         _draw_line!(img, x1, y1, x2, y2, axis_color)
-        for ytick in ceil(Int, ymin):floor(Int, ymax)
+        for ytick = ceil(Int, ymin):floor(Int, ymax)
             x, y = pmap(SVector{2,Float64}(0.0, Float64(ytick)))
             _draw_line!(img, x - 3.0, y, x + 3.0, y, axis_color)
         end
@@ -471,21 +558,26 @@ end
 
 function _render_transformations_direct_image(
     ifs;
-    width::Int=1200,
-    height::Int=1200,
-    show_base::Bool=false,
-    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
-    color::Bool=true,
-    axis::Bool=false,
+    width::Int = 1200,
+    height::Int = 1200,
+    show_base::Bool = false,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol} = initial_polygon(),
+    color::Bool = true,
+    axis::Bool = false,
 )
-    _, base_segments, transformed_by_map, _ =
-        _collect_transformed_base_segments(ifs; show_base=show_base, initial_polygon_spec=initial_polygon_spec)
+    _, base_segments, transformed_by_map, _ = _collect_transformed_base_segments(
+        ifs;
+        show_base = show_base,
+        initial_polygon_spec = initial_polygon_spec,
+    )
     map_colors = _map_colors(length(transformed_by_map))
     img = fill(RGBA{Float32}(0.0f0, 0.0f0, 0.0f0, 0.0f0), height, width)
     limits = ifs.limits
 
     if show_base
-        base_color = color ? RGBA{Float32}(0.2f0, 0.2f0, 0.2f0, 1.0f0) : RGBA{Float32}(1.0f0, 1.0f0, 1.0f0, 1.0f0)
+        base_color =
+            color ? RGBA{Float32}(0.2f0, 0.2f0, 0.2f0, 1.0f0) :
+            RGBA{Float32}(1.0f0, 1.0f0, 1.0f0, 1.0f0)
         for (p1, p2) in base_segments
             x1, y1 = _limits_xy(p1, limits, width, height)
             x2, y2 = _limits_xy(p2, limits, width, height)
@@ -494,10 +586,11 @@ function _render_transformations_direct_image(
     end
 
     for (i, transformed) in enumerate(transformed_by_map)
-        map_color = color ? begin
-            c = _map_color_rgb(i, map_colors)
-            RGBA{Float32}(c.r, c.g, c.b, 1.0f0)
-        end : RGBA{Float32}(1.0f0, 1.0f0, 1.0f0, 1.0f0)
+        map_color =
+            color ? begin
+                c = _map_color_rgb(i, map_colors)
+                RGBA{Float32}(c.r, c.g, c.b, 1.0f0)
+            end : RGBA{Float32}(1.0f0, 1.0f0, 1.0f0, 1.0f0)
         for (p1, p2) in transformed
             x1, y1 = _limits_xy(p1, limits, width, height)
             x2, y2 = _limits_xy(p2, limits, width, height)
@@ -507,7 +600,9 @@ function _render_transformations_direct_image(
 
     if axis
         sx, sy, ox, oy = _projection_from_limits(limits, width, height)
-        axis_color = color ? RGBA{Float32}(0.42f0, 0.45f0, 0.50f0, 1.0f0) : RGBA{Float32}(1.0f0, 1.0f0, 1.0f0, 1.0f0)
+        axis_color =
+            color ? RGBA{Float32}(0.42f0, 0.45f0, 0.50f0, 1.0f0) :
+            RGBA{Float32}(1.0f0, 1.0f0, 1.0f0, 1.0f0)
         _draw_axes_on_image!(img, sx, sy, ox, oy, width, height, axis_color)
     end
 
@@ -516,9 +611,9 @@ end
 
 function _render_initial_polygon_seed_image(
     ifs;
-    width::Int=1200,
-    height::Int=1200,
-    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
+    width::Int = 1200,
+    height::Int = 1200,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol} = initial_polygon(),
 )
     preset = _resolve_initial_polygon(initial_polygon_spec)
     img = fill(Gray{Float32}(0.0f0), height, width)
@@ -535,8 +630,8 @@ function _overlay_initial_polygon!(
     ifs;
     width::Int,
     height::Int,
-    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
-    color::Bool=false,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol} = initial_polygon(),
+    color::Bool = false,
 )
     preset = _resolve_initial_polygon(initial_polygon_spec)
     line_color = Gray{Float32}(1.0f0)
@@ -553,8 +648,8 @@ function _overlay_initial_polygon!(
     ifs;
     width::Int,
     height::Int,
-    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
-    color::Bool=true,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol} = initial_polygon(),
+    color::Bool = true,
 )
     preset = _resolve_initial_polygon(initial_polygon_spec)
     line_color = color ? RGB{Float32}(0.2f0, 0.2f0, 0.2f0) : RGB{Float32}(1.0f0, 1.0f0, 1.0f0)
@@ -566,116 +661,131 @@ function _overlay_initial_polygon!(
     return img
 end
 
-function _overlay_axes!(
-    img::AbstractMatrix{Gray{Float32}},
-    ifs;
-    width::Int,
-    height::Int,
-)
+function _overlay_axes!(img::AbstractMatrix{Gray{Float32}}, ifs; width::Int, height::Int)
     _draw_axes_on_raster!(img, ifs.limits, width, height, Gray{Float32}(1.0f0))
     return img
 end
 
-function _overlay_axes!(
-    img::AbstractMatrix{RGB{Float32}},
-    ifs;
-    width::Int,
-    height::Int,
-)
+function _overlay_axes!(img::AbstractMatrix{RGB{Float32}}, ifs; width::Int, height::Int)
     _draw_axes_on_raster!(img, ifs.limits, width, height, RGB{Float32}(0.42f0, 0.45f0, 0.50f0))
     return img
 end
 
 function _render_transformations_image(
     ifs;
-    width::Int=1200,
-    height::Int=1200,
-    show_base::Bool=false,
-    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
-    polygon_limits_iterations::Integer=1,
-    color::Bool=true,
-    axis::Bool=false,
-    alpha::Bool=false,
+    width::Int = 1200,
+    height::Int = 1200,
+    show_base::Bool = false,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol} = initial_polygon(),
+    polygon_limits_iterations::Integer = 1,
+    color::Bool = true,
+    axis::Bool = false,
+    alpha::Bool = false,
 )
-    raster_ifs = _render_transformations_effective_ifs(ifs;
-                                                       initial_polygon_spec=initial_polygon_spec,
-                                                       polygon_limits_iterations=polygon_limits_iterations)
+    raster_ifs = _render_transformations_effective_ifs(
+        ifs;
+        initial_polygon_spec = initial_polygon_spec,
+        polygon_limits_iterations = polygon_limits_iterations,
+    )
 
-    seed = _render_initial_polygon_seed_image(raster_ifs;
-                                              width=width,
-                                              height=height,
-                                              initial_polygon_spec=initial_polygon_spec)
-    img = iterate_image(raster_ifs, seed; colors=color)
+    seed = _render_initial_polygon_seed_image(
+        raster_ifs;
+        width = width,
+        height = height,
+        initial_polygon_spec = initial_polygon_spec,
+    )
+    img = iterate_image(raster_ifs, seed; colors = color)
     if show_base
-        _overlay_initial_polygon!(img, raster_ifs;
-                                  width=width,
-                                  height=height,
-                                  initial_polygon_spec=initial_polygon_spec,
-                                  color=color)
+        _overlay_initial_polygon!(
+            img,
+            raster_ifs;
+            width = width,
+            height = height,
+            initial_polygon_spec = initial_polygon_spec,
+            color = color,
+        )
     end
     if axis
-        _overlay_axes!(img, raster_ifs; width=width, height=height)
+        _overlay_axes!(img, raster_ifs; width = width, height = height)
     end
     return alpha ? _apply_alpha_mask(img) : img
 end
 
 function _render_transformations_png_impl(
     ifs;
-    outpath::Union{Nothing,AbstractString}=nothing,
-    width::Int=1200,
-    height::Int=1200,
-    show_base::Bool=false,
-    initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
-    polygon_limits_iterations::Integer=1,
-    color::Bool=true,
-    axis::Bool=false,
-    alpha::Bool=false,
+    outpath::Union{Nothing,AbstractString} = nothing,
+    width::Int = 1200,
+    height::Int = 1200,
+    show_base::Bool = false,
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol} = initial_polygon(),
+    polygon_limits_iterations::Integer = 1,
+    color::Bool = true,
+    axis::Bool = false,
+    alpha::Bool = false,
 )
-    raster_ifs = _render_transformations_effective_ifs(ifs;
-                                                       initial_polygon_spec=initial_polygon_spec,
-                                                       polygon_limits_iterations=polygon_limits_iterations)
-    img = _render_transformations_image(ifs;
-                                        width=width,
-                                        height=height,
-                                        show_base=show_base,
-                                        initial_polygon_spec=initial_polygon_spec,
-                                        polygon_limits_iterations=polygon_limits_iterations,
-                                        color=color,
-                                        axis=axis,
-                                        alpha=alpha)
+    raster_ifs = _render_transformations_effective_ifs(
+        ifs;
+        initial_polygon_spec = initial_polygon_spec,
+        polygon_limits_iterations = polygon_limits_iterations,
+    )
+    img = _render_transformations_image(
+        ifs;
+        width = width,
+        height = height,
+        show_base = show_base,
+        initial_polygon_spec = initial_polygon_spec,
+        polygon_limits_iterations = polygon_limits_iterations,
+        color = color,
+        axis = axis,
+        alpha = alpha,
+    )
 
-    params = (; method=:transformations_png, ifs_name=ifs.name,
-              initial_polygon=_resolve_initial_polygon(initial_polygon_spec).name,
-              polygon_limits_iterations, show_base, axis, resolution=(height, width), color, alpha)
-    final_outpath = _resolve_output_path(outpath,
-                                         _output_name(ifs.name,
-                                                      params[(:method, :initial_polygon, :resolution, :color, :alpha)],
-                                                      "png"))
-    return _save_image(final_outpath, img, raster_ifs.limits; params=params)
+    params = (;
+        method = :transformations_png,
+        ifs_name = ifs.name,
+        initial_polygon = _resolve_initial_polygon(initial_polygon_spec).name,
+        polygon_limits_iterations,
+        show_base,
+        axis,
+        resolution = (height, width),
+        color,
+        alpha,
+    )
+    final_outpath = _resolve_output_path(
+        outpath,
+        _output_name(
+            ifs.name,
+            params[(:method, :initial_polygon, :resolution, :color, :alpha)],
+            "png",
+        ),
+    )
+    return _save_image(final_outpath, img, raster_ifs.limits; params = params)
 end
 
 function render_transformations_png(
     ifs;
-    outpath::Union{Nothing,AbstractString}=nothing,
-    width::Int=1200,
-    height::Int=1200,
-    show_base::Bool=false,
-    initial_polygon::Union{InitialPolygonPreset,Symbol}=initial_polygon(),
-    polygon_limits_iterations::Integer=1,
-    color::Bool=true,
-    axis::Bool=false,
-    alpha::Bool=false,
+    outpath::Union{Nothing,AbstractString} = nothing,
+    width::Int = 1200,
+    height::Int = 1200,
+    show_base::Bool = false,
+    initial_polygon::Union{InitialPolygonPreset,Symbol} = initial_polygon(),
+    polygon_limits_iterations::Integer = 1,
+    color::Bool = true,
+    axis::Bool = false,
+    alpha::Bool = false,
 )
-    return _render_transformations_png_impl(ifs;
-                                            outpath=outpath,
-                                            width=width,
-                                            height=height,
-                                            show_base=show_base,
-                                            initial_polygon_spec=initial_polygon,
-                                            polygon_limits_iterations=polygon_limits_iterations,
-                                            color=color,
-                                            axis=axis,
-                                            alpha=alpha)
+    return _render_transformations_png_impl(
+        ifs;
+        outpath = outpath,
+        width = width,
+        height = height,
+        show_base = show_base,
+        initial_polygon_spec = initial_polygon,
+        polygon_limits_iterations = polygon_limits_iterations,
+        color = color,
+        axis = axis,
+        alpha = alpha,
+    )
 end
 
 const _render_transformations_png_from_base_l_svg = render_transformations_png

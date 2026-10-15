@@ -27,7 +27,7 @@ function lex_ifs(input::AbstractString)
                 throw(ArgumentError("Unexpected '}' outside IFS block at line $lineno"))
             end
             if occursin('{', line)
-                parts = split(line, '{', limit=2)
+                parts = split(line, '{', limit = 2)
                 name = replace(strip(parts[1]), "'" => "")
                 if isempty(name)
                     throw(ArgumentError("Missing name before '{' at line $lineno"))
@@ -57,7 +57,7 @@ function lex_ifs(input::AbstractString)
             continue
         end
 
-        data = split(line, ';', limit=2)[1]
+        data = split(line, ';', limit = 2)[1]
         data = strip(data)
         isempty(data) && continue
         nums = split(data)
@@ -110,7 +110,11 @@ function _parse_ifs_tokens(tokens::Vector{IFSToken})
                 if width == 0
                     width = row_width
                 elseif row_width != width
-                    throw(ArgumentError("Row $(nrows + 1) for '$name' has length $row_width; expected $width"))
+                    throw(
+                        ArgumentError(
+                            "Row $(nrows + 1) for '$name' has length $row_width; expected $width",
+                        ),
+                    )
                 end
                 append!(flat_vals, row)
                 nrows += 1
@@ -130,8 +134,8 @@ function _parse_ifs_tokens(tokens::Vector{IFSToken})
         end
         eq = Matrix{Float64}(undef, nrows, width)
         k = 1
-        @inbounds for r in 1:nrows
-            for c in 1:width
+        @inbounds for r = 1:nrows
+            for c = 1:width
                 eq[r, c] = flat_vals[k]
                 k += 1
             end
@@ -159,7 +163,7 @@ function _split_valid_ifs_definitions(defs::Vector{IFSDefinition})
         if isempty(failures)
             push!(valid, d)
         else
-            push!(invalid, (definition=d, failures=failures))
+            push!(invalid, (definition = d, failures = failures))
         end
     end
     return valid, invalid
@@ -172,28 +176,28 @@ function _warn_skipped_invalid_ifs(source::AbstractString, invalid)
     return nothing
 end
 
-function _validated_ifs_definitions(defs::Vector{IFSDefinition}; source::AbstractString="input")
+function _validated_ifs_definitions(defs::Vector{IFSDefinition}; source::AbstractString = "input")
     valid, invalid = _split_valid_ifs_definitions(defs)
     isempty(invalid) || _warn_skipped_invalid_ifs(source, invalid)
     return valid
 end
 
-function parse_ifs_string(input::AbstractString; npoints::Integer=DEFAULT_SAMPLES)
-    defs = _validated_ifs_definitions(parse_ifs_definitions_string(input); source="input")
+function parse_ifs_string(input::AbstractString; npoints::Integer = DEFAULT_SAMPLES)
+    defs = _validated_ifs_definitions(parse_ifs_definitions_string(input); source = "input")
     out = Vector{IFS}(undef, length(defs))
     @inbounds for i in eachindex(defs)
         d = defs[i]
-        out[i] = IFS(d.eq; npoints=npoints, name=d.name, docs=d.docs)
+        out[i] = IFS(d.eq; npoints = npoints, name = d.name, docs = d.docs)
     end
     return out
 end
 
-function parse_ifs_file(path::AbstractString; npoints::Integer=DEFAULT_SAMPLES)
-    defs = _validated_ifs_definitions(parse_ifs_definitions_file(path); source=path)
+function parse_ifs_file(path::AbstractString; npoints::Integer = DEFAULT_SAMPLES)
+    defs = _validated_ifs_definitions(parse_ifs_definitions_file(path); source = path)
     out = Vector{IFS}(undef, length(defs))
     @inbounds for i in eachindex(defs)
         d = defs[i]
-        out[i] = IFS(d.eq; npoints=npoints, name=d.name, docs=d.docs)
+        out[i] = IFS(d.eq; npoints = npoints, name = d.name, docs = d.docs)
     end
     return out
 end

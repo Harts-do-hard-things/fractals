@@ -45,9 +45,7 @@ const _INITIAL_POLYGON_REGISTRY = (
     ),
     InitialPolygonPreset(
         :line,
-        [
-            (SVector{2,Float64}(0.0, 0.0), SVector{2,Float64}(1.0, 0.0)),
-        ],
+        [(SVector{2,Float64}(0.0, 0.0), SVector{2,Float64}(1.0, 0.0))],
         ((0.0, 1.0), (-0.1, 0.1)),
     ),
 )
@@ -61,11 +59,5 @@ const _INITIAL_POLYGON_REGISTRY = (
     RenderTransformations
 end
 
-const _RENDER_METHOD_CHOICES = (
-    Chaos,
-    Parallel,
-    PointDeterministic,
-    ImageIterate,
-    Inverse,
-    RenderTransformations,
-)
+const _RENDER_METHOD_CHOICES =
+    (Chaos, Parallel, PointDeterministic, ImageIterate, Inverse, RenderTransformations)

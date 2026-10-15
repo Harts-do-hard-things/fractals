@@ -110,7 +110,7 @@ function _gitcommit()
     root = projectdir()
     cached_root, stamp, cached = _GITCOMMIT_CACHE[]
     cached_root == root && time() - stamp < _GITCOMMIT_TTL_SECONDS && return cached
-    value = _in_git_repo(root) ? gitdescribe(root; warn=false) : nothing
+    value = _in_git_repo(root) ? gitdescribe(root; warn = false) : nothing
     _GITCOMMIT_CACHE[] = (root, time(), value)
     return value
 end
@@ -119,13 +119,13 @@ _provenance_value(v::Symbol) = String(v)
 _provenance_value(v::Tuple) = collect(v)
 _provenance_value(v) = v
 
-function _provenance_payload(params::NamedTuple; gitcommit=_gitcommit())
+function _provenance_payload(params::NamedTuple; gitcommit = _gitcommit())
     return JSON3.write((
-        version=_PROVENANCE_VERSION,
-        gitcommit=gitcommit,
-        created=string(now()),
-        fractals_version=string(pkgversion(@__MODULE__)),
-        params=Dict(String(k) => _provenance_value(v) for (k, v) in pairs(params)),
+        version = _PROVENANCE_VERSION,
+        gitcommit = gitcommit,
+        created = string(now()),
+        fractals_version = string(pkgversion(@__MODULE__)),
+        params = Dict(String(k) => _provenance_value(v) for (k, v) in pairs(params)),
     ))
 end
 
@@ -173,8 +173,8 @@ function _save_image(
     outpath::AbstractString,
     img,
     limits;
-    params::NamedTuple=(;),
-    provenance::AbstractString=_provenance_payload(params),
+    params::NamedTuple = (;),
+    provenance::AbstractString = _provenance_payload(params),
 )
     chunks = [
         _PNG_SOURCE_LIMITS_KEYWORD => _serialize_source_limits_payload(limits),
@@ -189,7 +189,7 @@ end
 
 `safesave` SVG text to the already-resolved `outpath`, prefixed with a provenance comment.
 """
-function _save_svg(outpath::AbstractString, svg::AbstractString; params::NamedTuple=(;))
+function _save_svg(outpath::AbstractString, svg::AbstractString; params::NamedTuple = (;))
     provenance = replace(_provenance_payload(params), "--" => "- -")
     safesave(outpath, _TextOutput("<!-- $(_PNG_PROVENANCE_KEYWORD): $provenance -->\n" * svg))
     return outpath

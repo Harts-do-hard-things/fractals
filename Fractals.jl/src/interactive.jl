@@ -7,7 +7,7 @@
 # Prompt primitives (injectable stdin)
 # -------------------------------------------------
 
-function _prompt_int(msg::AbstractString, default::Int; input_fn=readline)
+function _prompt_int(msg::AbstractString, default::Int; input_fn = readline)
     print(msg)
     line = input_fn()
     isempty(strip(line)) && return default
@@ -19,14 +19,14 @@ function _prompt_int(msg::AbstractString, default::Int; input_fn=readline)
     end
 end
 
-function _prompt_string(msg::AbstractString, default::AbstractString; input_fn=readline)
+function _prompt_string(msg::AbstractString, default::AbstractString; input_fn = readline)
     print(msg)
     line = input_fn()
     isempty(strip(line)) && return String(default)
     return strip(line)
 end
 
-function _prompt_choice(msg::AbstractString, n::Int, default::Int; input_fn=readline)
+function _prompt_choice(msg::AbstractString, n::Int, default::Int; input_fn = readline)
     print(msg)
     line = input_fn()
     isempty(strip(line)) && return default
@@ -57,7 +57,7 @@ function _select_ifs_definition(
     defs::AbstractVector;
     ifs_index::Union{Nothing,Integer},
     ifs_name::Union{Nothing,AbstractString},
-    input_fn=readline
+    input_fn = readline,
 )
     choices = _ifs_choices_text(defs)
 
@@ -104,12 +104,14 @@ end
 # Interactive IFS selection + render entrypoint
 # -------------------------------------------------
 
-function prompt_ifs_and_render(path::AbstractString;
-                               npoints::Integer=DEFAULT_SAMPLES,
-                               resolution::Tuple{Int,Int}=RESOLUTION,
-                               outpath::Union{Nothing,AbstractString}=nothing,
-                               input_fn=readline)
-    ifs_list = parse_ifs_file(path; npoints=npoints)
+function prompt_ifs_and_render(
+    path::AbstractString;
+    npoints::Integer = DEFAULT_SAMPLES,
+    resolution::Tuple{Int,Int} = RESOLUTION,
+    outpath::Union{Nothing,AbstractString} = nothing,
+    input_fn = readline,
+)
+    ifs_list = parse_ifs_file(path; npoints = npoints)
     if isempty(ifs_list)
         println("No IFS definitions found in: $path")
         return nothing
@@ -121,25 +123,42 @@ function prompt_ifs_and_render(path::AbstractString;
         println("  [$i] $(ifs.name)$(doc_preview)")
     end
 
-    idx = _prompt_choice("Select a fractal [1-$(length(ifs_list))] (default 1): ",
-                         length(ifs_list), 1; input_fn=input_fn)
+    idx = _prompt_choice(
+        "Select a fractal [1-$(length(ifs_list))] (default 1): ",
+        length(ifs_list),
+        1;
+        input_fn = input_fn,
+    )
     ifs = ifs_list[idx]
 
     println("Iteration methods:")
     println("  [1] chaos auto-threaded (iterate!)")
     println("  [2] chaos auto-threaded (iterate_parallel! alias)")
     println("  [3] point deterministic (deterministic_iterate, n=1)")
-    method = _prompt_choice("Select method [1-3] (default 1): ", 3, 1; input_fn=input_fn)
+    method = _prompt_choice("Select method [1-3] (default 1): ", 3, 1; input_fn = input_fn)
 
-    npoints = _prompt_int("Number of points (default $(npoints)): ", npoints; input_fn=input_fn)
-    width   = _prompt_int("Image width (default $(resolution[2])): ", resolution[2]; input_fn=input_fn)
-    height  = _prompt_int("Image height (default $(resolution[1])): ", resolution[1]; input_fn=input_fn)
+    npoints = _prompt_int("Number of points (default $(npoints)): ", npoints; input_fn = input_fn)
+    width =
+        _prompt_int("Image width (default $(resolution[2])): ", resolution[2]; input_fn = input_fn)
+    height =
+        _prompt_int("Image height (default $(resolution[1])): ", resolution[1]; input_fn = input_fn)
     default_outpath = isnothing(outpath) ? "" : String(outpath)
     default_label = isnothing(outpath) ? "auto-named in $(output_dir())" : default_outpath
-    entered = _prompt_string("Output path (default $(default_label)): ", default_outpath; input_fn=input_fn)
+    entered = _prompt_string(
+        "Output path (default $(default_label)): ",
+        default_outpath;
+        input_fn = input_fn,
+    )
     outpath = isempty(entered) ? nothing : entered
 
-    ifs = IFS(ifs.maps, ifs.weights; npoints=npoints, name=ifs.name, docs=ifs.docs, limits=ifs.limits)
+    ifs = IFS(
+        ifs.maps,
+        ifs.weights;
+        npoints = npoints,
+        name = ifs.name,
+        docs = ifs.docs,
+        limits = ifs.limits,
+    )
 
     if method == 1
         iterate!(ifs)
@@ -150,10 +169,13 @@ function prompt_ifs_and_render(path::AbstractString;
     end
 
     method_symbol = method == 3 ? :point_deterministic : :chaos
-    params = (; method=method_symbol, ifs_name=ifs.name, npoints, resolution=(height, width))
-    final_outpath = _resolve_output_path(outpath, _output_name(ifs.name, params[(:method, :npoints, :resolution)], "png"))
-    img = make_image(ifs; resolution=(height, width))
-    _save_image(final_outpath, img, ifs.limits; params=params)
+    params = (; method = method_symbol, ifs_name = ifs.name, npoints, resolution = (height, width))
+    final_outpath = _resolve_output_path(
+        outpath,
+        _output_name(ifs.name, params[(:method, :npoints, :resolution)], "png"),
+    )
+    img = make_image(ifs; resolution = (height, width))
+    _save_image(final_outpath, img, ifs.limits; params = params)
     println("Saved image to $(final_outpath)")
     return ifs
 end
