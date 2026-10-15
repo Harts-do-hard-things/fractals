@@ -1,0 +1,5 @@
+# Formatting-only commits, skipped by `git blame` (GitHub applies this automatically;
+# locally: git config blame.ignoreRevsFile .git-blame-ignore-revs).
+
+# Format Fractals.jl/src and test with JuliaFormatter 1.0.62
+c1887f1b2feadbbb2e7d957127e6f7ea368b196b

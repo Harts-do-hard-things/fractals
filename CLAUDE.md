@@ -36,10 +36,10 @@ Snapshot tests compare against PNGs in `Fractals.jl/test/snapshots/`; on mismatc
 julia --startup-file=no --project=Fractals.jl Fractals.jl/test/generate_snapshots.jl
 ```
 
-Formatting (JuliaFormatter v1, `.JuliaFormatter.toml`: default style, margin 100) covers `Fractals.jl/src` and `Fractals.jl/test`; CI runs it as a check. Apply locally with:
+Formatting (JuliaFormatter pinned to 1.0.62, `.JuliaFormatter.toml`: default style, margin 100) covers `Fractals.jl/src` and `Fractals.jl/test`. CI fails on any unformatted code and prints the diff, so format before committing changes there (note this style uses spaces around keyword `=`, e.g. `f(x; kw = 1)`). Apply locally with:
 
 ```bash
-julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1\"); using JuliaFormatter; format([\"Fractals.jl/src\", \"Fractals.jl/test\"]; overwrite=true, verbose=true)"
+julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1.0.62\"); using JuliaFormatter; format([\"Fractals.jl/src\", \"Fractals.jl/test\"]; overwrite=true, verbose=true)"
 ```
 
 CLI (`render`, `batch-render`, `validate-ifs`, `benchmark`; see `docs/cli.md`):

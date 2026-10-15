@@ -27,17 +27,22 @@ jobs:
         with:
           version: '1.12'
 
+      # Formats in place, then fails with the exact diff if anything changed. JuliaFormatter is
+      # pinned so a new release can't change the expected output without a code change.
       - name: Check formatting
         shell: bash
-        run: >
+        run: |
           julia --startup-file=no -e '
-          using Pkg;
-          Pkg.activate(temp=true);
-          Pkg.add(name="JuliaFormatter", version="1");
-          using JuliaFormatter;
-          ok = format(["Fractals.jl/src", "Fractals.jl/test"]; overwrite=false, verbose=true);
-          ok || @warn("Formatting check reported changes. Run JuliaFormatter locally.");
+            using Pkg
+            Pkg.activate(temp=true)
+            Pkg.add(name="JuliaFormatter", version="1.0.62")
+            using JuliaFormatter
+            format(["Fractals.jl/src", "Fractals.jl/test"]; overwrite=true)
           '
+          if ! git diff --exit-code -- Fractals.jl/src Fractals.jl/test; then
+            echo "::error title=Formatting::Fractals.jl/src or Fractals.jl/test is not JuliaFormatter-formatted. Run the formatter (see README) and commit the result."
+            exit 1
+          fi
 
   test:
     name: ${{ matrix.os }} / Julia ${{ matrix.julia-version }}
