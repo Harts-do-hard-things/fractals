@@ -39,7 +39,7 @@ end
         write(io, sample)
         close(io)
 
-        loaded = load_ifs_definition(path; definition_index=2)
+        loaded = parse_ifs_definition_for_gui(path; definition_index=2)
         @test loaded.name == "Second"
         @test size(loaded.eq, 2) == 7
         @test length(loaded.names) == 2
@@ -139,6 +139,15 @@ end
     @test state.last_error === nothing
     @test state.svg_temp_path != old_svg_path
     @test occursin("<svg", state.svg_string)
+end
+
+@testset "Apply Does Not Mutate Loaded Baseline" begin
+    state = make_default_state()
+    baseline = copy(state.loaded_eq_matrix)
+    eq = copy(state.eq_matrix)
+    eq[1, 5] += 0.3
+    @test apply_eq_matrix!(state, eq)
+    @test state.loaded_eq_matrix == baseline
 end
 
 @testset "State Validation Rejection" begin

@@ -33,6 +33,12 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
   - CLI `--out` defaults to an auto-generated name, and `batch-render --out-dir` defaults to `plots/batch`.
 - Breaking API change: transformation renders no longer accept `limits_mode`; PNG now frames from derived polygon limits by default, and SVG now uses the same derived polygon limits behavior via `polygon_limits_iterations`.
 - Transformation axis overlays now render within the existing `ifs.limits` projection instead of affecting the visible framing.
+- Breaking (FractalsGUI): removed the unused `load_ifs_definition` and `load_ifs_definition!`; use `parse_ifs_definition_for_gui` and `load_ifs_definition_gui!`.
+
+### Fixed
+- FractalsGUI: applying an edited matrix no longer overwrites the loaded baseline, so "Reset to Loaded" restores the file's definition.
+- FractalsGUI: the previous temporary transformation SVG is deleted after each re-render, and `Rsvg` is imported explicitly.
+- Removed transformation SVGs leaked into `FractalsGUI.jl/test/media/` and ignored `FractalsGUI.jl/media` and `FractalsGUI.jl/test/media`.
 
 ### Fixed
 - `prompt_ifs_and_render` rejects non-positive point counts and image sizes (falling back to the default) instead of crashing after iterating, no longer swallows unrelated errors as "invalid input", and renders through `render_chaos`/`render_point_deterministic`.
