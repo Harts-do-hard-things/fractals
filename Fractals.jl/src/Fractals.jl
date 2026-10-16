@@ -3,8 +3,8 @@ module Fractals
 using StaticArrays
 using LinearAlgebra
 using StatsBase
-using Images
-using FileIO
+import PNGFiles
+import FileIO
 using Colors
 using Random
 using Base.Threads
@@ -34,6 +34,7 @@ include("ifsparser.jl")              # IFS file/string parser (pure; no I/O)
 include("interactive.jl")            # all stdin logic: prompt helpers, _select_ifs_definition, prompt_ifs_and_render
 include("render.jl")                 # render (top-level API, must come after all methods)
 include("examples.jl")               # HEIGHWAY_DRAGON, EISENSTEIN, main()
+include("precompile.jl")             # PrecompileTools workload (must stay last)
 
 export AffineMap,
     IFS,

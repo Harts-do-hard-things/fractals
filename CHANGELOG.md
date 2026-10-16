@@ -20,6 +20,8 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
   - PNGs embed a `fractals.provenance` chunk (git commit, version, timestamp, parameters), readable with `read_provenance(path)`; SVGs carry it as a comment.
 
 ### Changed
+- Load and precompile times: `Fractals` no longer depends on `Images` (PNG I/O goes through `PNGFiles` directly; only `Colors`/`ColorTypes` are needed for pixel types), roughly halving `using Fractals`. A `PrecompileTools` workload now precompiles the common render, parser, and PNG paths, so package precompilation takes longer once but first calls and the test suite are much faster. Non-PNG image paths still go through `FileIO` and need a backend such as `ImageIO` installed by the caller.
+- Test suite runs its (run-once) test bodies with `optimize = 0, compile = min, infer = false` to avoid spending most of its time in compilation.
 - Repository follows DrWatson's default project layout.
   - The curated `.ifs` library moved from `Fractals.jl/data/` to `data/exp_raw/`; use `ifs_data_dir(...)` to locate it (the GUI's default `data_dir` now does).
   - Project scripts moved from `Fractals.jl/bin/` to `scripts/` with `@quickactivate "fractals"`: `animate_image_iterate.jl`, `export_gif.jl`, `export_mp4.jl`, `generate_rotation_examples.jl`. `Fractals.jl/bin/fractals.jl` remains the package CLI.

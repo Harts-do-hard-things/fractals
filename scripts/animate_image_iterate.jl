@@ -11,7 +11,6 @@ module AnimateImageIterateScript
 
 using Fractals
 using Colors
-using FileIO
 using Printf
 using StaticArrays
 using StatsBase: Weights
@@ -191,7 +190,7 @@ function render_image_iterate_build_frames(
     frames_per_map > 0 || throw(ArgumentError("frames_per_map must be > 0, got $frames_per_map"))
     !isempty(strip(String(basename))) || throw(ArgumentError("basename must be non-empty"))
 
-    img = load(String(image_path))
+    img = Fractals._load_image(String(image_path))
     background, foreground = _split_graya_seed(img)
     base_rgb = _gray_to_rgb(background)
     map_colors = Fractals._map_colors(length(ifs.maps))

@@ -107,7 +107,6 @@ the same pixel across all `initial_polygon` presets.
 
 ```julia
 using Fractals
-using FileIO
 
 result = render(EISENSTEIN;
                 method=Chaos,

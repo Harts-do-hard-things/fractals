@@ -200,7 +200,7 @@ struct _MovedFileOutput
 end
 
 function DrWatson._wsave(path, out::_PNGOutput)
-    save(path, out.image)
+    _save_image_file(path, out.image)
     _has_png_extension(path) && _embed_png_text_chunks(path, out.text_chunks)
     return path
 end
