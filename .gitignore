@@ -153,3 +153,5 @@ NNData/training_data1.json
 
 .ctags
 tags
+.claude/
+.julia_depot/
