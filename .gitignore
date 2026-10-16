@@ -148,11 +148,10 @@ dmypy.json
 NNData/training_data.json
 NNData/training_data1.json
 /media
-/Fractals.jl/media/
-/FractalsGUI.jl/media/
 /rectangular_generators/media
 /julia/Fractals/src/statprof
-.julia_depot/
 
 .ctags
 tags
+.claude/
+.julia_depot/
