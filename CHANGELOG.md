@@ -8,7 +8,10 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
 
 ### Added
 - `interpolate_eq_matrix(...)` and `interpolate_ifs(...)` helpers for animation-oriented transform interpolation.
-- `render_interpolation_frames(...)` for deterministic transformation-frame rendering into numbered PNG sequences.
+- `render_interpolation_frames(...)` for deterministic transformation-frame rendering into numbered PNG sequences; it also supports `render_method=Chaos`.
+- `interpolation_mode=:rotation_scale` (default) for `interpolate_eq_matrix`, `interpolate_ifs`, and `render_interpolation_frames`: interpolates each map's 2x2 part as rotation plus uniform scale, falling back to linear; `:linear` keeps the previous behavior.
+- `Fractals.jl/bin/animate_image_iterate.jl`: builds a per-map ImageIterate animation (frames + GIF) from a GrayA seed image.
+- `Fractals.jl/data/imported_from_python.ifs`: IFS definitions imported from the original Python fractal classes.
 - PNG outputs now embed source-limits metadata so `image_source=:file` can reuse the original pixel-to-world framing when that metadata is present.
 - DrWatson-managed output: the repo root is now a DrWatson project (`fractals`, with `scripts/`), and `Fractals` depends on DrWatson for saving.
   - `output_dir(...)`, `with_output_root(f, root)`, and the `FRACTALS_OUTPUT_ROOT` environment variable control where files go.
@@ -25,6 +28,9 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
   - CLI `--out` defaults to an auto-generated name, and `batch-render --out-dir` defaults to `plots/batch`.
 - Breaking API change: transformation renders no longer accept `limits_mode`; PNG now frames from derived polygon limits by default, and SVG now uses the same derived polygon limits behavior via `polygon_limits_iterations`.
 - Transformation axis overlays now render within the existing `ifs.limits` projection instead of affecting the visible framing.
+
+### Fixed
+- `prompt_ifs_and_render` rejects non-positive point counts and image sizes (falling back to the default) instead of crashing after iterating, no longer swallows unrelated errors as "invalid input", and renders through `render_chaos`/`render_point_deterministic`.
 
 ## [1.0.0] - 2026-03-02
 

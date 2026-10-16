@@ -279,6 +279,29 @@ function _set_entry_float!(e, v::Real)
     Gtk.set_gtk_property!(e, :text, @sprintf("%.10g", Float64(v)))
 end
 
+function _make_math_label(text::AbstractString; width_chars::Union{Nothing,Integer}=nothing)
+    label = Gtk.GtkLabel("")
+    escaped = replace(String(text), "&" => "&amp;", "<" => "&lt;", ">" => "&gt;")
+    Gtk.set_gtk_property!(label, :use_markup, true)
+    Gtk.set_gtk_property!(label, :label, "<tt>$escaped</tt>")
+    Gtk.set_gtk_property!(label, :xalign, 0.0)
+    isnothing(width_chars) || Gtk.set_gtk_property!(label, :width_chars, Int(width_chars))
+    return label
+end
+
+function _function_color_hex(i::Int, n::Int)::String
+    colors = Fractals._map_colors(n)
+    return Fractals._rgb_to_hex(Fractals._map_color_rgb(i, colors))
+end
+
+function _make_function_color_icon(i::Int, n::Int)
+    icon = Gtk.GtkLabel("")
+    Gtk.set_gtk_property!(icon, :use_markup, true)
+    Gtk.set_gtk_property!(icon, :label,
+                          "<span foreground=\"$(_function_color_hex(i, n))\" size=\"x-large\">●</span>")
+    return icon
+end
+
 function _build_function_row(eq::AbstractMatrix{<:Real}, i::Int)
     a11 = _make_numeric_entry(eq[i, 1])
     a12 = _make_numeric_entry(eq[i, 2])
@@ -288,57 +311,61 @@ function _build_function_row(eq::AbstractMatrix{<:Real}, i::Int)
     b2 = _make_numeric_entry(eq[i, 6])
     p = _make_numeric_entry(eq[i, 7]; width_chars=8)
 
-    color_btn = Gtk.GtkColorButton()
+    color_icon = _make_function_color_icon(i, size(eq, 1))
     idx_lbl = Gtk.GtkLabel("$(i)")
 
     row_box = Gtk.GtkBox(:h)
     eq_box = Gtk.GtkBox(:v)
     l1 = Gtk.GtkBox(:h)
     l2 = Gtk.GtkBox(:h)
+    Gtk.set_gtk_property!(row_box, :spacing, 6)
+    Gtk.set_gtk_property!(eq_box, :spacing, 0)
+    Gtk.set_gtk_property!(l1, :spacing, 3)
+    Gtk.set_gtk_property!(l2, :spacing, 3)
 
-    Gtk.push!(l1, Gtk.GtkLabel("A_i"))
-    Gtk.push!(l1, Gtk.GtkLabel("⎡"))
+    Gtk.push!(l1, _make_math_label("A_i"; width_chars=3))
+    Gtk.push!(l1, _make_math_label("⎡"))
     Gtk.push!(l1, a11)
     Gtk.push!(l1, a12)
-    Gtk.push!(l1, Gtk.GtkLabel("⎤"))
+    Gtk.push!(l1, _make_math_label("⎤"))
 
-    Gtk.push!(l2, Gtk.GtkLabel("   "))
-    Gtk.push!(l2, Gtk.GtkLabel("⎣"))
+    Gtk.push!(l2, _make_math_label("" ; width_chars=3))
+    Gtk.push!(l2, _make_math_label("⎣"))
     Gtk.push!(l2, a21)
     Gtk.push!(l2, a22)
-    Gtk.push!(l2, Gtk.GtkLabel("⎦"))
+    Gtk.push!(l2, _make_math_label("⎦"))
 
-    Gtk.push!(l1, Gtk.GtkLabel("  "))
-    Gtk.push!(l1, Gtk.GtkLabel("⎡"))
-    Gtk.push!(l1, Gtk.GtkLabel("x"))
-    Gtk.push!(l1, Gtk.GtkLabel("⎤"))
-    Gtk.push!(l2, Gtk.GtkLabel("  "))
-    Gtk.push!(l2, Gtk.GtkLabel("⎣"))
-    Gtk.push!(l2, Gtk.GtkLabel("y"))
-    Gtk.push!(l2, Gtk.GtkLabel("⎦"))
+    Gtk.push!(l1, _make_math_label("" ; width_chars=2))
+    Gtk.push!(l1, _make_math_label("⎡"))
+    Gtk.push!(l1, _make_math_label("x"))
+    Gtk.push!(l1, _make_math_label("⎤"))
+    Gtk.push!(l2, _make_math_label("" ; width_chars=2))
+    Gtk.push!(l2, _make_math_label("⎣"))
+    Gtk.push!(l2, _make_math_label("y"))
+    Gtk.push!(l2, _make_math_label("⎦"))
 
-    Gtk.push!(l1, Gtk.GtkLabel(" + b_i "))
-    Gtk.push!(l1, Gtk.GtkLabel("⎡"))
+    Gtk.push!(l1, _make_math_label("+ b_i"; width_chars=6))
+    Gtk.push!(l1, _make_math_label("⎡"))
     Gtk.push!(l1, b1)
-    Gtk.push!(l1, Gtk.GtkLabel("⎤"))
-    Gtk.push!(l2, Gtk.GtkLabel("      "))
-    Gtk.push!(l2, Gtk.GtkLabel("⎣"))
+    Gtk.push!(l1, _make_math_label("⎤"))
+    Gtk.push!(l2, _make_math_label("" ; width_chars=6))
+    Gtk.push!(l2, _make_math_label("⎣"))
     Gtk.push!(l2, b2)
-    Gtk.push!(l2, Gtk.GtkLabel("⎦"))
+    Gtk.push!(l2, _make_math_label("⎦"))
 
-    Gtk.push!(l1, Gtk.GtkLabel("   p_i"))
+    Gtk.push!(l1, _make_math_label("p_i"; width_chars=4))
     Gtk.push!(l1, p)
 
     Gtk.push!(eq_box, l1)
     Gtk.push!(eq_box, l2)
 
-    Gtk.push!(row_box, color_btn)
+    Gtk.push!(row_box, color_icon)
     Gtk.push!(row_box, idx_lbl)
     Gtk.push!(row_box, Gtk.GtkLabel("  "))
     Gtk.push!(row_box, eq_box)
 
     entries = [a11, a12, a21, a22, b1, b2, p]
-    return (widget=row_box, entries=entries, color_btn=color_btn)
+    return (widget=row_box, entries=entries, color_icon=color_icon)
 end
 
 function launch_gui(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))
@@ -398,7 +425,7 @@ function launch_gui(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))
     Gtk.push!(row, panel_fractal)
 
     Gtk.push!(panel_matrix, Gtk.GtkLabel("Functions as affine transforms: f_i([x;y]) = A_i*[x;y] + b_i"))
-    Gtk.push!(panel_matrix, Gtk.GtkLabel("Left color swatch sets function color. Edit each numeric field directly."))
+    Gtk.push!(panel_matrix, Gtk.GtkLabel("Left color icon shows which rendered color belongs to each function. Edit each numeric field directly."))
     Gtk.push!(panel_svg, Gtk.GtkLabel("Transformation SVG Preview"))
     Gtk.push!(panel_fractal, Gtk.GtkLabel("Fractal Panel (placeholder)"))
 

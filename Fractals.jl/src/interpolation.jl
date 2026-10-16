@@ -56,14 +56,111 @@ function _interpolate_limits(
     )
 end
 
-"""
-    interpolate_eq_matrix(left, right, t)
+@inline function _normalize_interpolation_mode(mode::Symbol)
+    normalized = Symbol(lowercase(String(mode)))
+    normalized in (:rotation_scale, :linear) || throw(
+        ArgumentError("Invalid interpolation_mode '$mode'. Supported: :rotation_scale, :linear"),
+    )
+    return normalized
+end
 
-Linearly interpolate between two compatible IFS equation matrices and return a
-normalized 7-column matrix. Six-column inputs derive a probability column from
-their affine determinants before interpolation.
+@inline function _normalize_interpolation_mode(mode::AbstractString)
+    return _normalize_interpolation_mode(Symbol(strip(mode)))
+end
+
+function _linearly_interpolate_eq_matrix(
+    left_eq::AbstractMatrix{<:Real},
+    right_eq::AbstractMatrix{<:Real},
+    α::Float64,
+)
+    out = (1 - α) .* Float64.(left_eq) .+ α .* Float64.(right_eq)
+    total = sum(out[:, 7])
+    total > 0 ||
+        throw(ArgumentError("Interpolated probability column must have positive total weight"))
+    out[:, 7] ./= total
+    return out
+end
+
+function _rotation_scale_parameters(
+    A::AbstractMatrix{<:Real};
+    atol::Float64 = 1e-8,
+    rtol::Float64 = 1e-6,
+)
+    c1 = SVector{2,Float64}(A[1, 1], A[2, 1])
+    c2 = SVector{2,Float64}(A[1, 2], A[2, 2])
+    s1 = norm(c1)
+    s2 = norm(c2)
+    max_scale = max(s1, s2)
+    max_scale > atol || return nothing
+
+    tol = max(atol, rtol * max_scale)
+    abs(s1 - s2) <= tol || return nothing
+    abs(dot(c1, c2)) <= max(atol, rtol * max_scale^2) || return nothing
+
+    scale = 0.5 * (s1 + s2)
+    detA = det(Matrix{Float64}(A))
+    detA >= -max(atol, rtol * scale^2) || return nothing
+
+    R = Matrix{Float64}(A) ./ scale
+    isapprox(R' * R, Matrix{Float64}(I, 2, 2); atol = 1e-6, rtol = 1e-6) || return nothing
+    isapprox(det(R), 1.0; atol = 1e-6, rtol = 1e-6) || return nothing
+
+    angle = atan(R[2, 1], R[1, 1])
+    return (scale = scale, angle = angle)
+end
+
+@inline function _shortest_angle_delta(left::Float64, right::Float64)
+    return mod(right - left + pi, 2pi) - pi
+end
+
+function _rotation_scale_matrix(scale::Float64, angle::Float64)
+    c = cos(angle)
+    s = sin(angle)
+    return scale .* [c -s; s c]
+end
+
+function _interpolate_linear_block!(
+    out::AbstractMatrix{Float64},
+    left_eq::AbstractMatrix{Float64},
+    right_eq::AbstractMatrix{Float64},
+    α::Float64,
+)
+    for i = 1:size(out, 1)
+        leftA = @view left_eq[i, 1:4]
+        rightA = @view right_eq[i, 1:4]
+        leftM = reshape(collect(leftA), 2, 2)'
+        rightM = reshape(collect(rightA), 2, 2)'
+        left_params = _rotation_scale_parameters(leftM)
+        right_params = _rotation_scale_parameters(rightM)
+
+        if isnothing(left_params) || isnothing(right_params)
+            continue
+        end
+
+        scale = (1 - α) * left_params.scale + α * right_params.scale
+        angle = left_params.angle + α * _shortest_angle_delta(left_params.angle, right_params.angle)
+        interp = _rotation_scale_matrix(scale, angle)
+        out[i, 1] = interp[1, 1]
+        out[i, 2] = interp[1, 2]
+        out[i, 3] = interp[2, 1]
+        out[i, 4] = interp[2, 2]
+    end
+    return out
+end
+
 """
-function interpolate_eq_matrix(left::AbstractMatrix{<:Real}, right::AbstractMatrix{<:Real}, t::Real)
+    interpolate_eq_matrix(left, right, t; interpolation_mode=:rotation_scale)
+
+Interpolate between two compatible IFS equation matrices and return a normalized
+7-column matrix. Six-column inputs derive a probability column from their affine
+determinants before interpolation.
+"""
+function interpolate_eq_matrix(
+    left::AbstractMatrix{<:Real},
+    right::AbstractMatrix{<:Real},
+    t::Real;
+    interpolation_mode::Union{Symbol,AbstractString} = :rotation_scale,
+)
     0 <= t <= 1 || throw(ArgumentError("Interpolation parameter t must be in [0, 1], got $t"))
     size(left, 1) == size(right, 1) || throw(
         ArgumentError(
@@ -80,19 +177,18 @@ function interpolate_eq_matrix(left::AbstractMatrix{<:Real}, right::AbstractMatr
     )
 
     α = Float64(t)
-    out = (1 - α) .* left_eq .+ α .* right_eq
-    total = sum(out[:, 7])
-    total > 0 ||
-        throw(ArgumentError("Interpolated probability column must have positive total weight"))
-    out[:, 7] ./= total
+    mode = _normalize_interpolation_mode(interpolation_mode)
+    out = _linearly_interpolate_eq_matrix(left_eq, right_eq, α)
+    mode == :rotation_scale && _interpolate_linear_block!(out, left_eq, right_eq, α)
     return out
 end
 
 """
-    interpolate_ifs(left, right, t; npoints, name, docs, limits_mode)
+    interpolate_ifs(left, right, t; npoints, name, docs, limits_mode, interpolation_mode=:rotation_scale)
 
 Build an interpolated IFS suitable for animation or transitional rendering.
-Map coefficients, translations, and normalized weights are blended linearly.
+The linear 2x2 map components default to rotation+scale interpolation with
+linear fallback; translations and normalized weights remain linearly blended.
 By default, viewport limits are also interpolated to avoid frame-to-frame jitter.
 """
 function interpolate_ifs(
@@ -103,6 +199,7 @@ function interpolate_ifs(
     name::AbstractString = "",
     docs::AbstractString = "",
     limits_mode::Symbol = :interpolate,
+    interpolation_mode::Union{Symbol,AbstractString} = :rotation_scale,
 )
     length(left.maps) == length(right.maps) || throw(
         ArgumentError(
@@ -114,7 +211,8 @@ function interpolate_ifs(
     eq = interpolate_eq_matrix(
         _eq_matrix_for_interpolation(left),
         _eq_matrix_for_interpolation(right),
-        t,
+        t;
+        interpolation_mode = interpolation_mode,
     )
     maps, weights = _build_maps_and_weights(eq)
     α = Float64(t)
@@ -163,6 +261,7 @@ function render_interpolation_frames(
     t_end::Real = 1.0,
     render_method::Union{RenderMethod,Symbol,AbstractString} = RenderTransformations,
     limits_mode::Symbol = :interpolate,
+    interpolation_mode::Union{Symbol,AbstractString} = :rotation_scale,
     npoints::Integer = min(length(left.points), length(right.points)),
     name::AbstractString = "",
     docs::AbstractString = "",
@@ -174,18 +273,23 @@ function render_interpolation_frames(
     0 <= t_end <= 1 || throw(ArgumentError("t_end must be in [0, 1], got $t_end"))
 
     parsed_method = _parse_render_method(render_method)
-    parsed_method == RenderTransformations || throw(
+    parsed_method in (Chaos, RenderTransformations) || throw(
         ArgumentError(
-            "render_interpolation_frames currently supports method=RenderTransformations only",
+            "render_interpolation_frames currently supports method=Chaos or method=RenderTransformations only",
         ),
     )
+    method_symbol = _render_method_symbol(parsed_method)
 
     sequence_name = left.name == right.name ? left.name : string(left.name, "_to_", right.name)
     outdir = _resolve_output_path(
         outdir,
         joinpath(
             "frames",
-            _output_name(sequence_name, (; frames, t_start, t_end, limits_mode), ""),
+            _output_name(
+                sequence_name,
+                (; method = method_symbol, frames, t_start, t_end, limits_mode),
+                "",
+            ),
         ),
     )
     mkpath(outdir)
@@ -206,52 +310,86 @@ function render_interpolation_frames(
             name = name,
             docs = docs,
             limits_mode = limits_mode,
+            interpolation_mode = interpolation_mode,
         )
         path = joinpath(outdir, @sprintf("%s_%04d.png", basename, i))
-        img = _render_transformations_image(
-            ifs;
-            width = get(kwargs, :resolution, RESOLUTION)[2],
-            height = get(kwargs, :resolution, RESOLUTION)[1],
-            show_base = get(kwargs, :show_base, false),
-            initial_polygon_spec = get(kwargs, :initial_polygon, :default),
-            color = get(kwargs, :color, false),
-            axis = get(kwargs, :axis, false),
-            alpha = get(kwargs, :alpha, false),
-        )
-        source_limits =
-            _render_transformations_effective_ifs(
-                ifs;
-                initial_polygon_spec = get(kwargs, :initial_polygon, :default),
-                polygon_limits_iterations = get(kwargs, :polygon_limits_iterations, 1),
-            ).limits
-        params = (;
+        frame_params = (;
             method = :interpolation_frame,
+            render_method = method_symbol,
             ifs_name = ifs.name,
             frame = i,
             frames,
             t,
             limits_mode,
-            resolution = get(kwargs, :resolution, RESOLUTION),
-            initial_polygon = get(kwargs, :initial_polygon, :default),
-            color = get(kwargs, :color, false),
-            alpha = get(kwargs, :alpha, false),
+            interpolation_mode = _normalize_interpolation_mode(interpolation_mode),
         )
-        _save_image(
-            path,
-            img,
-            source_limits;
-            params = params,
-            provenance = _provenance_payload(params; gitcommit = gitcommit),
-        )
+        _render_interpolation_frame(ifs, parsed_method, path, frame_params, gitcommit; kwargs...)
         push!(paths, path)
     end
 
-    return (
-        outdir = String(outdir),
-        paths = paths,
-        ts = ts,
-        render_method = _render_method_symbol(parsed_method),
+    return (outdir = String(outdir), paths = paths, ts = ts, render_method = method_symbol)
+end
+
+# Render one interpolation frame with `render_method` and safesave it to the resolved `outpath`,
+# recording `frame_params` plus the render settings in its provenance.
+function _render_interpolation_frame(
+    ifs::IFS,
+    render_method::RenderMethod,
+    outpath::AbstractString,
+    frame_params::NamedTuple,
+    gitcommit;
+    kwargs...,
+)
+    resolution = get(kwargs, :resolution, RESOLUTION)
+    color = get(kwargs, :color, false)
+    alpha = get(kwargs, :alpha, false)
+
+    if render_method == RenderTransformations
+        initial_polygon = get(kwargs, :initial_polygon, :default)
+        img = _render_transformations_image(
+            ifs;
+            width = resolution[2],
+            height = resolution[1],
+            show_base = get(kwargs, :show_base, false),
+            initial_polygon_spec = initial_polygon,
+            color = color,
+            axis = get(kwargs, :axis, false),
+            alpha = alpha,
+        )
+        source_limits =
+            _render_transformations_effective_ifs(
+                ifs;
+                initial_polygon_spec = initial_polygon,
+                polygon_limits_iterations = get(kwargs, :polygon_limits_iterations, 1),
+            ).limits
+        params = merge(frame_params, (; resolution, initial_polygon, color, alpha))
+    else
+        warmup = get(kwargs, :warmup, DEFAULT_WARMUP)
+        backend = get(kwargs, :backend, :cpu)
+
+        iterate!(ifs; warmup = warmup)
+        img = make_image(ifs; resolution = resolution, backend = backend)
+        if color
+            img = iterate_image(ifs, img; colors = true, backend = backend)
+        end
+        if alpha
+            img = _apply_alpha_mask(img)
+        end
+        source_limits = ifs.limits
+        params = merge(
+            frame_params,
+            (; npoints = length(ifs.points), warmup, resolution, color, alpha, backend),
+        )
+    end
+
+    _save_image(
+        outpath,
+        img,
+        source_limits;
+        params = params,
+        provenance = _provenance_payload(params; gitcommit = gitcommit),
     )
+    return nothing
 end
 
 function _animation_frame_pattern(basename::AbstractString)
@@ -330,7 +468,9 @@ function export_animation(
         scratch_outpath = joinpath(scratch, "animation.$format")
         if format == :gif
             palette_path = joinpath(scratch, "palette.png")
-            _run_ffmpeg(`$ffmpeg -y -framerate $fps -i $input_pattern -vf palettegen $palette_path`)
+            _run_ffmpeg(
+                `$ffmpeg -y -framerate $fps -i $input_pattern -vf palettegen -frames:v 1 $palette_path`,
+            )
             _run_ffmpeg(
                 `$ffmpeg -y -framerate $fps -i $input_pattern -i $palette_path -lavfi paletteuse $scratch_outpath`,
             )

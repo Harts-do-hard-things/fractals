@@ -19,6 +19,10 @@ module FractalsCLI
 include(joinpath(@__DIR__, "..", "bin", "fractals.jl"))
 end
 
+if !isdefined(Main, :AnimateImageIterateScript)
+    include(joinpath(@__DIR__, "..", "bin", "animate_image_iterate.jl"))
+end
+
 # Run `bin/fractals.jl` with `args` in-process, capturing output; `code` is the exit code the
 # script would return (exceptions → 2).
 function _run_cli(args::AbstractString...)
@@ -221,11 +225,18 @@ end
     midpoint = interpolate_eq_matrix(left6, right7, 0.5)
     @test size(midpoint) == (2, 7)
     @test midpoint[:, 1:6] ≈ [
-        0.5 0.5 -0.5 0.5 0.0 0.5
+        sqrt(0.5) sqrt(0.5) -sqrt(0.5) sqrt(0.5) 0.0 0.5
         0.75 0.0 0.0 0.75 1.5 0.0
     ]
     @test midpoint[:, 7] ≈ [0.5, 0.5]
     @test isapprox(sum(midpoint[:, 7]), 1.0; atol = 1e-12)
+
+    midpoint_linear = interpolate_eq_matrix(left6, right7, 0.5; interpolation_mode = :linear)
+    @test midpoint_linear[:, 1:6] ≈ [
+        0.5 0.5 -0.5 0.5 0.0 0.5
+        0.75 0.0 0.0 0.75 1.5 0.0
+    ]
+    @test midpoint_linear[:, 7] ≈ [0.5, 0.5]
 
     @test interpolate_eq_matrix(left6, right7, 0.0) ≈ [
         1.0 0.0 0.0 1.0 0.0 0.0 0.8
@@ -240,15 +251,19 @@ end
     @test length(blended.points) == 12
     @test blended.name == "Interpolated(Left -> Right)"
     @test occursin("Interpolated IFS at t=0.25", blended.docs)
-    # Verify the blended map transforms points correctly (t=0.25 linear blend):
-    # left map 1 is identity; right map 1 maps (x,y)→(-y, x+1). Blended: A*x+b.
-    @test blended.maps[1](SVector{2,Float64}(1.0, 0.0)) ≈ SVector{2,Float64}(0.75, 0.0)
-    @test blended.maps[1](SVector{2,Float64}(0.0, 1.0)) ≈ SVector{2,Float64}(0.25, 1.0)
+    @test blended.maps[1](SVector{2,Float64}(1.0, 0.0)) ≈
+          SVector{2,Float64}(cospi(0.125), -sinpi(0.125) + 0.25)
+    @test blended.maps[1](SVector{2,Float64}(0.0, 1.0)) ≈
+          SVector{2,Float64}(sinpi(0.125), cospi(0.125) + 0.25)
     @test collect(blended.weights) ≈ [0.65, 0.35]
     @test blended.limits[1][1] ≈ 0.75 * left_ifs.limits[1][1] + 0.25 * right_ifs.limits[1][1]
     @test blended.limits[1][2] ≈ 0.75 * left_ifs.limits[1][2] + 0.25 * right_ifs.limits[1][2]
     @test blended.limits[2][1] ≈ 0.75 * left_ifs.limits[2][1] + 0.25 * right_ifs.limits[2][1]
     @test blended.limits[2][2] ≈ 0.75 * left_ifs.limits[2][2] + 0.25 * right_ifs.limits[2][2]
+
+    blended_linear = interpolate_ifs(left_ifs, right_ifs, 0.25; interpolation_mode = :linear)
+    @test blended_linear.maps[1](SVector{2,Float64}(1.0, 0.0)) ≈ SVector{2,Float64}(0.75, 0.0)
+    @test blended_linear.maps[1](SVector{2,Float64}(0.0, 1.0)) ≈ SVector{2,Float64}(0.25, 1.0)
 
     right_locked = interpolate_ifs(
         left_ifs,
@@ -266,11 +281,18 @@ end
 
     @test_throws ArgumentError interpolate_eq_matrix(left6, right7[:, 1:6], -0.1)
     @test_throws ArgumentError interpolate_eq_matrix(left6, ones(3, 6), 0.5)
+    @test_throws ArgumentError interpolate_eq_matrix(left6, right7, 0.5; interpolation_mode = :bad)
     @test_throws ArgumentError interpolate_ifs(left_ifs, right_ifs, 0.5; limits_mode = :bad)
+    @test_throws ArgumentError interpolate_ifs(left_ifs, right_ifs, 0.5; interpolation_mode = :bad)
     @test_throws ArgumentError interpolate_ifs(left_ifs, right_ifs, 0.5; npoints = -1)
 
     recomputed = interpolate_ifs(left_ifs, right_ifs, 0.5; limits_mode = :recompute)
     @test recomputed.limits == refresh_limits(recomputed; source = :maps).limits
+
+    shear_left = [1.0 0.2 0.0 1.0 0.0 0.0]
+    shear_right = [0.9 0.4 0.1 0.8 1.0 2.0]
+    @test interpolate_eq_matrix(shear_left, shear_right, 0.5) ≈
+          interpolate_eq_matrix(shear_left, shear_right, 0.5; interpolation_mode = :linear)
 end
 
 @testset "Limits Refresh And Staleness" begin
@@ -360,6 +382,56 @@ end
         @test all(size(img) == (24, 24) for img in imgs)
     end
 
+    mktempdir() do tmp
+        result = render_interpolation_frames(
+            left,
+            right;
+            frames = 3,
+            outdir = tmp,
+            basename = "chaos_anim",
+            render_method = Chaos,
+            resolution = (24, 24),
+            npoints = 250,
+            warmup = 5,
+        )
+
+        @test result.outdir == tmp
+        @test result.render_method == :chaos
+        @test result.paths == [
+            joinpath(tmp, "chaos_anim_0001.png"),
+            joinpath(tmp, "chaos_anim_0002.png"),
+            joinpath(tmp, "chaos_anim_0003.png"),
+        ]
+        @test result.ts ≈ [0.0, 0.5, 1.0]
+        @test all(isfile, result.paths)
+
+        imgs = load.(result.paths)
+        @test all(size(img) == (24, 24) for img in imgs)
+        @test any(any(_is_drawn_pixel, img) for img in imgs)
+
+        prov = read_provenance(result.paths[2])
+        @test prov.params.method == "interpolation_frame"
+        @test prov.params.render_method == "chaos"
+        @test prov.params.interpolation_mode == "rotation_scale"
+        @test prov.params.t ≈ 0.5
+        @test prov.params.npoints == 250
+    end
+
+    # Default output: an auto-named sequence directory under output_dir("frames").
+    default_result = render_interpolation_frames(
+        left,
+        right;
+        frames = 2,
+        render_method = Chaos,
+        resolution = (16, 16),
+        npoints = 100,
+        warmup = 2,
+    )
+    @test dirname(default_result.outdir) == output_dir("frames")
+    @test startswith(basename(default_result.outdir), "left_to_right_")
+    @test occursin("method=chaos", basename(default_result.outdir))
+    @test all(isfile, default_result.paths)
+
     mismatch = IFS(
         [
             0.5 0.0 0.0 0.5 0.0 0.0
@@ -386,17 +458,27 @@ end
         )
         @test_throws ArgumentError render_interpolation_frames(
             left,
-            right;
-            frames = 2,
-            outdir = tmp,
-            render_method = Chaos,
-        )
-        @test_throws ArgumentError render_interpolation_frames(
-            left,
             mismatch;
             frames = 2,
             outdir = tmp,
         )
+
+        for method in (PointDeterministic, ImageIterate, Inverse)
+            err = _capture_exception(
+                () -> render_interpolation_frames(
+                    left,
+                    right;
+                    frames = 2,
+                    outdir = tmp,
+                    render_method = method,
+                ),
+            )
+            @test err isa ArgumentError
+            @test occursin(
+                "supports method=Chaos or method=RenderTransformations",
+                sprint(showerror, err),
+            )
+        end
     end
 end
 
@@ -486,6 +568,141 @@ end
             @test mp4_result.format == :mp4
             @test isfile(mp4_result.outpath)
             @test filesize(mp4_result.outpath) > 0
+
+            left = IFS(
+                [
+                    0.5 -0.5 0.5 0.5 0.0 0.0
+                    -0.5 -0.5 0.5 -0.5 1.0 0.0
+                ];
+                npoints = 250,
+                name = "left",
+            )
+            right = IFS(
+                [
+                    0.5 0.0 0.0 0.5 0.0 0.0 0.3
+                    0.0 0.5 -0.5 0.0 1.0 0.0 0.7
+                ];
+                npoints = 250,
+                name = "right",
+            )
+            generated_frames = render_interpolation_frames(
+                left,
+                right;
+                frames = 3,
+                outdir = joinpath(tmp, "generated_frames"),
+                basename = "chaos_anim",
+                render_method = Chaos,
+                resolution = (24, 24),
+                warmup = 5,
+            )
+            generated_gif = export_animation(
+                :gif;
+                frames_dir = generated_frames.outdir,
+                basename = "chaos_anim",
+                outpath = joinpath(tmp, "nested", "chaos_anim.gif"),
+                fps = 6,
+            )
+            @test generated_gif.format == :gif
+            @test isfile(generated_gif.outpath)
+            @test filesize(generated_gif.outpath) > 0
+        else
+            @test_skip "ffmpeg available"
+        end
+    end
+end
+
+@testset "ImageIterate Animation Script" begin
+    script = Main.AnimateImageIterateScript
+
+    _nontinted_pixels(img) = count(
+        px ->
+            abs(Float32(red(px)) - Float32(green(px))) < 1.0f-4 &&
+                abs(Float32(green(px)) - Float32(blue(px))) < 1.0f-4,
+        img,
+    )
+    _tinted_pixels(img) = count(
+        px -> !(
+            abs(Float32(red(px)) - Float32(green(px))) < 1.0f-4 &&
+            abs(Float32(green(px)) - Float32(blue(px))) < 1.0f-4
+        ),
+        img,
+    )
+
+    mktempdir() do tmp
+        seed = fill(GrayA{Float32}(0.15f0, 0.0f0), 20, 20)
+        seed[7:14, 7:14] .= GrayA{Float32}(0.85f0, 1.0f0)
+        seed_path = joinpath(tmp, "seed_graya.png")
+        save(seed_path, seed)
+
+        ifs = IFS(SMALL_EQ; npoints = 1)
+        frames = script.render_image_iterate_build_frames(
+            ifs,
+            seed_path;
+            frames_per_map = 2,
+            outdir = joinpath(tmp, "frames"),
+            basename = "image_iter_anim",
+        )
+
+        @test frames.basename == "image_iter_anim"
+        @test frames.stage_ranges == [1:2, 3:4]
+        @test length(frames.paths) == 4
+        @test all(isfile, frames.paths)
+        @test size(frames.final_image) == (20, 20)
+        @test _tinted_pixels(frames.final_image) > 0
+        @test read_provenance(first(frames.paths)).params.method == "image_iterate_build_frame"
+
+        first_frame = load(first(frames.paths))
+        last_frame = load(last(frames.paths))
+        @test size(first_frame) == (20, 20)
+        @test size(last_frame) == (20, 20)
+        @test first_frame != last_frame
+        @test _nontinted_pixels(first_frame) > 0
+
+        # Default frames directory: output_dir("frames", basename).
+        default_frames = script.render_image_iterate_build_frames(
+            ifs,
+            seed_path;
+            frames_per_map = 1,
+            basename = "default_anim",
+        )
+        @test default_frames.outdir == output_dir("frames", "default_anim")
+        @test all(isfile, default_frames.paths)
+
+        bad_seed = fill(Gray{Float32}(0.5f0), 8, 8)
+        bad_seed_path = joinpath(tmp, "seed_gray.png")
+        save(bad_seed_path, bad_seed)
+        err = _capture_exception(
+            () -> script.render_image_iterate_build_frames(
+                ifs,
+                bad_seed_path;
+                frames_per_map = 2,
+                outdir = joinpath(tmp, "bad_frames"),
+                basename = "bad_anim",
+            ),
+        )
+        @test err isa ArgumentError
+        @test occursin("GrayA", sprint(showerror, err))
+
+        if !isnothing(Sys.which("ffmpeg"))
+            result = script.create_animation([
+                "--input",
+                "Fractals.jl/data/Default.ifs",
+                "--image-path",
+                seed_path,
+                "--frames-per-map",
+                "1",
+                "--out-dir",
+                joinpath(tmp, "cli_frames"),
+                "--basename",
+                "cli_anim",
+                "--out",
+                joinpath(tmp, "cli_anim.gif"),
+                "--fps",
+                "6",
+            ])
+            @test isfile(result.gif.outpath)
+            @test filesize(result.gif.outpath) > 0
+            @test length(result.frames.paths) == 3
         else
             @test_skip "ffmpeg available"
         end
@@ -2257,6 +2474,62 @@ end
         end
     end
 
+    @testset "Imported Python Data File" begin
+        @info "Imported Python Data File"
+
+        imported_path = joinpath(dirname(@__FILE__), "..", "data", "imported_from_python.ifs")
+        imported_defs = Fractals.parse_ifs_definitions_file(imported_path)
+        imported_names = [String(def.name) for def in imported_defs]
+
+        @test imported_names == [
+            "Flowsnake",
+            "Heighway",
+            "TwinDragon",
+            "GoldenDragon",
+            "Z2 Dragon",
+            "LevyC",
+            "Z2 Levy",
+            "Terdragon",
+            "Z2 Golden Dragon",
+            "Pentigree",
+            "Pentadentrite",
+            "KochFlake",
+            "Kochawave",
+            "DurerPentagon",
+        ]
+
+        defs_by_name = Dict(String(def.name) => def for def in imported_defs)
+
+        @test size(defs_by_name["Flowsnake"].eq) == (7, 6)
+        @test size(defs_by_name["Heighway"].eq) == (2, 6)
+        @test size(defs_by_name["Terdragon"].eq) == (3, 6)
+        @test size(defs_by_name["Pentigree"].eq) == (6, 6)
+        @test size(defs_by_name["Pentadentrite"].eq) == (6, 6)
+        @test size(defs_by_name["DurerPentagon"].eq) == (4, 6)
+
+        @test defs_by_name["Heighway"].eq ≈ [
+            0.5 -0.5 0.5 0.5 0.0 0.0
+            -0.5 -0.5 0.5 -0.5 1.0 0.0
+        ]
+
+        @test defs_by_name["Pentigree"].eq[1:2, :] ≈ [
+            0.309016994375 -0.224513988290 0.224513988290 0.309016994375 0.0 0.0
+            -0.118033988750 -0.363271264003 0.363271264003 -0.118033988750 0.309016994375 0.224513988290
+        ]
+
+        @test defs_by_name["Pentadentrite"].eq[4:5, :] ≈ [
+            -0.233977061461 0.258209017515 -0.258209017515 -0.233977061461 0.719645709553 0.489158183710
+            0.173268480388 0.302316383479 -0.302316383479 0.173268480388 0.485668648091 0.230949166195
+        ]
+
+        @test defs_by_name["Z2 Golden Dragon"].eq ≈ [
+            0.623665256330 -0.403371701830 0.403371701830 0.623665256330 0.0 0.0
+            -0.623665256330 0.403371701830 -0.403371701830 -0.623665256330 0.0 -0.0
+            -0.376334743670 -0.403371701830 0.403371701830 -0.376334743670 1.0 0.0
+            0.376334743670 0.403371701830 -0.403371701830 0.376334743670 -1.0 0.0
+        ]
+    end
+
     @testset "Render Image Iterate API: polygon overlays and alpha" begin
         mktempdir() do tmp
             rot_eq = reshape([cos(pi / 6) sin(pi / 6) -sin(pi / 6) cos(pi / 6) 0.0 0.0 1.0], 1, 7)
@@ -2815,6 +3088,31 @@ end
 
             Fractals.main(eq = SMALL_EQ, npoints = 1000, outpath = "main_output.png")
             @test isfile(output_dir("main_output.png"))
+
+            @testset "_prompt_int enforces min and narrows catch" begin
+                @test Fractals._prompt_int("p", 5; input_fn = () -> "0", min = 1) == 5
+                @test Fractals._prompt_int("p", 5; input_fn = () -> "-3", min = 1) == 5
+                @test Fractals._prompt_int("p", 5; input_fn = () -> "abc") == 5
+                @test Fractals._prompt_int("p", 5; input_fn = () -> "7", min = 1) == 7
+                @test Fractals._prompt_choice("p", 3, 1; input_fn = () -> "xyz") == 1
+            end
+
+            @testset "Zero width falls back to default, no crash" begin
+                queued = ["", "", "", "0", "", ""]
+                idx = Ref(0)
+                fake_input = () -> (idx[] += 1; idx[] <= length(queued) ? queued[idx[]] : "")
+                zero_selected = prompt_ifs_and_render(
+                    ifs_path;
+                    npoints = 100,
+                    resolution = (32, 32),
+                    outpath = "prompt_zero_width.png",
+                    input_fn = fake_input,
+                )
+                @test zero_selected isa IFS
+                out_path = output_dir("prompt_zero_width.png")
+                @test isfile(out_path)
+                @test size(load(out_path)) == (32, 32)
+            end
         finally
             cd(old)
         end

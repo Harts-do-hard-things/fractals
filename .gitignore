@@ -150,7 +150,6 @@ NNData/training_data1.json
 /media
 /rectangular_generators/media
 /julia/Fractals/src/statprof
-.julia_depot/
 
 .ctags
 tags
@@ -161,3 +160,5 @@ tags
 /FractalsGUI.jl/plots
 /Fractals.jl/media
 /Fractals.jl/test/media
+.claude/
+.julia_depot/

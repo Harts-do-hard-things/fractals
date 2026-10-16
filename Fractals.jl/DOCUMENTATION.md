@@ -240,13 +240,15 @@ mid_ifs = interpolate_ifs(IFS(start_eq; npoints=2_000),
 ```
 
 Interpolation behavior:
-- `interpolate_eq_matrix(left, right, t)` accepts compatible 6- or 7-column equation matrices and returns a normalized 7-column matrix.
+- `interpolate_eq_matrix(left, right, t; interpolation_mode=:rotation_scale)` accepts compatible 6- or 7-column equation matrices and returns a normalized 7-column matrix.
 - 6-column inputs derive normalized weights from affine determinants before interpolation.
-- `interpolate_ifs(left, right, t)` blends map coefficients, translations, normalized weights, and by default also blends `ifs.limits` with `limits_mode=:interpolate`.
+- By default, `interpolation_mode=:rotation_scale` interpolates each map's 2x2 linear part as rotation plus isotropic scale, with automatic fallback to coefficient-wise linear interpolation for map pairs that do not fit that model cleanly.
+- `interpolation_mode=:linear` preserves the previous coefficient-wise linear behavior.
+- `interpolate_ifs(left, right, t; interpolation_mode=:rotation_scale)` blends map coefficients, translations, normalized weights, and by default also blends `ifs.limits` with `limits_mode=:interpolate`.
 - `limits_mode=:left|:right|:recompute` is available when a fixed or freshly sampled camera box is preferred.
-- `render_interpolation_frames(left, right; frames, outdir, basename, render_method=RenderTransformations, ...)` writes deterministic numbered PNG frames such as `dragon_0001.png`.
+- `render_interpolation_frames(left, right; frames, outdir, basename, render_method=RenderTransformations, interpolation_mode=:rotation_scale, ...)` writes deterministic numbered PNG frames such as `dragon_0001.png`.
 - `export_animation(:gif|:mp4; frames_dir, basename, outpath, fps=12)` converts those numbered PNG frames into an animation artifact via `ffmpeg`.
-- Current scope is intentionally narrow: `render_method=RenderTransformations` only, which keeps the first animation frame pipeline deterministic and easy to test.
+- Current supported frame render methods are `RenderTransformations` and `Chaos`.
 
 ```julia
 using Fractals
@@ -258,11 +260,10 @@ frames = render_interpolation_frames(start, finish;
                                      frames=5,
                                      outdir="frames",
                                      basename="dragon_morph",
-                                     render_method=RenderTransformations,
+                                     render_method=Chaos,
+                                     interpolation_mode=:rotation_scale,
                                      resolution=(512, 512),
-                                     color=true,
-                                     initial_polygon=:line_arrow,
-                                     axis=true)
+                                     warmup=20)
 
 gif = export_animation(:gif;
                        frames_dir="frames",
@@ -284,7 +285,15 @@ julia --startup-file=no --project=. Fractals.jl/bin/export_gif.jl --frames-dir f
 julia --startup-file=no --project=. Fractals.jl/bin/export_mp4.jl --frames-dir frames --basename dragon_morph --out dragon_morph.mp4 --fps 12
 ```
 
-`ffmpeg` must be installed and available on `PATH`. The helper expects deterministic frame names in the form `basename_0001.png`, `basename_0002.png`, and so on.
+`ffmpeg` must be installed and available on `PATH`. On common systems:
+
+```bash
+sudo apt-get install ffmpeg
+brew install ffmpeg
+winget install Gyan.FFmpeg
+```
+
+The helper expects deterministic frame names in the form `basename_0001.png`, `basename_0002.png`, and so on.
 
 ### Parse from file and render interactively
 

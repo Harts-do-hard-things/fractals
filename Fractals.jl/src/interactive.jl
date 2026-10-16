@@ -1,22 +1,37 @@
-# NOTE: This file must be included after ifsparser.jl (calls parse_ifs_file) and after all
-# render-method files (prompt_ifs_and_render calls iterate!, deterministic_iterate, make_image,
-# _save_image). It must be included BEFORE render.jl — render.jl's
-# _resolve_render_input(AbstractString) calls _select_ifs_definition defined here.
+# NOTE: This file must be included after ifsparser.jl (calls parse_ifs_file). It must be
+# included BEFORE render.jl — render.jl's _resolve_render_input(AbstractString) calls
+# _select_ifs_definition defined here.
+#
+# prompt_ifs_and_render calls render_chaos/render_point_deterministic, which are defined
+# *later* in render.jl. This is safe: Julia resolves function calls at call time, not at
+# `include` time, and by the time anyone invokes prompt_ifs_and_render the whole module
+# (including render.jl) has finished loading.
 
 # -------------------------------------------------
 # Prompt primitives (injectable stdin)
 # -------------------------------------------------
 
-function _prompt_int(msg::AbstractString, default::Int; input_fn = readline)
+function _prompt_int(
+    msg::AbstractString,
+    default::Int;
+    input_fn = readline,
+    min::Union{Nothing,Int} = nothing,
+)
     print(msg)
     line = input_fn()
     isempty(strip(line)) && return default
-    try
-        return parse(Int, strip(line))
-    catch
+    parsed = try
+        parse(Int, strip(line))
+    catch e
+        e isa ArgumentError || rethrow()
         println("Invalid number, using default $default")
         return default
     end
+    if !isnothing(min) && parsed < min
+        println("Value must be >= $min, using default $default")
+        return default
+    end
+    return parsed
 end
 
 function _prompt_string(msg::AbstractString, default::AbstractString; input_fn = readline)
@@ -35,7 +50,8 @@ function _prompt_choice(msg::AbstractString, n::Int, default::Int; input_fn = re
         if 1 <= choice <= n
             return choice
         end
-    catch
+    catch e
+        e isa ArgumentError || rethrow()
     end
     println("Invalid choice, using default $default")
     return default
@@ -87,11 +103,7 @@ function _select_ifs_definition(
 
     println(choices)
     print("No ifs_index/ifs_name provided. Render [1] $(defs[1].name)? [y/N]: ")
-    answer = try
-        lowercase(strip(input_fn()))
-    catch
-        ""
-    end
+    answer = lowercase(strip(input_fn()))
 
     if answer in ("y", "yes")
         return defs[1]
@@ -137,11 +149,24 @@ function prompt_ifs_and_render(
     println("  [3] point deterministic (deterministic_iterate, n=1)")
     method = _prompt_choice("Select method [1-3] (default 1): ", 3, 1; input_fn = input_fn)
 
-    npoints = _prompt_int("Number of points (default $(npoints)): ", npoints; input_fn = input_fn)
-    width =
-        _prompt_int("Image width (default $(resolution[2])): ", resolution[2]; input_fn = input_fn)
-    height =
-        _prompt_int("Image height (default $(resolution[1])): ", resolution[1]; input_fn = input_fn)
+    npoints = _prompt_int(
+        "Number of points (default $(npoints)): ",
+        npoints;
+        input_fn = input_fn,
+        min = 1,
+    )
+    width = _prompt_int(
+        "Image width (default $(resolution[2])): ",
+        resolution[2];
+        input_fn = input_fn,
+        min = 1,
+    )
+    height = _prompt_int(
+        "Image height (default $(resolution[1])): ",
+        resolution[1];
+        input_fn = input_fn,
+        min = 1,
+    )
     default_outpath = isnothing(outpath) ? "" : String(outpath)
     default_label = isnothing(outpath) ? "auto-named in $(output_dir())" : default_outpath
     entered = _prompt_string(
@@ -151,31 +176,19 @@ function prompt_ifs_and_render(
     )
     outpath = isempty(entered) ? nothing : entered
 
-    ifs = IFS(
-        ifs.maps,
-        ifs.weights;
-        npoints = npoints,
-        name = ifs.name,
-        docs = ifs.docs,
-        limits = ifs.limits,
-    )
-
-    if method == 1
-        iterate!(ifs)
-    elseif method == 2
-        iterate_parallel!(ifs)
+    # Saving goes through DrWatson safesave, which keeps an existing file as a `_#N` backup
+    # instead of overwriting it, so no overwrite confirmation is needed here.
+    result = if method == 3
+        render_point_deterministic(
+            ifs;
+            npoints = npoints,
+            resolution = (height, width),
+            outpath = outpath,
+        )
     else
-        ifs = deterministic_iterate(ifs, 1)
+        render_chaos(ifs; npoints = npoints, resolution = (height, width), outpath = outpath)
     end
 
-    method_symbol = method == 3 ? :point_deterministic : :chaos
-    params = (; method = method_symbol, ifs_name = ifs.name, npoints, resolution = (height, width))
-    final_outpath = _resolve_output_path(
-        outpath,
-        _output_name(ifs.name, params[(:method, :npoints, :resolution)], "png"),
-    )
-    img = make_image(ifs; resolution = (height, width))
-    _save_image(final_outpath, img, ifs.limits; params = params)
-    println("Saved image to $(final_outpath)")
-    return ifs
+    println("Saved image to $(result.outpath)")
+    return result.ifs
 end
