@@ -3,10 +3,15 @@ using LinearAlgebra
 using StaticArrays
 using Fractals
 using Random
-using FileIO
+using PNGFiles: load, save
 using Colors
 using JSON3
 using Printf
+
+# The test bodies are huge one-shot closures (`mktempdir() do ... end` full of `@test`s) that run
+# exactly once, so optimizing/type-inferring them is pure compile-time overhead: most of the suite
+# used to be spent in LLVM. The package itself is precompiled and unaffected by this setting.
+Base.Experimental.@compiler_options optimize = 0 compile = min infer = false
 
 # Route all package output into a scratch directory so tests never write into the DrWatson
 # project's plots/.
@@ -16,6 +21,7 @@ ENV["FRACTALS_OUTPUT_ROOT"] = TEST_OUTPUT_ROOT
 # The CLI script, loaded once so CLI tests call it in-process instead of paying Julia startup
 # and package loading for a subprocess per command.
 module FractalsCLI
+Base.Experimental.@compiler_options optimize = 0 compile = min infer = false
 include(joinpath(@__DIR__, "..", "bin", "fractals.jl"))
 end
 

@@ -3,8 +3,8 @@ module Fractals
 using StaticArrays
 using LinearAlgebra
 using StatsBase
-using Images
-using FileIO
+import PNGFiles
+import FileIO
 using Colors
 using Random
 using Base.Threads
@@ -38,6 +38,7 @@ include("render.jl")                 # render (top-level API, must come after al
 # _save_render_output)
 include("fractal_store.jl")          # JLD2 records: save_fractal, load_fractal, fractal_data, ...
 include("examples.jl")               # HEIGHWAY_DRAGON, EISENSTEIN, main()
+include("precompile.jl")             # PrecompileTools workload (must stay last)
 
 export AffineMap,
     IFS,

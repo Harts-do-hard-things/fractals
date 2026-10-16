@@ -100,3 +100,9 @@ Parsing and interactivity:
 - `ifsparser.jl` is pure (no I/O): `lex_ifs` → `parse_ifs_tokens` → `IFSDefinition`. Non-contractive definitions are skipped with a warning.
 - All stdin prompting lives in `interactive.jl`. Interactive functions take an `input_fn` (default `readline`) so tests can drive them.
 - Curated `.ifs` libraries live in `data/exp_raw/` at the repo root. Locate them with `ifs_data_dir(...)`, not `datadir()`, which follows the active project (`Fractals.jl/data` under `--project=Fractals.jl`).
+
+## Load/compile performance notes
+
+- `Fractals` deliberately avoids `Images` (huge load cost); PNG I/O uses `PNGFiles` via `_load_image`/`_save_image_file` in `utils.jl`, and pixel types come from `Colors`. Do not reintroduce `Images`/`ImageIO` as a dependency of `Fractals.jl`.
+- `src/precompile.jl` (last include) holds the `PrecompileTools` workload; it renders into a temp `with_output_root` dir. When adding a new public render path or common keyword combination, add a tiny call to it (each keyword set compiles its own `kwcall`). Precompiling takes about a minute because of it.
+- `test/runtests.jl` sets `Base.Experimental.@compiler_options optimize = 0 compile = min infer = false` for the test bodies; keep it, and do not add `@inferred`/allocation assertions to that file without scoping them elsewhere.

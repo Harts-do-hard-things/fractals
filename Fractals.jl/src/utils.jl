@@ -63,6 +63,17 @@ end
     return lowercase(splitext(String(path))[2]) == ".png"
 end
 
+# PNG goes straight through PNGFiles (what FileIO's ImageIO backend would call anyway, without
+# loading the rest of ImageIO/Images). Other formats fall back to FileIO, which needs a backend
+# such as ImageIO to be installed by the caller.
+_load_image(path::AbstractString) =
+    _has_png_extension(path) ? PNGFiles.load(String(path)) : FileIO.load(String(path))
+
+function _save_image_file(path::AbstractString, img)
+    _has_png_extension(path) ? PNGFiles.save(String(path), img) : FileIO.save(String(path), img)
+    return path
+end
+
 @inline function _limits_tuple(x1::Real, x2::Real, y1::Real, y2::Real)
     return ((Float64(x1), Float64(x2)), (Float64(y1), Float64(y2)))
 end
