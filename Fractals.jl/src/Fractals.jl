@@ -13,7 +13,7 @@ using JSON3
 using Dates: now
 using Base.ScopedValues: ScopedValue, with
 import DrWatson
-using DrWatson: plotsdir, projectdir, savename, safesave, gitdescribe
+using DrWatson: plotsdir, datadir, projectdir, savename, safesave, gitdescribe
 
 include("config.jl")                 # constants, RenderMethod enum, polygon presets
 include("utils.jl")                  # shared utilities: PNG metadata, color maps, GPU stub
@@ -77,6 +77,8 @@ export AffineMap,
     initial_polygon,
     supported_initial_polygons,
     output_dir,
+    data_output_dir,
+    ifs_data_dir,
     with_output_root,
     read_provenance,
     RESOLUTION,

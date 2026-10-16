@@ -40,7 +40,7 @@ Common options:
   --out-dir <path>         Output directory for batch-render (default: plots/batch)
   --profile <name>         Benchmark profile: small|medium|large|all
   --repeats <int>          Benchmark repeat count
-  --json <path>            Benchmark JSON output path
+  --json <path>            Benchmark JSON output path (relative paths resolve under data/exp_pro/)
   --targets <path>         Benchmark target envelope TOML file
   --include-gpu-bench      Also run make_image/iterate_image GPU benchmarks (benchmark command)
   --strict                 Fail benchmark command when targets status is fail
@@ -299,7 +299,7 @@ function _cmd_benchmark(opts::Dict{String,Any})
                                          strict=strict)
     BenchmarkSuite.print_report(payload)
     if !isnothing(json_path)
-        println("Wrote benchmark JSON to $json_path")
+        println("Wrote benchmark JSON to $(payload["json_path"])")
     end
     return 0
 end

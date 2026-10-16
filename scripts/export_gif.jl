@@ -1,12 +1,15 @@
 #!/usr/bin/env julia
 
+using DrWatson
+@quickactivate "fractals"
+
 using Fractals
 
 function _usage()
     println(
         """
 Usage:
-  export_mp4.jl --frames-dir <dir> --basename <name> [--out <path>] [--fps <n>] [--ffmpeg <cmd>]
+  export_gif.jl --frames-dir <dir> --basename <name> [--out <path>] [--fps <n>] [--ffmpeg <cmd>]
 """
     )
 end
@@ -38,13 +41,13 @@ function main(args=ARGS)
     isnothing(basename) && throw(ArgumentError("--basename is required"))
     fps = parse(Float64, get(opts, "fps", "12"))
     ffmpeg_cmd = get(opts, "ffmpeg", "ffmpeg")
-    result = export_animation(:mp4;
+    result = export_animation(:gif;
                               frames_dir=frames_dir,
                               basename=basename,
                               outpath=outpath,
                               fps=fps,
                               ffmpeg_cmd=ffmpeg_cmd)
-    println("Wrote MP4 to $(result.outpath)")
+    println("Wrote GIF to $(result.outpath)")
     return 0
 end
 

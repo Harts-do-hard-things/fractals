@@ -20,7 +20,7 @@ include(joinpath(@__DIR__, "..", "bin", "fractals.jl"))
 end
 
 if !isdefined(Main, :AnimateImageIterateScript)
-    include(joinpath(@__DIR__, "..", "bin", "animate_image_iterate.jl"))
+    include(joinpath(@__DIR__, "..", "..", "scripts", "animate_image_iterate.jl"))
 end
 
 # Run `bin/fractals.jl` with `args` in-process, capturing output; `code` is the exit code the
@@ -686,7 +686,7 @@ end
         if !isnothing(Sys.which("ffmpeg"))
             result = script.create_animation([
                 "--input",
-                "Fractals.jl/data/Default.ifs",
+                ifs_data_dir("Default.ifs"),
                 "--image-path",
                 seed_path,
                 "--frames-per-map",
@@ -1403,7 +1403,29 @@ end
             withenv("FRACTALS_OUTPUT_ROOT" => d) do
                 with_output_root(other) do
                     @test output_dir() == joinpath(abspath(other), "plots")
+                    @test data_output_dir() == joinpath(abspath(other), "data", "exp_pro")
                 end
+            end
+            withenv("FRACTALS_OUTPUT_ROOT" => nothing) do
+                @test data_output_dir("b.json") == Fractals.datadir("exp_pro", "b.json")
+            end
+        end
+
+        @testset "DrWatson data layout" begin
+            # Curated inputs live in <project root>/data/exp_raw, independent of the active project.
+            @test ifs_data_dir() == joinpath(dirname(pkgdir(Fractals)), "data", "exp_raw")
+            @test isfile(ifs_data_dir("Default.ifs"))
+            @test !isempty(parse_ifs_file(ifs_data_dir("Default.ifs"); npoints = 1))
+
+            with_output_root(d) do
+                json1 = Fractals._save_data_text(joinpath("benchmarks", "x.json"), "{\"a\":1}")
+                @test json1 == joinpath(abspath(d), "data", "exp_pro", "benchmarks", "x.json")
+                @test read(json1, String) == "{\"a\":1}"
+                @test Fractals._save_data_text(joinpath("data", "benchmarks", "x.json"), "{}") ==
+                      json1
+                @test read(joinpath(dirname(json1), "x_#1.json"), String) == "{\"a\":1}"
+                absolute = joinpath(d, "elsewhere", "y.json")
+                @test Fractals._save_data_text(absolute, "{}") == absolute
             end
         end
 
@@ -2366,7 +2388,7 @@ end
             return xmax - xmin, ymax - ymin
         end
 
-        edgar_path = joinpath(dirname(@__FILE__), "..", "data", "Edgar.ifs")
+        edgar_path = ifs_data_dir("Edgar.ifs")
         edgar_defs = Fractals.parse_ifs_definitions_file(edgar_path)
         wreath_idx = findfirst(d -> String(d.name) == "Barnsleys Wreath", edgar_defs)
         wreath_idx === nothing && error("Barnsleys Wreath not found in Edgar.ifs")
@@ -2477,7 +2499,7 @@ end
     @testset "Imported Python Data File" begin
         @info "Imported Python Data File"
 
-        imported_path = joinpath(dirname(@__FILE__), "..", "data", "imported_from_python.ifs")
+        imported_path = ifs_data_dir("imported_from_python.ifs")
         imported_defs = Fractals.parse_ifs_definitions_file(imported_path)
         imported_names = [String(def.name) for def in imported_defs]
 
@@ -3459,6 +3481,14 @@ if _env_flag("FRACTALS_RUN_CLI_BENCH_TESTS")
             @test bench_with_json.code == 0
             @test occursin("Wrote benchmark JSON", bench_with_json.stdout)
             @test isfile(bench_json)
+
+            # Relative --json paths land in DrWatson's data/exp_pro.
+            bench_rel = _run_cli(bench_args..., "--json", joinpath("benchmarks", "rel.json"))
+            @test bench_rel.code == 0
+            rel_json = data_output_dir("benchmarks", "rel.json")
+            @test isfile(rel_json)
+            @test occursin(rel_json, bench_rel.stdout)
+
             json_txt = read(bench_json, String)
             @test occursin("\"results\"", json_txt)
             @test occursin("\"small\"", json_txt)

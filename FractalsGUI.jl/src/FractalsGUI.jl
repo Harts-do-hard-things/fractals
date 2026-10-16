@@ -134,7 +134,7 @@ function _refresh_svg!(state::GUIState; width::Int=520, height::Int=520)
     return actual
 end
 
-function make_default_state(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))::GUIState
+function make_default_state(; data_dir::AbstractString=ifs_data_dir())::GUIState
     eq = copy(_DEFAULT_ROW)
     ifs = IFS(eq; npoints=20_000, name="Template", docs="FractalsGUI template")
     state = GUIState(
@@ -368,7 +368,7 @@ function _build_function_row(eq::AbstractMatrix{<:Real}, i::Int)
     return (widget=row_box, entries=entries, color_icon=color_icon)
 end
 
-function launch_gui(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))
+function launch_gui(; data_dir::AbstractString=ifs_data_dir())
     state = make_default_state(; data_dir=data_dir)
 
     window = Gtk.GtkWindow("FractalsGUI", 1580, 860)

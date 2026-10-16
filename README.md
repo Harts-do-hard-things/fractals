@@ -14,11 +14,16 @@ The package includes:
 ## Repository Layout
 
 - `Project.toml` (repo root): [DrWatson](https://juliadynamics.github.io/DrWatson.jl/stable/) scientific project `fractals` that uses the local `Fractals` package (via `[sources]`); run scripts and renders from here
-- `Fractals.jl/`: Julia package (`src/`, `test/`, `Project.toml`)
+- `Fractals.jl/`: Julia package (`src/`, `test/`, `bench/`, and `bin/fractals.jl`, the package CLI)
 - `FractalsGUI.jl/`: separate Julia package for the desktop GUI (depends on `Fractals`)
-- `scripts/`: DrWatson project scripts (`@quickactivate "fractals"`)
-- `plots/`: rendered output (git-ignored, created on demand)
+- `scripts/`: DrWatson project scripts (`@quickactivate "fractals"`): example renders, ImageIterate animation builder, GIF/MP4 export, rotation examples
+- `data/exp_raw/`: curated `.ifs` input library (tracked; `ifs_data_dir()` returns this path)
+- `data/exp_pro/`, `data/sims/`: generated data such as benchmark JSON (git-ignored; `data_output_dir()`)
+- `plots/`: rendered images and animations (git-ignored, created on demand; `output_dir()`)
 - `site/`: generated static docs site artifacts
+
+The layout follows DrWatson's default project template; `notebooks/`, `papers/`, `videos/` and `_research/` are
+created on demand (all but `papers/` are git-ignored, per DrWatson's `.gitignore` template).
 
 ## Quick Start
 
@@ -90,7 +95,7 @@ julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"J
 This writes 30deg/45deg clockwise and counterclockwise SVG/PNG transformation examples to `plots/rotation_examples/`:
 
 ```powershell
-julia --startup-file=no --project=. Fractals.jl/bin/generate_rotation_examples.jl
+julia --startup-file=no --project=. scripts/generate_rotation_examples.jl
 ```
 
 Rotation convention for transformation examples/tests is canonical math-space:

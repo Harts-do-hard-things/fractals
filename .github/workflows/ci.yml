@@ -85,7 +85,7 @@ jobs:
         shell: bash
         env:
           FRACTALS_OUTPUT_ROOT: ${{ runner.temp }}/fractals-output
-        run: julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input Fractals.jl/data/Default.ifs --ifs-index 1 --npoints 2000 --resolution 64x64
+        run: julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input data/exp_raw/Default.ifs --ifs-index 1 --npoints 2000 --resolution 64x64
 
   gui-test:
     name: GUI Tests / ubuntu-latest / Julia 1.12
@@ -134,12 +134,12 @@ jobs:
 
       - name: Instantiate dependencies
         shell: bash
-        run: julia --startup-file=no --project=Fractals.jl -e 'using Pkg; Pkg.instantiate()'
+        run: julia --startup-file=no --project=. -e 'using Pkg; Pkg.instantiate()'
 
       - name: Run benchmark with targets
         shell: bash
         run: >
-          julia --startup-file=no --project=Fractals.jl
+          julia --startup-file=no --project=.
           Fractals.jl/bin/fractals.jl benchmark
           --profile small
           --repeats 3
@@ -149,9 +149,9 @@ jobs:
       - name: Evaluate regression status (warn/fail)
         shell: bash
         run: |
-          julia --startup-file=no --project=Fractals.jl -e '
+          julia --startup-file=no --project=. -e '
           using JSON3;
-          payload = JSON3.read(read("benchmarks/bench_ci.json", String));
+          payload = JSON3.read(read("data/exp_pro/benchmarks/bench_ci.json", String));
           cmp = payload[:comparison];
           status = String(cmp[:status]);
           println("Benchmark comparison status: ", status);
@@ -175,4 +175,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bench-ci-json
-          path: benchmarks/bench_ci.json
+          path: data/exp_pro/benchmarks/bench_ci.json

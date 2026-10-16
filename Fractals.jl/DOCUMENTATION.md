@@ -281,8 +281,8 @@ mp4 = export_animation(:mp4;
 Shell helpers are also available:
 
 ```bash
-julia --startup-file=no --project=. Fractals.jl/bin/export_gif.jl --frames-dir frames --basename dragon_morph --out dragon_morph.gif --fps 12
-julia --startup-file=no --project=. Fractals.jl/bin/export_mp4.jl --frames-dir frames --basename dragon_morph --out dragon_morph.mp4 --fps 12
+julia --startup-file=no --project=. scripts/export_gif.jl --frames-dir frames --basename dragon_morph --out dragon_morph.gif --fps 12
+julia --startup-file=no --project=. scripts/export_mp4.jl --frames-dir frames --basename dragon_morph --out dragon_morph.mp4 --fps 12
 ```
 
 `ffmpeg` must be installed and available on `PATH`. On common systems:
@@ -311,6 +311,10 @@ Saving is managed with [DrWatson](https://juliadynamics.github.io/DrWatson.jl/st
 - `output_dir(args...)` is DrWatson's `plotsdir(args...)` for the active project, unless overridden by
   `with_output_root(f, root)` (scoped) or the `FRACTALS_OUTPUT_ROOT` environment variable; overrides write to
   `<root>/plots/`.
+- `data_output_dir(args...)` is DrWatson's `datadir("exp_pro", args...)` (or `<root>/data/exp_pro/` when
+  overridden) and receives generated data such as benchmark JSON (`fractals.jl benchmark --json <path>`).
+- `ifs_data_dir(args...)` points at the curated `.ifs` input library in `data/exp_raw/` at the DrWatson project
+  root, independent of the active project, e.g. `parse_ifs_file(ifs_data_dir("Default.ifs"))`.
 - Auto-generated names come from `savename(prefix, params, ext)`: the prefix is the sanitized IFS name (`ifs` when
   unnamed) and the parameters are the content-defining render settings (`false`/`nothing` values omitted).
 - Every save goes through `safesave`, so an existing file is moved to `name_#1.ext` instead of being overwritten.

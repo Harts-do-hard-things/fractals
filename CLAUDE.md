@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Two Julia packages for generating and rasterizing 2D IFS (iterated function system) fractals, supporting Julia 1.11 and 1.12 (CI uses 1.12). They sit inside a DrWatson scientific project:
 
-- Repo root (`Project.toml`, name `fractals`) — the DrWatson project. It depends on DrWatson, the local `Fractals` package (via `[sources]` path), and the stdlibs/packages the `bin/` scripts load. Run renders, CLI commands, and `scripts/*.jl` (which start with `@quickactivate "fractals"`) with `--project=.`; output then lands in `<repo>/plots/`.
+- Repo root (`Project.toml`, name `fractals`) — the DrWatson project. It depends on DrWatson, the local `Fractals` package (via `[sources]` path), and the packages the scripts and `bin/fractals.jl` load. It follows the DrWatson template: `scripts/` (project scripts, `@quickactivate "fractals"`), `data/exp_raw/` (curated `.ifs` inputs, tracked), `data/exp_pro/` and `data/sims/` (generated, git-ignored), `plots/` (images/animations, git-ignored). Run renders, CLI commands, and scripts with `--project=.`. `.gitignore` is DrWatson's template with `/data` narrowed so `data/exp_raw` stays tracked.
 - `Fractals.jl/` — the core package (with an optional CUDA extension). Tests and package development use `--project=Fractals.jl`.
 - `FractalsGUI.jl/` — a Gtk desktop GUI for editing IFS matrices and previewing transformation SVGs. Its `Manifest.toml` depends on `Fractals` by relative path (`../Fractals.jl`), so it always uses the working-tree version.
 
@@ -46,7 +46,7 @@ CLI (`render`, `batch-render`, `validate-ifs`, `benchmark`; see `docs/cli.md`):
 
 ```bash
 julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl help
-julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input Fractals.jl/data/Default.ifs --ifs-index 1 --resolution 512x512
+julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input data/exp_raw/Default.ifs --ifs-index 1 --resolution 512x512
 julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile small --repeats 3 --targets Fractals.jl/bench/perf_targets.toml
 ```
 
@@ -67,7 +67,7 @@ Render methods — each lives in its own file and is wrapped by a `render_*` fun
 - `inverse.jl` — per-pixel inverse-map coverage (`rasterize_image_inversely`, `mode=:exact|:preview`).
 - `image_iterate.jl` — applies the IFS to an image rather than to points. The source image is chosen by `image_source` (`:polygon`, `:chaos`, `:point_deterministic`, `:inverse`, `:file`) through the `_IMAGE_SOURCE_DISPATCH` table.
 - `render_transformations.jl` — SVG/PNG diagrams of the affine maps applied to an initial polygon (presets are in `config.jl`). Rotation convention is math-space: positive angles are counterclockwise, `+y` is up, and the model origin is anchored to the same pixel across presets.
-- `interpolation.jl` — interpolates between equation matrices to produce animation frames. `bin/export_gif.jl` and `bin/export_mp4.jl` turn the frames into GIF/MP4 via `ffmpeg`.
+- `interpolation.jl` — interpolates between equation matrices to produce animation frames. `scripts/export_gif.jl` and `scripts/export_mp4.jl` turn the frames into GIF/MP4 via `ffmpeg`; `scripts/animate_image_iterate.jl` builds per-map ImageIterate animations (the test suite `include`s it, so its `@quickactivate` only runs when executed as a script).
 
 `render(input; method=...)` in `render.jl` is the top-level entrypoint:
 - `input` can be an equation matrix, an `IFS`, or an `.ifs` path (choose a definition with `ifs_index`/`ifs_name`; otherwise you are prompted interactively).
@@ -76,7 +76,7 @@ Render methods — each lives in its own file and is wrapped by a `render_*` fun
 
 Saving is DrWatson-managed in `output.jl`. Every file the package writes goes through it, so never call `save`/`write` directly in `src/`:
 - `_resolve_output_path(outpath, default_name)` handles all `outpath`/`outdir` arguments. `nothing` means auto-named, relative paths go under `output_dir()`, and absolute paths are used as-is.
-- `output_dir()` is DrWatson's `plotsdir()` for the active project. `with_output_root` (a ScopedValue) or `FRACTALS_OUTPUT_ROOT` override it.
+- `output_dir()` is DrWatson's `plotsdir()` and `data_output_dir()` is `datadir("exp_pro")` for the active project; `with_output_root` (a ScopedValue) or `FRACTALS_OUTPUT_ROOT` override both (`<root>/plots`, `<root>/data/exp_pro`). Generated data (benchmark JSON) goes through `_save_data_text`.
 - `_output_name` builds `savename` filenames, `_save_image`/`_save_svg`/`_safesave_moved_file` write via `safesave` (existing files become `_#N` backups), and the wrapper types plug into DrWatson's `_wsave` extension point.
 - PNGs get two tEXt chunks (helpers in `utils.jl`):
   - `fractals.source_limits` lets `image_source=:file` reuse the original pixel-to-world framing.
@@ -90,4 +90,4 @@ GPU backends:
 Parsing and interactivity:
 - `ifsparser.jl` is pure (no I/O): `lex_ifs` → `parse_ifs_tokens` → `IFSDefinition`. Non-contractive definitions are skipped with a warning.
 - All stdin prompting lives in `interactive.jl`. Interactive functions take an `input_fn` (default `readline`) so tests can drive them.
-- Curated `.ifs` libraries live in `Fractals.jl/data/`.
+- Curated `.ifs` libraries live in `data/exp_raw/` at the repo root. Locate them with `ifs_data_dir(...)`, not `datadir()`, which follows the active project (`Fractals.jl/data` under `--project=Fractals.jl`).

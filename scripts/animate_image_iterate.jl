@@ -1,5 +1,12 @@
 #!/usr/bin/env julia
 
+# Activate the DrWatson project only when run as a script; the Fractals.jl test suite
+# `include`s this file and must stay in its own environment.
+using DrWatson
+if abspath(PROGRAM_FILE) == @__FILE__
+    @quickactivate "fractals"
+end
+
 module AnimateImageIterateScript
 
 using Fractals

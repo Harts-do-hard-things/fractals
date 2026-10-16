@@ -1,5 +1,8 @@
 #!/usr/bin/env julia
 
+using DrWatson
+@quickactivate "fractals"
+
 using Fractals
 
 function rotation_eq(degrees::Real; clockwise::Bool)::Matrix{Float64}

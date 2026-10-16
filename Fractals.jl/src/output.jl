@@ -21,45 +21,90 @@ const _NAME_EXCLUDED_KEYS = (:backend,)
 """
     with_output_root(f, root)
 
-Run `f()` with package output resolved under `joinpath(root, "plots")` instead of the active
-DrWatson project's `plotsdir()`. Scoped to `f` (and tasks it spawns).
+Run `f()` with package output resolved under `root` (`root/plots`, `root/data/exp_pro`) instead
+of the active DrWatson project's directories. Scoped to `f` (and tasks it spawns).
 """
 with_output_root(f, root::AbstractString) = with(f, _OUTPUT_ROOT => abspath(root))
+
+# Override root from `with_output_root` or `FRACTALS_OUTPUT_ROOT`, or `nothing` to use the
+# active DrWatson project.
+function _output_root_override()
+    root = _OUTPUT_ROOT[]
+    isnothing(root) || return root
+    env_root = strip(get(ENV, "FRACTALS_OUTPUT_ROOT", ""))
+    return isempty(env_root) ? nothing : abspath(env_root)
+end
 
 """
     output_dir(args...)
 
-Directory that relative and auto-generated output paths resolve against, joined with `args`.
-
-Resolution order: `with_output_root`, then the `FRACTALS_OUTPUT_ROOT` environment variable
-(both get a `plots/` subdirectory), then DrWatson's `plotsdir()` for the active project.
+Directory that relative and auto-generated image/animation paths resolve against, joined with
+`args`: DrWatson's `plotsdir()` for the active project, or `<root>/plots` when overridden by
+`with_output_root` or the `FRACTALS_OUTPUT_ROOT` environment variable.
 """
 function output_dir(args::AbstractString...)
-    root = _OUTPUT_ROOT[]
-    if isnothing(root)
-        env_root = strip(get(ENV, "FRACTALS_OUTPUT_ROOT", ""))
-        root = isempty(env_root) ? nothing : abspath(env_root)
-    end
+    root = _output_root_override()
     return isnothing(root) ? plotsdir(args...) : joinpath(root, "plots", args...)
 end
 
 """
-    _resolve_output_path(outpath, default_name)
+    data_output_dir(args...)
 
-`nothing` → `output_dir(default_name)`; absolute paths are returned unchanged; relative paths
-resolve under `output_dir()` (a leading `plots/` component is accepted and not duplicated).
+Directory for generated (processed) data such as benchmark JSON, joined with `args`: DrWatson's
+`datadir("exp_pro")` for the active project, or `<root>/data/exp_pro` when overridden like
+[`output_dir`](@ref).
 """
-function _resolve_output_path(outpath::Union{Nothing,AbstractString}, default_name::AbstractString)
-    isnothing(outpath) && return output_dir(default_name)
+function data_output_dir(args::AbstractString...)
+    root = _output_root_override()
+    return isnothing(root) ? datadir("exp_pro", args...) :
+           joinpath(root, "data", "exp_pro", args...)
+end
+
+"""
+    ifs_data_dir(args...)
+
+Directory of the curated `.ifs` input library, `data/exp_raw` at the DrWatson project root (the
+parent of the `Fractals.jl` package directory), joined with `args`. Unlike `datadir()`, this
+does not depend on which project is active, so tests and tools run with
+`--project=Fractals.jl` find the same files.
+"""
+ifs_data_dir(args::AbstractString...) =
+    joinpath(dirname(pkgdir(@__MODULE__)), "data", "exp_raw", args...)
+
+"""
+    _resolve_output_path(outpath, default_name; base=output_dir, prefix="plots")
+
+`nothing` → `base(default_name)`; absolute paths are returned unchanged; relative paths resolve
+under `base()` (a leading `prefix` component is accepted and not duplicated).
+"""
+function _resolve_output_path(
+    outpath::Union{Nothing,AbstractString},
+    default_name::AbstractString;
+    base = output_dir,
+    prefix::AbstractString = "plots",
+)
+    isnothing(outpath) && return base(default_name)
     path = normpath(String(outpath))
     isabspath(path) && return path
     parts = splitpath(path)
-    if !isempty(parts) && first(parts) == "plots"
+    if !isempty(parts) && first(parts) == prefix
         parts = parts[2:end]
     end
     (isempty(parts) || parts == ["."]) &&
         throw(ArgumentError("Output path '$outpath' does not name a file or directory"))
-    return output_dir(parts...)
+    return base(parts...)
+end
+
+"""
+    _save_data_text(outpath, text)
+
+Resolve `outpath` under `data_output_dir()` (relative paths) and `safesave` `text` there.
+Returns the final path.
+"""
+function _save_data_text(outpath::AbstractString, text::AbstractString)
+    final_outpath = _resolve_output_path(outpath, ""; base = data_output_dir, prefix = "data")
+    safesave(final_outpath, _TextOutput(String(text)))
+    return final_outpath
 end
 
 function _savename_prefix(name::AbstractString)

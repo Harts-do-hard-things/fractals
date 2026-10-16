@@ -210,13 +210,13 @@ mp4 = export_animation(:mp4;
 Equivalent helper scripts are available for shell workflows:
 
 ```bash
-julia --startup-file=no --project=. Fractals.jl/bin/export_gif.jl \
+julia --startup-file=no --project=. scripts/export_gif.jl \
   --frames-dir frames \
   --basename recipe_anim \
   --out recipe_anim.gif \
   --fps 12
 
-julia --startup-file=no --project=. Fractals.jl/bin/export_mp4.jl \
+julia --startup-file=no --project=. scripts/export_mp4.jl \
   --frames-dir frames \
   --basename recipe_anim \
   --out recipe_anim.mp4 \

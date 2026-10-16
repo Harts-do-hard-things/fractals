@@ -33,10 +33,10 @@ Include optional GPU benchmark lines (when CUDA is available):
 julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile small --repeats 3 --backend auto --include-gpu-bench
 ```
 
-Write JSON output:
+Write JSON output (relative `--json` paths resolve under DrWatson's `datadir("exp_pro")`, so this writes `data/exp_pro/benchmarks/bench_small.json`; an existing file is kept as a `_#1` backup):
 
 ```powershell
-julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile small --repeats 1 --json benchmarks/bench_small.json
+julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl benchmark --profile small --repeats 1 --json benchmarks/bench_small.json
 ```
 
 Compare against target envelopes:
@@ -91,8 +91,10 @@ When `--include-gpu-bench` is enabled, report may include:
 CI runs benchmark comparison using:
 
 ```powershell
-julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile small --repeats 3 --targets Fractals.jl/bench/perf_targets.toml --json benchmarks/bench_ci.json
+julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl benchmark --profile small --repeats 3 --targets Fractals.jl/bench/perf_targets.toml --json benchmarks/bench_ci.json
 ```
+
+The JSON lands in `data/exp_pro/benchmarks/bench_ci.json` and is uploaded as the `bench-ci-json` artifact.
 
 Behavior:
 - `warn`: CI job stays green and emits workflow warnings.

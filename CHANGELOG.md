@@ -20,6 +20,11 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
   - PNGs embed a `fractals.provenance` chunk (git commit, version, timestamp, parameters), readable with `read_provenance(path)`; SVGs carry it as a comment.
 
 ### Changed
+- Repository follows DrWatson's default project layout.
+  - The curated `.ifs` library moved from `Fractals.jl/data/` to `data/exp_raw/`; use `ifs_data_dir(...)` to locate it (the GUI's default `data_dir` now does).
+  - Project scripts moved from `Fractals.jl/bin/` to `scripts/` with `@quickactivate "fractals"`: `animate_image_iterate.jl`, `export_gif.jl`, `export_mp4.jl`, `generate_rotation_examples.jl`. `Fractals.jl/bin/fractals.jl` remains the package CLI.
+  - Relative `fractals.jl benchmark --json` paths resolve under DrWatson's `datadir("exp_pro")` via the new `data_output_dir(...)`, and existing files get `_#N` backups.
+  - `.gitignore` is DrWatson's template, with `/data` narrowed to `data/sims` and `data/exp_pro` so `data/exp_raw` stays tracked.
 - Breaking: output moved from a working-directory-relative `media/` to DrWatson's `plotsdir()` (`<repo>/plots/` with `--project=.`).
   - Relative paths keep their subdirectories under `plots/` instead of being flattened into `media/`, and absolute paths are now honored as given.
   - `outpath` defaults are `nothing` (auto-named) instead of fixed names like `media/render.png`.
