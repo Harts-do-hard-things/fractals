@@ -2,7 +2,7 @@
 
 julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "c368a8abf303d2e5eed788ef0279901922e21a5b"
+project_hash = "5d884171c6bbbc4bbe5188bcdb01c85a68f9076b"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -356,7 +356,7 @@ uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
 version = "0.8.5"
 
 [[deps.Fractals]]
-deps = ["Colors", "Dates", "DelimitedFiles", "FileIO", "Images", "JSON3", "LinearAlgebra", "Printf", "Random", "StaticArrays", "Statistics", "StatsBase", "TOML"]
+deps = ["Colors", "Dates", "DelimitedFiles", "DrWatson", "FileIO", "Images", "JLD2", "JSON3", "LinearAlgebra", "Printf", "Random", "StaticArrays", "Statistics", "StatsBase", "TOML"]
 path = "."
 uuid = "c711514a-ad55-41be-9602-f6ed5533a69e"
 version = "1.0.0"

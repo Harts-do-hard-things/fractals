@@ -65,3 +65,50 @@ provenance back with [`read_provenance`](@ref):
 prov = read_provenance(out.outpath)
 prov.params.method, prov.gitcommit   # ("chaos", "v1.0.1-41-g...")
 ```
+
+## Saving fractal data (JLD2)
+
+Images are lossy views of a fractal. [`save_fractal`](@ref) keeps the data itself as a
+[JLD2](https://github.com/JuliaIO/JLD2.jl) file under [`data_output_dir`](@ref), written
+with DrWatson's `tagsave` (so it records the Git commit) and `safesave` (so nothing is
+overwritten). A record contains only plain arrays, strings and numbers: the equation matrix
+`"eq"`, `"weights"`, `"limits"`, the point cloud `"points"` as a `2×N` `Matrix{Float64}`, an
+optional `"image"`, the render `"method"`, `"params"`, and the `"seed"`. It therefore loads
+without this package:
+
+```julia
+using DrWatson
+ifs = IFS(EISENSTEIN; npoints = 100_000); iterate!(ifs; seed = 1)
+path = save_fractal(ifs; seed = 1)
+rec = wload(path)
+rec["points"]   # 2×100000 Matrix{Float64}
+```
+
+[`load_fractal`](@ref) goes the other way and rebuilds an [`IFS`](@ref) with its points and
+limits, together with the metadata.
+
+### Caching with `fractal_data`
+
+[`fractal_data`](@ref) computes a point cloud once with DrWatson's `produce_or_load`. The
+file name is a `savename` of the method, parameters and a hash of the equation matrix, so an
+identical later call reloads the file (`cached = true`) instead of iterating again.
+[`render_fractal`](@ref) then rasterizes the saved points at any resolution or coloring:
+
+```julia
+data = fractal_data(EISENSTEIN; npoints = 1_000_000, seed = 1)   # computed and saved
+data = fractal_data(EISENSTEIN; npoints = 1_000_000, seed = 1)   # loaded: data.cached == true
+render_fractal(data; resolution = (2048, 2048), color = true)
+```
+
+### Resuming and cataloging
+
+[`extend_fractal`](@ref) continues a saved chaos game from its last point and saves the
+accumulated cloud as a new record, so a fractal can be refined over several sessions.
+[`fractal_catalog`](@ref) lists every saved record as a vector of named tuples (reading only
+a small summary per file). `render(...; save_data = true)` writes a record alongside the
+image it produces.
+
+```julia
+more = extend_fractal(data, 500_000; seed = 2)
+filter(r -> r.method == :chaos && r.npoints > 1_000_000, fractal_catalog())
+```

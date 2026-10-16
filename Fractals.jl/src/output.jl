@@ -107,6 +107,71 @@ function _save_data_text(outpath::AbstractString, text::AbstractString)
     return final_outpath
 end
 
+"""
+    _resolve_data_path(outpath, default_name)
+
+Like `_resolve_output_path` for generated data: `nothing` and relative paths resolve under
+`data_output_dir()` (a leading `data/` is not duplicated).
+"""
+_resolve_data_path(outpath::Union{Nothing,AbstractString}, default_name::AbstractString) =
+    _resolve_output_path(outpath, default_name; base = data_output_dir, prefix = "data")
+
+# DrWatson-style tagging (`tagsave` adds a "gitcommit" key), done here with the cached
+# `_gitcommit` because `tagsave` rescans the work tree on every save.
+function _tag_record!(record::AbstractDict)
+    commit = _gitcommit()
+    isnothing(commit) || haskey(record, "gitcommit") || (record["gitcommit"] = commit)
+    return record
+end
+
+"""
+    _save_data_record(path, record::AbstractDict; safe=true)
+
+Save a JLD2 `record` at the already-resolved `path` through DrWatson, tagged with the Git
+commit (`"gitcommit"`, as DrWatson's `tagsave` does) when the project is in a Git repository.
+With `safe=true` (`safesave`), an existing file is kept as a `_#N` backup. Returns the path.
+"""
+function _save_data_record(path::AbstractString, record::AbstractDict; safe::Bool = true)
+    tagged = _tag_record!(copy(record))
+    safe ? safesave(path, tagged) : DrWatson.wsave(path, tagged)
+    return path
+end
+
+"""
+    _load_data_record(path)
+
+Load a JLD2 record saved by `_save_data_record` through DrWatson's `wload`.
+"""
+_load_data_record(path::AbstractString) = DrWatson.wload(path)
+
+"""
+    _produce_or_load_record(produce, config, filename; force=false)
+
+DrWatson `produce_or_load` into `data_output_dir()`: if `filename` (a `.jld2` name) exists it
+is loaded, otherwise `produce(config)` must return a record `Dict`, which is saved (tagged
+with the Git commit when in a repository). Returns `(record, path, cached)`.
+"""
+function _produce_or_load_record(
+    produce::Function,
+    config,
+    filename::AbstractString;
+    force::Bool = false,
+)
+    produced = Ref(false)
+    record, path = DrWatson.produce_or_load(
+        c -> (produced[] = true; _tag_record!(produce(c))),
+        config,
+        data_output_dir();
+        filename = String(filename),
+        prefix = "",
+        suffix = "",
+        tag = false,
+        force = force,
+        verbose = false,
+    )
+    return record, path, !produced[]
+end
+
 function _savename_prefix(name::AbstractString)
     prefix = strip(replace(strip(String(name)), r"[^A-Za-z0-9.\-]+" => "_"), '_')
     return isempty(prefix) ? "ifs" : String(prefix)
