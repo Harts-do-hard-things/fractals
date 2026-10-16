@@ -3553,3 +3553,4 @@ if _env_flag("FRACTALS_RUN_CLI_BENCH_TESTS")
 else
     @info "Skipping CLI Commands and CLI Benchmarks testsets; set FRACTALS_RUN_CLI_BENCH_TESTS=1 to enable them."
 end
+include("test_jld2.jl")

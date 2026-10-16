@@ -18,6 +18,10 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
   - Omitting `outpath` names files with `savename` from the render parameters.
   - All saves use `safesave`, so existing files are kept as `name_#N` backups.
   - PNGs embed a `fractals.provenance` chunk (git commit, version, timestamp, parameters), readable with `read_provenance(path)`; SVGs carry it as a comment.
+- JLD2 data records: `save_fractal`, `load_fractal`, `fractal_record`, `fractal_data` (cached with DrWatson `produce_or_load`), `render_fractal` (re-rasterize saved points at any resolution without recomputing), `extend_fractal` (resume and accumulate a chaos game), and `fractal_catalog` (list saved records).
+  - Records hold plain arrays only, so they load with `JLD2.load`/`wload` without Fractals, and carry DrWatson's `gitcommit`.
+  - `render(...; save_data = true)` also writes a record named like the image under `data_output_dir()`.
+  - New dependency: JLD2.
 
 ### Changed
 - Repository follows DrWatson's default project layout.

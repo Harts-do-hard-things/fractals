@@ -13,6 +13,7 @@ using JSON3
 using Dates: now
 using Base.ScopedValues: ScopedValue, with
 import DrWatson
+import JLD2
 using DrWatson: plotsdir, datadir, projectdir, savename, safesave, gitdescribe
 
 include("config.jl")                 # constants, RenderMethod enum, polygon presets
@@ -33,6 +34,9 @@ include("ifsparser.jl")              # IFS file/string parser (pure; no I/O)
 # but must come BEFORE render.jl — render.jl's _resolve_render_input calls _select_ifs_definition
 include("interactive.jl")            # all stdin logic: prompt helpers, _select_ifs_definition, prompt_ifs_and_render
 include("render.jl")                 # render (top-level API, must come after all methods)
+# fractal_store.jl follows output.jl, types.jl, rasterize.jl and render.jl (render_fractal calls
+# _save_render_output)
+include("fractal_store.jl")          # JLD2 records: save_fractal, load_fractal, fractal_data, ...
 include("examples.jl")               # HEIGHWAY_DRAGON, EISENSTEIN, main()
 
 export AffineMap,
@@ -81,6 +85,13 @@ export AffineMap,
     ifs_data_dir,
     with_output_root,
     read_provenance,
+    fractal_record,
+    save_fractal,
+    load_fractal,
+    fractal_data,
+    render_fractal,
+    extend_fractal,
+    fractal_catalog,
     RESOLUTION,
     DEFAULT_WARMUP,
     DEFAULT_SAMPLES,

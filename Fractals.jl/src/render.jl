@@ -639,6 +639,8 @@ Shared keywords:
 - `alpha`: save with transparency where the image is zero.
 - `resolution`: `(rows, cols)`.
 - `backend`: `:cpu`, `:gpu`, or `:auto` (see [`make_image`](@ref)).
+- `save_data`: also save a JLD2 record (points, maps, image; see [`save_fractal`](@ref)) next
+  to the image's name under [`data_output_dir`](@ref); the result then includes `data_path`.
 - `outpath`: `nothing` names the file with DrWatson's `savename` under [`output_dir`](@ref);
   relative paths resolve there and absolute paths are used as given. Existing files are
   kept as `_#N` backups, and PNGs carry provenance (see [`read_provenance`](@ref)).
@@ -661,6 +663,7 @@ function render(
     ifs_index::Union{Nothing,Integer} = nothing,
     ifs_name::Union{Nothing,AbstractString} = nothing,
     input_fn = readline,
+    save_data::Bool = false,
     kwargs...,
 )
     parsed_method = _parse_render_method(method)
@@ -680,17 +683,17 @@ function render(
         input_fn,
     )
 
-    if render_method == Chaos
-        return render_chaos(input; shared..., kwargs...)
+    out = if render_method == Chaos
+        render_chaos(input; shared..., kwargs...)
     elseif render_method == PointDeterministic
-        return render_point_deterministic(input; shared..., kwargs...)
+        render_point_deterministic(input; shared..., kwargs...)
     elseif render_method == Inverse
-        return render_inverse(input; shared..., kwargs...)
+        render_inverse(input; shared..., kwargs...)
     elseif render_method == ImageIterate
-        return render_image_iterate(input; shared..., kwargs...)
+        render_image_iterate(input; shared..., kwargs...)
     else  # RenderTransformations — warmup and backend are not forwarded (unused)
         transform_color = isnothing(color) ? true : color
-        return render_transformations(
+        render_transformations(
             input;
             npoints,
             color = transform_color,
@@ -703,4 +706,22 @@ function render(
             kwargs...,
         )
     end
+    save_data || return out
+
+    # Also emit a JLD2 record named like the image (same stem, under data_output_dir()).
+    stem = splitext(basename(out.outpath))[1]
+    data_path = save_fractal(
+        out.ifs;
+        image = out.image,
+        method = out.method,
+        params = (;
+            npoints = length(out.ifs.points),
+            warmup,
+            resolution,
+            color = shared_color,
+            alpha,
+        ),
+        outpath = stem * ".jld2",
+    )
+    return merge(out, (; data_path))
 end

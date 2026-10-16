@@ -90,6 +90,18 @@ with_output_root
 read_provenance
 ```
 
+## Saved data (JLD2)
+
+```@docs
+save_fractal
+load_fractal
+fractal_record
+fractal_data
+render_fractal
+extend_fractal
+fractal_catalog
+```
+
 ## Constants
 
 ```@docs
