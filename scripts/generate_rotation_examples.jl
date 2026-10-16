@@ -1,5 +1,8 @@
 #!/usr/bin/env julia
 
+using DrWatson
+@quickactivate "fractals"
+
 using Fractals
 
 function rotation_eq(degrees::Real; clockwise::Bool)::Matrix{Float64}
@@ -22,12 +25,12 @@ for (deg, clockwise, stem) in cases
     eq = rotation_eq(deg; clockwise=clockwise)
     ifs = IFS(eq; npoints=10, name=stem)
     svg_path = render_transformations_svg(ifs;
-                                          outpath=joinpath("media", "$stem.svg"),
+                                          outpath=joinpath("rotation_examples", "$stem.svg"),
                                           width=640,
                                           height=640,
                                           initial_polygon=:line)
     png_path = render_transformations_png(ifs;
-                                          outpath=joinpath("media", "$stem.png"),
+                                          outpath=joinpath("rotation_examples", "$stem.png"),
                                           width=640,
                                           height=640,
                                           initial_polygon=:line,

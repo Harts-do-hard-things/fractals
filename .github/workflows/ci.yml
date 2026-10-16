@@ -27,17 +27,22 @@ jobs:
         with:
           version: '1.12'
 
+      # Formats in place, then fails with the exact diff if anything changed. JuliaFormatter is
+      # pinned so a new release can't change the expected output without a code change.
       - name: Check formatting
         shell: bash
-        run: >
+        run: |
           julia --startup-file=no -e '
-          using Pkg;
-          Pkg.activate(temp=true);
-          Pkg.add(name="JuliaFormatter", version="1");
-          using JuliaFormatter;
-          ok = format(["Fractals.jl/src", "Fractals.jl/test"]; overwrite=false, verbose=true);
-          ok || @warn("Formatting check reported changes. Run JuliaFormatter locally.");
+            using Pkg
+            Pkg.activate(temp=true)
+            Pkg.add(name="JuliaFormatter", version="1.0.62")
+            using JuliaFormatter
+            format(["Fractals.jl/src", "Fractals.jl/test"]; overwrite=true)
           '
+          if ! git diff --exit-code -- Fractals.jl/src Fractals.jl/test; then
+            echo "::error title=Formatting::Fractals.jl/src or Fractals.jl/test is not JuliaFormatter-formatted. Run the formatter (see README) and commit the result."
+            exit 1
+          fi
 
   test:
     name: ${{ matrix.os }} / Julia ${{ matrix.julia-version }}
@@ -72,6 +77,16 @@ jobs:
           FRACTALS_RUN_CLI_BENCH_TESTS: "0"
         run: julia --startup-file=no --project=Fractals.jl Fractals.jl/test/runtests.jl
 
+      - name: Instantiate DrWatson project
+        shell: bash
+        run: julia --startup-file=no --project=. -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Smoke-test DrWatson project render
+        shell: bash
+        env:
+          FRACTALS_OUTPUT_ROOT: ${{ runner.temp }}/fractals-output
+        run: julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input data/exp_raw/Default.ifs --ifs-index 1 --npoints 2000 --resolution 64x64
+
   gui-test:
     name: GUI Tests / ubuntu-latest / Julia 1.12
     runs-on: ubuntu-latest
@@ -97,6 +112,39 @@ jobs:
         shell: bash
         run: julia --startup-file=no --project=FractalsGUI.jl FractalsGUI.jl/test/runtests.jl
 
+  # Builds the Documenter.jl site to catch undocumented exports, broken @ref links, and failing
+  # doctests. Nothing is deployed; the built site is uploaded as an artifact.
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.12'
+
+      - name: Cache Julia packages
+        uses: julia-actions/cache@v2
+
+      - name: Instantiate docs dependencies
+        shell: bash
+        run: julia --startup-file=no --project=docs -e 'using Pkg; Pkg.instantiate()'
+
+      - name: Build docs
+        shell: bash
+        run: julia --startup-file=no --project=docs docs/make.jl
+
+      - name: Upload built docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-build
+          path: docs/build
+
   benchmark-regression:
     name: Benchmark Regression
     runs-on: ubuntu-latest
@@ -119,12 +167,12 @@ jobs:
 
       - name: Instantiate dependencies
         shell: bash
-        run: julia --startup-file=no --project=Fractals.jl -e 'using Pkg; Pkg.instantiate()'
+        run: julia --startup-file=no --project=. -e 'using Pkg; Pkg.instantiate()'
 
       - name: Run benchmark with targets
         shell: bash
         run: >
-          julia --startup-file=no --project=Fractals.jl
+          julia --startup-file=no --project=.
           Fractals.jl/bin/fractals.jl benchmark
           --profile small
           --repeats 3
@@ -134,9 +182,9 @@ jobs:
       - name: Evaluate regression status (warn/fail)
         shell: bash
         run: |
-          julia --startup-file=no --project=Fractals.jl -e '
+          julia --startup-file=no --project=. -e '
           using JSON3;
-          payload = JSON3.read(read("benchmarks/bench_ci.json", String));
+          payload = JSON3.read(read("data/exp_pro/benchmarks/bench_ci.json", String));
           cmp = payload[:comparison];
           status = String(cmp[:status]);
           println("Benchmark comparison status: ", status);
@@ -160,4 +208,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bench-ci-json
-          path: benchmarks/bench_ci.json
+          path: data/exp_pro/benchmarks/bench_ci.json

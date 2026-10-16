@@ -31,7 +31,7 @@ function _eq_matrix_for_interpolation(ifs::IFS)
     eq = Matrix{Float64}(undef, n, 7)
     probs = _normalized_probs(ifs.weights)
 
-    for i in 1:n
+    for i = 1:n
         m = ifs.maps[i]
         eq[i, 1] = m.A[1, 1]
         eq[i, 2] = m.A[1, 2]
@@ -51,21 +51,16 @@ function _interpolate_limits(
     t::Float64,
 )
     return (
-        (
-            (1 - t) * left[1][1] + t * right[1][1],
-            (1 - t) * left[1][2] + t * right[1][2],
-        ),
-        (
-            (1 - t) * left[2][1] + t * right[2][1],
-            (1 - t) * left[2][2] + t * right[2][2],
-        ),
+        ((1 - t) * left[1][1] + t * right[1][1], (1 - t) * left[1][2] + t * right[1][2]),
+        ((1 - t) * left[2][1] + t * right[2][1], (1 - t) * left[2][2] + t * right[2][2]),
     )
 end
 
 @inline function _normalize_interpolation_mode(mode::Symbol)
     normalized = Symbol(lowercase(String(mode)))
-    normalized in (:rotation_scale, :linear) ||
-        throw(ArgumentError("Invalid interpolation_mode '$mode'. Supported: :rotation_scale, :linear"))
+    normalized in (:rotation_scale, :linear) || throw(
+        ArgumentError("Invalid interpolation_mode '$mode'. Supported: :rotation_scale, :linear"),
+    )
     return normalized
 end
 
@@ -80,15 +75,16 @@ function _linearly_interpolate_eq_matrix(
 )
     out = (1 - α) .* Float64.(left_eq) .+ α .* Float64.(right_eq)
     total = sum(out[:, 7])
-    total > 0 || throw(ArgumentError("Interpolated probability column must have positive total weight"))
+    total > 0 ||
+        throw(ArgumentError("Interpolated probability column must have positive total weight"))
     out[:, 7] ./= total
     return out
 end
 
 function _rotation_scale_parameters(
     A::AbstractMatrix{<:Real};
-    atol::Float64=1e-8,
-    rtol::Float64=1e-6,
+    atol::Float64 = 1e-8,
+    rtol::Float64 = 1e-6,
 )
     c1 = SVector{2,Float64}(A[1, 1], A[2, 1])
     c2 = SVector{2,Float64}(A[1, 2], A[2, 2])
@@ -106,11 +102,11 @@ function _rotation_scale_parameters(
     detA >= -max(atol, rtol * scale^2) || return nothing
 
     R = Matrix{Float64}(A) ./ scale
-    isapprox(R' * R, Matrix{Float64}(I, 2, 2); atol=1e-6, rtol=1e-6) || return nothing
-    isapprox(det(R), 1.0; atol=1e-6, rtol=1e-6) || return nothing
+    isapprox(R' * R, Matrix{Float64}(I, 2, 2); atol = 1e-6, rtol = 1e-6) || return nothing
+    isapprox(det(R), 1.0; atol = 1e-6, rtol = 1e-6) || return nothing
 
     angle = atan(R[2, 1], R[1, 1])
-    return (scale=scale, angle=angle)
+    return (scale = scale, angle = angle)
 end
 
 @inline function _shortest_angle_delta(left::Float64, right::Float64)
@@ -129,7 +125,7 @@ function _interpolate_linear_block!(
     right_eq::AbstractMatrix{Float64},
     α::Float64,
 )
-    for i in 1:size(out, 1)
+    for i = 1:size(out, 1)
         leftA = @view left_eq[i, 1:4]
         rightA = @view right_eq[i, 1:4]
         leftM = reshape(collect(leftA), 2, 2)'
@@ -162,18 +158,23 @@ determinants before interpolation.
 function interpolate_eq_matrix(
     left::AbstractMatrix{<:Real},
     right::AbstractMatrix{<:Real},
-    t::Real,
-    ;
-    interpolation_mode::Union{Symbol,AbstractString}=:rotation_scale,
+    t::Real;
+    interpolation_mode::Union{Symbol,AbstractString} = :rotation_scale,
 )
     0 <= t <= 1 || throw(ArgumentError("Interpolation parameter t must be in [0, 1], got $t"))
-    size(left, 1) == size(right, 1) ||
-        throw(ArgumentError("Interpolation requires the same number of transforms, got $(size(left, 1)) and $(size(right, 1))"))
+    size(left, 1) == size(right, 1) || throw(
+        ArgumentError(
+            "Interpolation requires the same number of transforms, got $(size(left, 1)) and $(size(right, 1))",
+        ),
+    )
 
     left_eq = _eq_matrix_for_interpolation(left)
     right_eq = _eq_matrix_for_interpolation(right)
-    size(left_eq) == size(right_eq) ||
-        throw(ArgumentError("Interpolation requires matching equation matrix shapes, got $(size(left_eq)) and $(size(right_eq))"))
+    size(left_eq) == size(right_eq) || throw(
+        ArgumentError(
+            "Interpolation requires matching equation matrix shapes, got $(size(left_eq)) and $(size(right_eq))",
+        ),
+    )
 
     α = Float64(t)
     mode = _normalize_interpolation_mode(interpolation_mode)
@@ -194,60 +195,92 @@ function interpolate_ifs(
     left::IFS,
     right::IFS,
     t::Real;
-    npoints::Integer=min(length(left.points), length(right.points)),
-    name::AbstractString="",
-    docs::AbstractString="",
-    limits_mode::Symbol=:interpolate,
-    interpolation_mode::Union{Symbol,AbstractString}=:rotation_scale,
+    npoints::Integer = min(length(left.points), length(right.points)),
+    name::AbstractString = "",
+    docs::AbstractString = "",
+    limits_mode::Symbol = :interpolate,
+    interpolation_mode::Union{Symbol,AbstractString} = :rotation_scale,
 )
-    length(left.maps) == length(right.maps) ||
-        throw(ArgumentError("Interpolation requires the same number of transforms, got $(length(left.maps)) and $(length(right.maps))"))
+    length(left.maps) == length(right.maps) || throw(
+        ArgumentError(
+            "Interpolation requires the same number of transforms, got $(length(left.maps)) and $(length(right.maps))",
+        ),
+    )
     npoints >= 0 || throw(ArgumentError("npoints must be >= 0, got $npoints"))
 
-    eq = interpolate_eq_matrix(_eq_matrix_for_interpolation(left), _eq_matrix_for_interpolation(right), t;
-                               interpolation_mode=interpolation_mode)
+    eq = interpolate_eq_matrix(
+        _eq_matrix_for_interpolation(left),
+        _eq_matrix_for_interpolation(right),
+        t;
+        interpolation_mode = interpolation_mode,
+    )
     maps, weights = _build_maps_and_weights(eq)
     α = Float64(t)
 
-    limits =
-        if limits_mode == :interpolate
-            _interpolate_limits(left.limits, right.limits, α)
-        elseif limits_mode == :left
-            left.limits
-        elseif limits_mode == :right
-            right.limits
-        elseif limits_mode == :recompute
-            compute_limits(maps, weights)
-        else
-            throw(ArgumentError("Invalid limits_mode '$limits_mode'. Supported: :interpolate, :left, :right, :recompute"))
-        end
+    limits = if limits_mode == :interpolate
+        _interpolate_limits(left.limits, right.limits, α)
+    elseif limits_mode == :left
+        left.limits
+    elseif limits_mode == :right
+        right.limits
+    elseif limits_mode == :recompute
+        compute_limits(maps, weights)
+    else
+        throw(
+            ArgumentError(
+                "Invalid limits_mode '$limits_mode'. Supported: :interpolate, :left, :right, :recompute",
+            ),
+        )
+    end
 
     resolved_name =
         isempty(name) ?
-        (left.name == right.name ? left.name : string("Interpolated(", left.name, " -> ", right.name, ")")) :
-        String(name)
-    resolved_docs =
-        isempty(docs) ?
-        "Interpolated IFS at t=$(round(α; digits=4))" :
-        String(docs)
+        (
+            left.name == right.name ? left.name :
+            string("Interpolated(", left.name, " -> ", right.name, ")")
+        ) : String(name)
+    resolved_docs = isempty(docs) ? "Interpolated IFS at t=$(round(α; digits=4))" : String(docs)
 
-    return IFS(maps, weights; npoints=npoints, name=resolved_name, docs=resolved_docs, limits=limits)
+    return IFS(
+        maps,
+        weights;
+        npoints = npoints,
+        name = resolved_name,
+        docs = resolved_docs,
+        limits = limits,
+    )
 end
 
+"""
+    render_interpolation_frames(left, right; frames, outdir=nothing, basename="frame", t_start=0.0, t_end=1.0,
+                                render_method=RenderTransformations, limits_mode=:interpolate,
+                                interpolation_mode=:rotation_scale, npoints, kwargs...)
+
+Render `frames` evenly spaced interpolation steps from `left` to `right` (see
+[`interpolate_ifs`](@ref)) as numbered PNGs `basename_0001.png`, `basename_0002.png`, ... and
+return `(outdir, paths, ts, render_method)`. Both systems need the same number of maps.
+
+`render_method` is `RenderTransformations` (accepting `initial_polygon`, `show_base`,
+`axis`, `color`, `alpha`, `polygon_limits_iterations`, `resolution`) or `Chaos` (accepting
+`warmup`, `color`, `alpha`, `resolution`, `backend`), passed as `kwargs`. `outdir=nothing`
+writes to an auto-named sequence directory under `output_dir("frames")`. Every frame
+records its `t` and settings in provenance. Feed the frames to
+[`export_animation`](@ref).
+"""
 function render_interpolation_frames(
     left::IFS,
     right::IFS;
     frames::Integer,
-    outdir::AbstractString=joinpath(DEFAULT_MEDIA_DIR, "frames"),
-    basename::AbstractString="frame",
-    t_start::Real=0.0,
-    t_end::Real=1.0,
-    render_method::Union{RenderMethod,Symbol,AbstractString}=RenderTransformations,
-    limits_mode::Symbol=:interpolate,
-    interpolation_mode::Union{Symbol,AbstractString}=:rotation_scale,
-    npoints::Integer=min(length(left.points), length(right.points)),
-    name::AbstractString="",
-    docs::AbstractString="",
+    outdir::Union{Nothing,AbstractString} = nothing,
+    basename::AbstractString = "frame",
+    t_start::Real = 0.0,
+    t_end::Real = 1.0,
+    render_method::Union{RenderMethod,Symbol,AbstractString} = RenderTransformations,
+    limits_mode::Symbol = :interpolate,
+    interpolation_mode::Union{Symbol,AbstractString} = :rotation_scale,
+    npoints::Integer = min(length(left.points), length(right.points)),
+    name::AbstractString = "",
+    docs::AbstractString = "",
     kwargs...,
 )
     frames > 0 || throw(ArgumentError("frames must be > 0, got $frames"))
@@ -256,74 +289,122 @@ function render_interpolation_frames(
     0 <= t_end <= 1 || throw(ArgumentError("t_end must be in [0, 1], got $t_end"))
 
     parsed_method = _parse_render_method(render_method)
-    parsed_method in (Chaos, RenderTransformations) ||
-        throw(ArgumentError("render_interpolation_frames currently supports method=Chaos or method=RenderTransformations only"))
+    parsed_method in (Chaos, RenderTransformations) || throw(
+        ArgumentError(
+            "render_interpolation_frames currently supports method=Chaos or method=RenderTransformations only",
+        ),
+    )
+    method_symbol = _render_method_symbol(parsed_method)
 
+    sequence_name = left.name == right.name ? left.name : string(left.name, "_to_", right.name)
+    outdir = _resolve_output_path(
+        outdir,
+        joinpath(
+            "frames",
+            _output_name(
+                sequence_name,
+                (; method = method_symbol, frames, t_start, t_end, limits_mode),
+                "",
+            ),
+        ),
+    )
     mkpath(outdir)
-    ts = collect(Float64, frames == 1 ? [Float64(t_start)] : LinRange(Float64(t_start), Float64(t_end), frames))
+    gitcommit = _gitcommit()
+    ts = collect(
+        Float64,
+        frames == 1 ? [Float64(t_start)] : LinRange(Float64(t_start), Float64(t_end), frames),
+    )
     paths = String[]
     sizehint!(paths, frames)
 
     for (i, t) in enumerate(ts)
-        ifs = interpolate_ifs(left, right, t;
-                              npoints=npoints,
-                              name=name,
-                              docs=docs,
-                              limits_mode=limits_mode,
-                              interpolation_mode=interpolation_mode)
+        ifs = interpolate_ifs(
+            left,
+            right,
+            t;
+            npoints = npoints,
+            name = name,
+            docs = docs,
+            limits_mode = limits_mode,
+            interpolation_mode = interpolation_mode,
+        )
         path = joinpath(outdir, @sprintf("%s_%04d.png", basename, i))
-        _render_interpolation_frame(ifs, parsed_method, path; npoints=npoints, kwargs...)
+        frame_params = (;
+            method = :interpolation_frame,
+            render_method = method_symbol,
+            ifs_name = ifs.name,
+            frame = i,
+            frames,
+            t,
+            limits_mode,
+            interpolation_mode = _normalize_interpolation_mode(interpolation_mode),
+        )
+        _render_interpolation_frame(ifs, parsed_method, path, frame_params, gitcommit; kwargs...)
         push!(paths, path)
     end
 
-    return (
-        outdir=String(outdir),
-        paths=paths,
-        ts=ts,
-        render_method=_render_method_symbol(parsed_method),
-    )
+    return (outdir = String(outdir), paths = paths, ts = ts, render_method = method_symbol)
 end
 
+# Render one interpolation frame with `render_method` and safesave it to the resolved `outpath`,
+# recording `frame_params` plus the render settings in its provenance.
 function _render_interpolation_frame(
     ifs::IFS,
     render_method::RenderMethod,
-    outpath::AbstractString;
-    npoints::Integer,
+    outpath::AbstractString,
+    frame_params::NamedTuple,
+    gitcommit;
     kwargs...,
 )
-    if render_method == RenderTransformations
-        img = _render_transformations_image(ifs;
-                                            width=get(kwargs, :resolution, RESOLUTION)[2],
-                                            height=get(kwargs, :resolution, RESOLUTION)[1],
-                                            show_base=get(kwargs, :show_base, false),
-                                            initial_polygon_spec=get(kwargs, :initial_polygon, :default),
-                                            color=get(kwargs, :color, false),
-                                            axis=get(kwargs, :axis, false),
-                                            alpha=get(kwargs, :alpha, false))
-        source_limits = _render_transformations_effective_ifs(ifs;
-                                                              initial_polygon_spec=get(kwargs, :initial_polygon, :default),
-                                                              polygon_limits_iterations=get(kwargs, :polygon_limits_iterations, 1)).limits
-        _save_image_with_source_limits(outpath, img, source_limits)
-        return nothing
-    end
-
-    warmup = get(kwargs, :warmup, DEFAULT_WARMUP)
+    resolution = get(kwargs, :resolution, RESOLUTION)
     color = get(kwargs, :color, false)
     alpha = get(kwargs, :alpha, false)
-    resolution = get(kwargs, :resolution, RESOLUTION)
-    backend = get(kwargs, :backend, :cpu)
 
-    iterate!(ifs; warmup=warmup)
-    img = make_image(ifs; resolution=resolution, backend=backend)
+    if render_method == RenderTransformations
+        initial_polygon = get(kwargs, :initial_polygon, :default)
+        img = _render_transformations_image(
+            ifs;
+            width = resolution[2],
+            height = resolution[1],
+            show_base = get(kwargs, :show_base, false),
+            initial_polygon_spec = initial_polygon,
+            color = color,
+            axis = get(kwargs, :axis, false),
+            alpha = alpha,
+        )
+        source_limits =
+            _render_transformations_effective_ifs(
+                ifs;
+                initial_polygon_spec = initial_polygon,
+                polygon_limits_iterations = get(kwargs, :polygon_limits_iterations, 1),
+            ).limits
+        params = merge(frame_params, (; resolution, initial_polygon, color, alpha))
+    else
+        warmup = get(kwargs, :warmup, DEFAULT_WARMUP)
+        backend = get(kwargs, :backend, :cpu)
 
-    if color
-        img = iterate_image(ifs, img; colors=true, backend=backend)
+        iterate!(ifs; warmup = warmup)
+        img = make_image(ifs; resolution = resolution, backend = backend)
+        if color
+            img = iterate_image(ifs, img; colors = true, backend = backend)
+        end
+        if alpha
+            img = _apply_alpha_mask(img)
+        end
+        source_limits = ifs.limits
+        params = merge(
+            frame_params,
+            (; npoints = length(ifs.points), warmup, resolution, color, alpha, backend),
+        )
     end
-    if alpha
-        img = _apply_alpha_mask(img)
-    end
 
-    _save_image_with_source_limits(outpath, img, ifs.limits)
+    _save_image(
+        outpath,
+        img,
+        source_limits;
+        params = params,
+        provenance = _provenance_payload(params; gitcommit = gitcommit),
+    )
     return nothing
 end
 
@@ -333,21 +414,24 @@ function _animation_frame_pattern(basename::AbstractString)
     return Regex("^" * escape_string(stripped) * "_\\d{4}\\.png\$")
 end
 
-function _animation_frame_paths(
-    frames_dir::AbstractString,
-    basename::AbstractString,
-)
+function _animation_frame_paths(frames_dir::AbstractString, basename::AbstractString)
     isdir(frames_dir) || throw(ArgumentError("frames_dir '$frames_dir' does not exist"))
     pattern = _animation_frame_pattern(basename)
     matches = sort(filter(name -> occursin(pattern, name), readdir(frames_dir)))
-    isempty(matches) &&
-        throw(ArgumentError("No PNG frames matching '$(strip(String(basename)))_####.png' were found in '$frames_dir'"))
-    first(matches) == "$(strip(String(basename)))_0001.png" ||
-        throw(ArgumentError("Frame sequence in '$frames_dir' must start at '$(strip(String(basename)))_0001.png'"))
+    isempty(matches) && throw(
+        ArgumentError(
+            "No PNG frames matching '$(strip(String(basename)))_####.png' were found in '$frames_dir'",
+        ),
+    )
+    first(matches) == "$(strip(String(basename)))_0001.png" || throw(
+        ArgumentError(
+            "Frame sequence in '$frames_dir' must start at '$(strip(String(basename)))_0001.png'",
+        ),
+    )
     return joinpath.(Ref(String(frames_dir)), matches)
 end
 
-function _resolve_ffmpeg(ffmpeg_cmd::AbstractString="ffmpeg")
+function _resolve_ffmpeg(ffmpeg_cmd::AbstractString = "ffmpeg")
     path = Sys.which(ffmpeg_cmd)
     isnothing(path) && throw(ArgumentError("ffmpeg executable '$ffmpeg_cmd' was not found on PATH"))
     return path
@@ -366,49 +450,60 @@ function _run_ffmpeg(cmd::Cmd)
 end
 
 """
-    export_animation(format; frames_dir, basename, outpath, fps=12, ffmpeg_cmd="ffmpeg")
+    export_animation(format; frames_dir, basename, outpath=nothing, fps=12, ffmpeg_cmd="ffmpeg")
 
 Convert a deterministic numbered PNG frame sequence such as `basename_0001.png`
 into a GIF or MP4 animation using `ffmpeg`.
+
+Relative `frames_dir`/`outpath` resolve under `output_dir()`; `outpath=nothing` writes
+`animations/<basename>.<format>`. An existing animation is kept as a `_#N` backup.
 """
 function export_animation(
     format::Symbol;
     frames_dir::AbstractString,
     basename::AbstractString,
-    outpath::AbstractString,
-    fps::Real=12,
-    ffmpeg_cmd::AbstractString="ffmpeg",
+    outpath::Union{Nothing,AbstractString} = nothing,
+    fps::Real = 12,
+    ffmpeg_cmd::AbstractString = "ffmpeg",
 )
     format in (:gif, :mp4) ||
         throw(ArgumentError("Invalid animation format '$format'. Supported: :gif, :mp4"))
     fps > 0 || throw(ArgumentError("fps must be > 0, got $fps"))
 
-    frame_paths = _animation_frame_paths(frames_dir, basename)
+    resolved_frames_dir = _resolve_output_path(frames_dir, "frames")
+    frame_paths = _animation_frame_paths(resolved_frames_dir, basename)
     ffmpeg = _resolve_ffmpeg(ffmpeg_cmd)
 
-    final_outpath = normpath(String(outpath))
-    mkpath(dirname(final_outpath))
+    final_outpath =
+        _resolve_output_path(outpath, joinpath("animations", "$(strip(String(basename))).$format"))
+    input_pattern = joinpath(resolved_frames_dir, "$(strip(String(basename)))_%04d.png")
 
-    input_pattern = joinpath(String(frames_dir), "$(strip(String(basename)))_%04d.png")
-
-    if format == :gif
-        palette_path = joinpath(dirname(final_outpath), "$(Base.Filesystem.basename(final_outpath)).palette.png")
-        try
-            _run_ffmpeg(`$ffmpeg -y -framerate $fps -i $input_pattern -vf palettegen -frames:v 1 $palette_path`)
-            _run_ffmpeg(`$ffmpeg -y -framerate $fps -i $input_pattern -i $palette_path -lavfi paletteuse $final_outpath`)
-        finally
-            isfile(palette_path) && rm(palette_path; force=true)
+    # ffmpeg writes into a scratch directory; the finished file is then safesaved into place so an
+    # existing animation is kept as a `_#N` backup rather than overwritten.
+    mktempdir() do scratch
+        scratch_outpath = joinpath(scratch, "animation.$format")
+        if format == :gif
+            palette_path = joinpath(scratch, "palette.png")
+            _run_ffmpeg(
+                `$ffmpeg -y -framerate $fps -i $input_pattern -vf palettegen -frames:v 1 $palette_path`,
+            )
+            _run_ffmpeg(
+                `$ffmpeg -y -framerate $fps -i $input_pattern -i $palette_path -lavfi paletteuse $scratch_outpath`,
+            )
+        else
+            _run_ffmpeg(
+                `$ffmpeg -y -framerate $fps -i $input_pattern -c:v libx264 -pix_fmt yuv420p $scratch_outpath`,
+            )
         end
-    else
-        _run_ffmpeg(`$ffmpeg -y -framerate $fps -i $input_pattern -c:v libx264 -pix_fmt yuv420p $final_outpath`)
+        _safesave_moved_file(final_outpath, scratch_outpath)
     end
 
     return (
-        format=format,
-        frames_dir=String(frames_dir),
-        basename=strip(String(basename)),
-        frame_paths=frame_paths,
-        fps=Float64(fps),
-        outpath=final_outpath,
+        format = format,
+        frames_dir = resolved_frames_dir,
+        basename = strip(String(basename)),
+        frame_paths = frame_paths,
+        fps = Float64(fps),
+        outpath = final_outpath,
     )
 end

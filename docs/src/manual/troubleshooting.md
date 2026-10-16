@@ -53,7 +53,7 @@ julia --startup-file=no --project=Fractals.jl -e "using Pkg; Pkg.instantiate()"
 ## Quick Render Smoke Test
 
 ```powershell
-julia --startup-file=no --project=Fractals.jl -e "using Fractals; render(HEIGHWAY_DRAGON; method=Chaos, npoints=50_000, outpath=\"media/smoke.png\")"
+julia --startup-file=no --project=. -e "using Fractals; render(HEIGHWAY_DRAGON; method=Chaos, npoints=50_000, outpath=\"smoke.png\")"
 ```
 
 ## Method-Specific Troubleshooting

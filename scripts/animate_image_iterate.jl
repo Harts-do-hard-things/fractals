@@ -1,5 +1,12 @@
 #!/usr/bin/env julia
 
+# Activate the DrWatson project only when run as a script; the Fractals.jl test suite
+# `include`s this file and must stay in its own environment.
+using DrWatson
+if abspath(PROGRAM_FILE) == @__FILE__
+    @quickactivate "fractals"
+end
+
 module AnimateImageIterateScript
 
 using Fractals
@@ -24,8 +31,11 @@ Options:
   --interpolation-mode <m> Map interpolation mode: rotation_scale|linear (default rotation_scale)
   --fps <n>                GIF frame rate (default 12)
   --basename <name>        Frame basename (default image_iterate_build)
-  --out-dir <path>         Output frames directory (default media/frames)
-  --out <path>             Output GIF path (default media/image_iterate_build.gif)
+  --out-dir <path>         Output frames directory (default plots/frames/<basename>)
+  --out <path>             Output GIF path (default plots/animations/<basename>.gif)
+
+Relative paths resolve under the DrWatson project's plots/ directory; existing files are kept
+as `_#N` backups.
 """
     )
 end
@@ -174,7 +184,7 @@ function render_image_iterate_build_frames(
     ifs::IFS,
     image_path::AbstractString;
     frames_per_map::Integer=8,
-    outdir::AbstractString=joinpath("media", "frames"),
+    outdir::Union{Nothing,AbstractString}=nothing,
     basename::AbstractString="image_iterate_build",
     interpolation_mode::Union{Symbol,AbstractString}=:rotation_scale,
 )
@@ -186,7 +196,9 @@ function render_image_iterate_build_frames(
     base_rgb = _gray_to_rgb(background)
     map_colors = Fractals._map_colors(length(ifs.maps))
 
-    mkpath(String(outdir))
+    outdir = Fractals._resolve_output_path(outdir, joinpath("frames", strip(String(basename))))
+    mkpath(outdir)
+    gitcommit = Fractals._gitcommit()
     paths = String[]
     stage_ranges = UnitRange{Int}[]
     completed = copy(base_rgb)
@@ -199,8 +211,13 @@ function render_image_iterate_build_frames(
             frame = copy(completed)
             layer = _single_map_layer(ifs, foreground, map_index, t, interpolation_mode)
             _composite_tinted_layer!(frame, layer, Fractals._map_color_rgb(map_index, map_colors))
-            path = joinpath(String(outdir), @sprintf("%s_%04d.png", basename, frame_index))
-            Fractals._save_image_with_source_limits(path, frame, ifs.limits)
+            path = joinpath(outdir, @sprintf("%s_%04d.png", basename, frame_index))
+            params = (; method=:image_iterate_build_frame, ifs_name=ifs.name, image_path=String(image_path),
+                      map_index, t=Float64(t), frame=frame_index, frames_per_map,
+                      interpolation_mode=Symbol(interpolation_mode))
+            Fractals._save_image(path, frame, ifs.limits;
+                                 params=params,
+                                 provenance=Fractals._provenance_payload(params; gitcommit=gitcommit))
             push!(paths, path)
             frame_index += 1
         end
@@ -233,9 +250,9 @@ function create_animation(args=ARGS)
     frames_per_map = parse(Int, get(opts, "frames-per-map", "8"))
     interpolation_mode = get(opts, "interpolation-mode", "rotation_scale")
     fps = parse(Float64, get(opts, "fps", "12"))
-    outdir = get(opts, "out-dir", joinpath("media", "frames"))
+    outdir = get(opts, "out-dir", nothing)
     basename = get(opts, "basename", "image_iterate_build")
-    outpath = get(opts, "out", joinpath("media", basename * ".gif"))
+    outpath = get(opts, "out", nothing)
 
     ifs = _load_ifs(input; ifs_index=ifs_index, ifs_name=ifs_name)
     frames = render_image_iterate_build_frames(ifs, image_path;

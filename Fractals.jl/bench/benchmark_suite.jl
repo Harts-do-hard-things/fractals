@@ -288,8 +288,8 @@ function run_suite(; profile::String="small",
     end
 
     if !isnothing(json_path)
-        mkpath(dirname(json_path))
-        write(json_path, JSON3.write(payload))
+        # Relative paths resolve under data/exp_pro (DrWatson datadir); existing files get _#N backups.
+        payload["json_path"] = Fractals._save_data_text(json_path, JSON3.write(payload))
     end
 
     return payload

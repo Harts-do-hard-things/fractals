@@ -3,27 +3,29 @@
 # -------------------------------------------------
 
 function isinspace(v::AbstractVector, limits::Tuple{Tuple,Tuple})
-    ( xlim, ylim ) = limits
+    (xlim, ylim) = limits
     xmin, xmax = xlim
     ymin, ymax = ylim
     return xmin ≤ v[1] ≤ xmax && ymin ≤ v[2] ≤ ymax
 end
 
-function isinspace(point::SVector{2, Float64}, point1::SVector{2, Float64}, point2::SVector{2, Float64}, limits::Tuple{Tuple,Tuple})
+function isinspace(
+    point::SVector{2,Float64},
+    point1::SVector{2,Float64},
+    point2::SVector{2,Float64},
+    limits::Tuple{Tuple,Tuple},
+)
     return isinspace(point, limits) || isinspace(point1, limits) || isinspace(point2, limits)
 end
 
-@inline function points_contain_zero(
-    points::NTuple{3,SVector{2,Float64}}
-)::Bool
+@inline function points_contain_zero(points::NTuple{3,SVector{2,Float64}})::Bool
     p0, p1, p2 = points
 
     v1 = p1 - p0
     v2 = p2 - p0
     vO = -p0
 
-    return (0 ≤ dot(v1, vO) ≤ dot(v1, v1)) &&
-           (0 ≤ dot(v2, vO) ≤ dot(v2, v2))
+    return (0 ≤ dot(v1, vO) ≤ dot(v1, v1)) && (0 ≤ dot(v2, vO) ≤ dot(v2, v2))
 end
 
 
@@ -31,14 +33,27 @@ end
 # Inverse iteration (no comprehension allocations)
 # -------------------------------------------------
 
+"""
+    inverse_iterate(ifs, n, p0, p1, p2) -> Float32
+    inverse_iterate(inverse_maps, limits, n, p0, p1, p2) -> Float32
+
+Push the triangle `(p0, p1, p2)` (world coordinates, typically one pixel's corners) back
+through every inverse map for up to `n` rounds, discarding branches that leave `limits`
+(`ifs.limits` for the first form). Returns:
+
+- `1.0` as soon as any branch's triangle contains the origin;
+- `j / n * 0.5` if every branch has left the limits by round `j` (diverged);
+- `0.0` if branches remain after `n` rounds without containing the origin.
+
+This is the per-pixel kernel of [`rasterize_image_inversely`](@ref).
+"""
 function inverse_iterate(
     inverse_maps::Vector{AffineMap{Float64}},
-    limits::Tuple{Tuple{Float64,Float64},
-                  Tuple{Float64,Float64}},
+    limits::Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}},
     n::Integer,
     p0::SVector{2,Float64},
     p1::SVector{2,Float64},
-    p2::SVector{2,Float64}
+    p2::SVector{2,Float64},
 )::Float32
 
     current = Vector{NTuple{3,SVector{2,Float64}}}()
@@ -46,7 +61,7 @@ function inverse_iterate(
 
     next = Vector{NTuple{3,SVector{2,Float64}}}()
 
-    for j in 1:n
+    for j = 1:n
 
         empty!(next)
 
@@ -58,9 +73,7 @@ function inverse_iterate(
             end
 
             for imap in inverse_maps
-                newtri = (imap(tri[1]),
-                          imap(tri[2]),
-                          imap(tri[3]))
+                newtri = (imap(tri[1]), imap(tri[2]), imap(tri[3]))
 
                 push!(next, newtri)
             end
@@ -89,19 +102,18 @@ function _inverse_iterate!(
     current::Vector{NTuple{3,SVector{2,Float64}}},
     next::Vector{NTuple{3,SVector{2,Float64}}},
     inverse_maps::Vector{AffineMap{Float64}},
-    limits::Tuple{Tuple{Float64,Float64},
-                  Tuple{Float64,Float64}},
+    limits::Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}},
     n::Integer,
     p0::SVector{2,Float64},
     p1::SVector{2,Float64},
     p2::SVector{2,Float64};
-    max_frontier::Int=typemax(Int)
+    max_frontier::Int = typemax(Int),
 )::Float32
     empty!(current)
     empty!(next)
     push!(current, (p0, p1, p2))
 
-    for j in 1:n
+    for j = 1:n
         empty!(next)
 
         for tri in current
@@ -137,7 +149,7 @@ function inverse_iterate(
     n::Integer,
     p0::SVector{2,Float64},
     p1::SVector{2,Float64},
-    p2::SVector{2,Float64}
+    p2::SVector{2,Float64},
 )::Float32
 
     inverse_maps = inv.(ifs.maps)
@@ -152,15 +164,13 @@ end
 function _rasterize_image_inversely_cpu(
     ifs::IFS,
     n::Integer,
-    limits::Tuple{Tuple{Float64,Float64},
-                  Tuple{Float64,Float64}};
-    resolution::Tuple{Int,Int}=RESOLUTION,
-    show_divergence_scale::Bool=true,
-    mode::Symbol=:exact
-    )
+    limits::Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}};
+    resolution::Tuple{Int,Int} = RESOLUTION,
+    show_divergence_scale::Bool = true,
+    mode::Symbol = :exact,
+)
 
-    pixel_map = make_pixelate_map(limits;
-                                  resolution=resolution)
+    pixel_map = make_pixelate_map(limits; resolution = resolution)
     inverse_maps = inv.(ifs.maps)
 
     inv_pixel_map = inv(pixel_map)
@@ -169,19 +179,29 @@ function _rasterize_image_inversely_cpu(
     img = zeros(Float32, rows, cols)
     nthreads_local = _thread_buffer_slots()
     max_frontier = _inverse_cpu_capacity(ifs, n, mode)
-    current_buffers = [Vector{NTuple{3,SVector{2,Float64}}}() for _ in 1:nthreads_local]
-    next_buffers = [Vector{NTuple{3,SVector{2,Float64}}}() for _ in 1:nthreads_local]
+    current_buffers = [Vector{NTuple{3,SVector{2,Float64}}}() for _ = 1:nthreads_local]
+    next_buffers = [Vector{NTuple{3,SVector{2,Float64}}}() for _ = 1:nthreads_local]
 
-    @threads for x in 1:cols
+    @threads for x = 1:cols
         tid = threadid()
         current = current_buffers[tid]
         next = next_buffers[tid]
-        @inbounds for y in 1:rows
-            p0 = inv_pixel_map(SVector{2,Float64}(x,     y))
+        @inbounds for y = 1:rows
+            p0 = inv_pixel_map(SVector{2,Float64}(x, y))
             p1 = inv_pixel_map(SVector{2,Float64}(x + 1, y))
-            p2 = inv_pixel_map(SVector{2,Float64}(x,     y + 1))
+            p2 = inv_pixel_map(SVector{2,Float64}(x, y + 1))
 
-            v = _inverse_iterate!(current, next, inverse_maps, ifs.limits, n, p0, p1, p2; max_frontier=max_frontier)
+            v = _inverse_iterate!(
+                current,
+                next,
+                inverse_maps,
+                ifs.limits,
+                n,
+                p0,
+                p1,
+                p2;
+                max_frontier = max_frontier,
+            )
             img[y, x] = show_divergence_scale ? v : _inverse_hide_scale_value(v)
         end
     end
@@ -200,7 +220,7 @@ end
     end
 
     cap = 1
-    for _ in 1:Int(n)
+    for _ = 1:Int(n)
         cap *= nmaps
         cap = min(cap, 256)
     end
@@ -212,17 +232,13 @@ end
         return 1
     end
     cap = 1
-    for _ in 1:n
+    for _ = 1:n
         cap = cap * nmaps
     end
     return max(1, cap)
 end
 
-@inline function _inverse_gpu_preview_capacity(
-    nmaps::Int,
-    n::Int,
-    resolution::Tuple{Int,Int}
-)::Int
+@inline function _inverse_gpu_preview_capacity(nmaps::Int, n::Int, resolution::Tuple{Int,Int})::Int
     rows, cols = resolution
     npix = max(rows * cols, 1)
     # Keep preview mode bounded to reduce GPU memory pressure on larger frames.
@@ -239,12 +255,7 @@ end
     return 2 * 6 * sizeof(Float64) * cap * npix
 end
 
-function _inverse_gpu_capacity(
-    ifs::IFS,
-    n::Integer,
-    resolution::Tuple{Int,Int},
-    mode::Symbol
-)::Int
+function _inverse_gpu_capacity(ifs::IFS, n::Integer, resolution::Tuple{Int,Int}, mode::Symbol)::Int
     nmaps = length(ifs.maps)
     nmaps > 0 || throw(ArgumentError("IFS must have at least one map"))
     n >= 0 || throw(ArgumentError("n must be >= 0, got $n"))
@@ -260,12 +271,11 @@ end
 function _rasterize_image_inversely_gpu(
     ifs::IFS,
     n::Integer,
-    limits::Tuple{Tuple{Float64,Float64},
-                  Tuple{Float64,Float64}},
+    limits::Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}},
     ::Val;
-    resolution::Tuple{Int,Int}=RESOLUTION,
-    show_divergence_scale::Bool=true,
-    mode::Symbol=:exact
+    resolution::Tuple{Int,Int} = RESOLUTION,
+    show_divergence_scale::Bool = true,
+    mode::Symbol = :exact,
 )
     throw(_gpu_backend_unavailable_error())
 end
@@ -273,48 +283,76 @@ end
 function _rasterize_image_inversely_gpu_or_throw(
     ifs::IFS,
     n::Integer,
-    limits::Tuple{Tuple{Float64,Float64},
-                  Tuple{Float64,Float64}};
-    resolution::Tuple{Int,Int}=RESOLUTION,
-    show_divergence_scale::Bool=true,
-    mode::Symbol=:exact
+    limits::Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}};
+    resolution::Tuple{Int,Int} = RESOLUTION,
+    show_divergence_scale::Bool = true,
+    mode::Symbol = :exact,
 )
     cap = _inverse_gpu_capacity(ifs, n, resolution, mode)
     rows, cols = resolution
     bytes = _inverse_gpu_buffer_bytes(cap, rows, cols)
     max_bytes = 768 * 1024 * 1024
     if bytes > max_bytes
-        throw(ArgumentError("Inverse GPU '$mode' buffers are too large for resolution=$resolution and n=$n (estimated $(round(bytes / 1024^2; digits=1)) MiB > $(round(max_bytes / 1024^2; digits=1)) MiB). Reduce resolution/iterations or use backend=:cpu."))
+        throw(
+            ArgumentError(
+                "Inverse GPU '$mode' buffers are too large for resolution=$resolution and n=$n (estimated $(round(bytes / 1024^2; digits=1)) MiB > $(round(max_bytes / 1024^2; digits=1)) MiB). Reduce resolution/iterations or use backend=:cpu.",
+            ),
+        )
     end
 
-    return _rasterize_image_inversely_gpu(ifs, n, limits, Val(:cuda);
-                                          resolution=resolution,
-                                          show_divergence_scale=show_divergence_scale,
-                                          mode=mode)
+    return _rasterize_image_inversely_gpu(
+        ifs,
+        n,
+        limits,
+        Val(:cuda);
+        resolution = resolution,
+        show_divergence_scale = show_divergence_scale,
+        mode = mode,
+    )
 end
 
+"""
+    rasterize_image_inversely(ifs, n, limits; resolution=RESOLUTION, show_divergence_scale=true, backend=:cpu, mode=:exact)
+
+Render `ifs` by inverse iteration: each pixel of a `(rows, cols)` image over world `limits`
+is scored with [`inverse_iterate`](@ref) to depth `n`, returning a `Float32` matrix.
+
+- `show_divergence_scale=true` keeps the graded divergence values.
+- `show_divergence_scale=false` returns a binary mask: white (`1.0`) where branches never
+  diverged or reached the origin, black (`0.0`) where they diverged.
+- `mode=:exact` tracks every branch (CPU semantics); `mode=:preview` caps the tracked
+  frontier for faster, approximate GPU renders.
+- `backend` behaves as in [`make_image`](@ref).
+"""
 function rasterize_image_inversely(
     ifs::IFS,
     n::Integer,
-    limits::Tuple{Tuple{Float64,Float64},
-                  Tuple{Float64,Float64}};
-    resolution::Tuple{Int,Int}=RESOLUTION,
-    show_divergence_scale::Bool=true,
-    backend::Symbol=:cpu,
-    mode::Symbol=:exact
-    )
+    limits::Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}};
+    resolution::Tuple{Int,Int} = RESOLUTION,
+    show_divergence_scale::Bool = true,
+    backend::Symbol = :cpu,
+    mode::Symbol = :exact,
+)
     mode in (:exact, :preview) ||
         throw(ArgumentError("Invalid mode '$mode'. Supported: :exact, :preview"))
 
     return _dispatch_backend(
         backend,
-        () -> _rasterize_image_inversely_cpu(ifs, n, limits;
-                                             resolution=resolution,
-                                             show_divergence_scale=show_divergence_scale,
-                                             mode=mode),
-        () -> _rasterize_image_inversely_gpu_or_throw(ifs, n, limits;
-                                                      resolution=resolution,
-                                                      show_divergence_scale=show_divergence_scale,
-                                                      mode=mode),
+        () -> _rasterize_image_inversely_cpu(
+            ifs,
+            n,
+            limits;
+            resolution = resolution,
+            show_divergence_scale = show_divergence_scale,
+            mode = mode,
+        ),
+        () -> _rasterize_image_inversely_gpu_or_throw(
+            ifs,
+            n,
+            limits;
+            resolution = resolution,
+            show_divergence_scale = show_divergence_scale,
+            mode = mode,
+        ),
     )
 end

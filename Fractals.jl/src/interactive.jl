@@ -1,19 +1,22 @@
-# NOTE: This file must be included after ifsparser.jl (calls parse_ifs_file) and after all
-# render-method files (prompt_ifs_and_render calls _normalize_media_outpath). It must be
+# NOTE: This file must be included after ifsparser.jl (calls parse_ifs_file). It must be
 # included BEFORE render.jl — render.jl's _resolve_render_input(AbstractString) calls
 # _select_ifs_definition defined here.
 #
-# prompt_ifs_and_render also calls render_chaos/render_point_deterministic, which are
-# defined *later* in render.jl. This is safe: Julia resolves function calls at call time,
-# not at `include` time, and by the time anyone actually invokes prompt_ifs_and_render the
-# whole module (including render.jl) has finished loading. Same reasoning already applies
-# to the reverse direction above.
+# prompt_ifs_and_render calls render_chaos/render_point_deterministic, which are defined
+# *later* in render.jl. This is safe: Julia resolves function calls at call time, not at
+# `include` time, and by the time anyone invokes prompt_ifs_and_render the whole module
+# (including render.jl) has finished loading.
 
 # -------------------------------------------------
 # Prompt primitives (injectable stdin)
 # -------------------------------------------------
 
-function _prompt_int(msg::AbstractString, default::Int; input_fn=readline, min::Union{Nothing,Int}=nothing)
+function _prompt_int(
+    msg::AbstractString,
+    default::Int;
+    input_fn = readline,
+    min::Union{Nothing,Int} = nothing,
+)
     print(msg)
     line = input_fn()
     isempty(strip(line)) && return default
@@ -31,14 +34,14 @@ function _prompt_int(msg::AbstractString, default::Int; input_fn=readline, min::
     return parsed
 end
 
-function _prompt_string(msg::AbstractString, default::AbstractString; input_fn=readline)
+function _prompt_string(msg::AbstractString, default::AbstractString; input_fn = readline)
     print(msg)
     line = input_fn()
     isempty(strip(line)) && return String(default)
     return strip(line)
 end
 
-function _prompt_choice(msg::AbstractString, n::Int, default::Int; input_fn=readline)
+function _prompt_choice(msg::AbstractString, n::Int, default::Int; input_fn = readline)
     print(msg)
     line = input_fn()
     isempty(strip(line)) && return default
@@ -70,7 +73,7 @@ function _select_ifs_definition(
     defs::AbstractVector;
     ifs_index::Union{Nothing,Integer},
     ifs_name::Union{Nothing,AbstractString},
-    input_fn=readline
+    input_fn = readline,
 )
     choices = _ifs_choices_text(defs)
 
@@ -113,12 +116,26 @@ end
 # Interactive IFS selection + render entrypoint
 # -------------------------------------------------
 
-function prompt_ifs_and_render(path::AbstractString;
-                               npoints::Integer=DEFAULT_SAMPLES,
-                               resolution::Tuple{Int,Int}=RESOLUTION,
-                               outpath::AbstractString="media/output.png",
-                               input_fn=readline)
-    ifs_list = parse_ifs_file(path; npoints=npoints)
+"""
+    prompt_ifs_and_render(path; npoints=DEFAULT_SAMPLES, resolution=RESOLUTION, outpath=nothing, input_fn=readline)
+
+Interactively render a definition from the `.ifs` file at `path`. Lists the definitions,
+then prompts for the definition, the method (chaos or point-deterministic), the point
+count, the image size, and the output path, with each prompt defaulting to the keyword
+values. Invalid or non-positive numbers fall back to the default. Renders through
+[`render_chaos`](@ref) or [`render_point_deterministic`](@ref) and returns the rendered
+`IFS`, or `nothing` if the file has no definitions.
+
+`input_fn` supplies each answer (default `readline`), so tests can script the session.
+"""
+function prompt_ifs_and_render(
+    path::AbstractString;
+    npoints::Integer = DEFAULT_SAMPLES,
+    resolution::Tuple{Int,Int} = RESOLUTION,
+    outpath::Union{Nothing,AbstractString} = nothing,
+    input_fn = readline,
+)
+    ifs_list = parse_ifs_file(path; npoints = npoints)
     if isempty(ifs_list)
         println("No IFS definitions found in: $path")
         return nothing
@@ -130,35 +147,58 @@ function prompt_ifs_and_render(path::AbstractString;
         println("  [$i] $(ifs.name)$(doc_preview)")
     end
 
-    idx = _prompt_choice("Select a fractal [1-$(length(ifs_list))] (default 1): ",
-                         length(ifs_list), 1; input_fn=input_fn)
+    idx = _prompt_choice(
+        "Select a fractal [1-$(length(ifs_list))] (default 1): ",
+        length(ifs_list),
+        1;
+        input_fn = input_fn,
+    )
     ifs = ifs_list[idx]
 
     println("Iteration methods:")
     println("  [1] chaos auto-threaded (iterate!)")
     println("  [2] chaos auto-threaded (iterate_parallel! alias)")
     println("  [3] point deterministic (deterministic_iterate, n=1)")
-    method = _prompt_choice("Select method [1-3] (default 1): ", 3, 1; input_fn=input_fn)
+    method = _prompt_choice("Select method [1-3] (default 1): ", 3, 1; input_fn = input_fn)
 
-    npoints = _prompt_int("Number of points (default $(npoints)): ", npoints; input_fn=input_fn, min=1)
-    width   = _prompt_int("Image width (default $(resolution[2])): ", resolution[2]; input_fn=input_fn, min=1)
-    height  = _prompt_int("Image height (default $(resolution[1])): ", resolution[1]; input_fn=input_fn, min=1)
-    outpath = _prompt_string("Output path (default $(outpath)): ", outpath; input_fn=input_fn)
+    npoints = _prompt_int(
+        "Number of points (default $(npoints)): ",
+        npoints;
+        input_fn = input_fn,
+        min = 1,
+    )
+    width = _prompt_int(
+        "Image width (default $(resolution[2])): ",
+        resolution[2];
+        input_fn = input_fn,
+        min = 1,
+    )
+    height = _prompt_int(
+        "Image height (default $(resolution[1])): ",
+        resolution[1];
+        input_fn = input_fn,
+        min = 1,
+    )
+    default_outpath = isnothing(outpath) ? "" : String(outpath)
+    default_label = isnothing(outpath) ? "auto-named in $(output_dir())" : default_outpath
+    entered = _prompt_string(
+        "Output path (default $(default_label)): ",
+        default_outpath;
+        input_fn = input_fn,
+    )
+    outpath = isempty(entered) ? nothing : entered
 
-    final_outpath = _normalize_media_outpath(outpath)
-    if isfile(final_outpath)
-        print("File '$(final_outpath)' already exists. Overwrite? [y/N]: ")
-        answer = lowercase(strip(input_fn()))
-        if !(answer in ("y", "yes"))
-            println("Not overwriting existing file. Aborting render.")
-            return nothing
-        end
-    end
-
+    # Saving goes through DrWatson safesave, which keeps an existing file as a `_#N` backup
+    # instead of overwriting it, so no overwrite confirmation is needed here.
     result = if method == 3
-        render_point_deterministic(ifs; npoints=npoints, resolution=(height, width), outpath=final_outpath)
+        render_point_deterministic(
+            ifs;
+            npoints = npoints,
+            resolution = (height, width),
+            outpath = outpath,
+        )
     else
-        render_chaos(ifs; npoints=npoints, resolution=(height, width), outpath=final_outpath)
+        render_chaos(ifs; npoints = npoints, resolution = (height, width), outpath = outpath)
     end
 
     println("Saved image to $(result.outpath)")

@@ -1,15 +1,35 @@
+"""
+    IFSDefinition
+
+One parsed `.ifs` block before it becomes an [`IFS`](@ref): its `name`, `docs` (the `;`
+comment lines), and equation matrix `eq` (6 or 7 columns).
+"""
 struct IFSDefinition
     name::String
     docs::String
     eq::Matrix{Float64}
 end
 
+"""
+    IFSToken
+
+A lexer token from [`lex_ifs`](@ref): `kind` is one of `:NAME`, `:LBRACE`, `:DOCS`,
+`:ARRAY` (one numeric row as `Vector{Float64}`), or `:RBRACE`; `value` holds the text or
+numbers; `line` is the 1-based source line.
+"""
 struct IFSToken
     kind::Symbol
     value::Union{Nothing,String,Vector{Float64}}
     line::Int
 end
 
+"""
+    lex_ifs(input::AbstractString) -> Vector{IFSToken}
+
+Tokenize `.ifs` text (see the IFS text format page of the manual). Lines containing `(3D)` are
+skipped. Throws `ArgumentError` (with the line number) for a `}` outside a block, a `{`
+without a name, or a non-numeric token in a row, and `EOFError` for an unclosed block.
+"""
 function lex_ifs(input::AbstractString)
     tokens = IFSToken[]
     sizehint!(tokens, max(16, div(length(input), 32)))
@@ -27,7 +47,7 @@ function lex_ifs(input::AbstractString)
                 throw(ArgumentError("Unexpected '}' outside IFS block at line $lineno"))
             end
             if occursin('{', line)
-                parts = split(line, '{', limit=2)
+                parts = split(line, '{', limit = 2)
                 name = replace(strip(parts[1]), "'" => "")
                 if isempty(name)
                     throw(ArgumentError("Missing name before '{' at line $lineno"))
@@ -57,7 +77,7 @@ function lex_ifs(input::AbstractString)
             continue
         end
 
-        data = split(line, ';', limit=2)[1]
+        data = split(line, ';', limit = 2)[1]
         data = strip(data)
         isempty(data) && continue
         nums = split(data)
@@ -110,7 +130,11 @@ function _parse_ifs_tokens(tokens::Vector{IFSToken})
                 if width == 0
                     width = row_width
                 elseif row_width != width
-                    throw(ArgumentError("Row $(nrows + 1) for '$name' has length $row_width; expected $width"))
+                    throw(
+                        ArgumentError(
+                            "Row $(nrows + 1) for '$name' has length $row_width; expected $width",
+                        ),
+                    )
                 end
                 append!(flat_vals, row)
                 nrows += 1
@@ -130,8 +154,8 @@ function _parse_ifs_tokens(tokens::Vector{IFSToken})
         end
         eq = Matrix{Float64}(undef, nrows, width)
         k = 1
-        @inbounds for r in 1:nrows
-            for c in 1:width
+        @inbounds for r = 1:nrows
+            for c = 1:width
                 eq[r, c] = flat_vals[k]
                 k += 1
             end
@@ -159,7 +183,7 @@ function _split_valid_ifs_definitions(defs::Vector{IFSDefinition})
         if isempty(failures)
             push!(valid, d)
         else
-            push!(invalid, (definition=d, failures=failures))
+            push!(invalid, (definition = d, failures = failures))
         end
     end
     return valid, invalid
@@ -172,28 +196,54 @@ function _warn_skipped_invalid_ifs(source::AbstractString, invalid)
     return nothing
 end
 
-function _validated_ifs_definitions(defs::Vector{IFSDefinition}; source::AbstractString="input")
+function _validated_ifs_definitions(defs::Vector{IFSDefinition}; source::AbstractString = "input")
     valid, invalid = _split_valid_ifs_definitions(defs)
     isempty(invalid) || _warn_skipped_invalid_ifs(source, invalid)
     return valid
 end
 
-function parse_ifs_string(input::AbstractString; npoints::Integer=DEFAULT_SAMPLES)
-    defs = _validated_ifs_definitions(parse_ifs_definitions_string(input); source="input")
+"""
+    parse_ifs_string(input; npoints=DEFAULT_SAMPLES) -> Vector{IFS}
+
+Parse every block in `.ifs` text into an [`IFS`](@ref) with `npoints` points, keeping each
+block's name and `;` docs. Non-contractive definitions are skipped with a warning. Syntax
+errors throw as described in [`lex_ifs`](@ref); mixed row widths within a block and blocks
+with no rows throw `ArgumentError`.
+
+```jldoctest
+julia> defs = parse_ifs_string(\"\"\"
+       Heighway Dragon {
+         0.5 -0.5  0.5  0.5  0.0 0.0
+        -0.5 -0.5  0.5 -0.5  1.0 0.0
+       }
+       \"\"\"; npoints = 100);
+
+julia> only(defs).name
+"Heighway Dragon"
+```
+"""
+function parse_ifs_string(input::AbstractString; npoints::Integer = DEFAULT_SAMPLES)
+    defs = _validated_ifs_definitions(parse_ifs_definitions_string(input); source = "input")
     out = Vector{IFS}(undef, length(defs))
     @inbounds for i in eachindex(defs)
         d = defs[i]
-        out[i] = IFS(d.eq; npoints=npoints, name=d.name, docs=d.docs)
+        out[i] = IFS(d.eq; npoints = npoints, name = d.name, docs = d.docs)
     end
     return out
 end
 
-function parse_ifs_file(path::AbstractString; npoints::Integer=DEFAULT_SAMPLES)
-    defs = _validated_ifs_definitions(parse_ifs_definitions_file(path); source=path)
+"""
+    parse_ifs_file(path; npoints=DEFAULT_SAMPLES) -> Vector{IFS}
+
+[`parse_ifs_string`](@ref) for the contents of the `.ifs` file at `path`; skip warnings
+name the file.
+"""
+function parse_ifs_file(path::AbstractString; npoints::Integer = DEFAULT_SAMPLES)
+    defs = _validated_ifs_definitions(parse_ifs_definitions_file(path); source = path)
     out = Vector{IFS}(undef, length(defs))
     @inbounds for i in eachindex(defs)
         d = defs[i]
-        out[i] = IFS(d.eq; npoints=npoints, name=d.name, docs=d.docs)
+        out[i] = IFS(d.eq; npoints = npoints, name = d.name, docs = d.docs)
     end
     return out
 end

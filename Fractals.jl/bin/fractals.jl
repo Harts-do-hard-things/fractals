@@ -36,11 +36,11 @@ Common options:
   --resolution <HxW>       Image resolution (e.g. 1024x1024)
   --ifs-index <int>        Select IFS by index from an .ifs file
   --ifs-name <name>        Select IFS by name from an .ifs file
-  --out <path>             Output image path
-  --out-dir <path>         Output directory for batch-render
+  --out <path>             Output image path (default: auto-named; relative paths resolve under plots/)
+  --out-dir <path>         Output directory for batch-render (default: plots/batch)
   --profile <name>         Benchmark profile: small|medium|large|all
   --repeats <int>          Benchmark repeat count
-  --json <path>            Benchmark JSON output path
+  --json <path>            Benchmark JSON output path (relative paths resolve under data/exp_pro/)
   --targets <path>         Benchmark target envelope TOML file
   --include-gpu-bench      Also run make_image/iterate_image GPU benchmarks (benchmark command)
   --strict                 Fail benchmark command when targets status is fail
@@ -206,7 +206,7 @@ function _render_from_input(input::String, opts::Dict{String,Any})
     initial_polygon = Symbol(_opt_str(opts, "initial-polygon", "default"))
     ifs_index = _opt_int(opts, "ifs-index", nothing)
     ifs_name = _opt_str(opts, "ifs-name", nothing)
-    outpath = _opt_str(opts, "out", "media/cli_render.png")
+    outpath = _opt_str(opts, "out", nothing)
     if image_source != :polygon && initial_polygon != :default
         @warn "--initial-polygon is ignored unless --image-source polygon."
     end
@@ -235,8 +235,7 @@ function _cmd_batch_render(opts::Dict{String,Any})
 
     image_source = Symbol(_opt_str(opts, "image-source", "polygon"))
     initial_polygon = Symbol(_opt_str(opts, "initial-polygon", "default"))
-    outdir = _opt_str(opts, "out-dir", "media/batch")
-    mkpath(outdir)
+    outdir = _opt_str(opts, "out-dir", "batch")
 
     defs = parse_ifs_file(input; npoints=1)
     isempty(defs) && throw(ArgumentError("No IFS definitions found in '$input'"))
@@ -300,7 +299,7 @@ function _cmd_benchmark(opts::Dict{String,Any})
                                          strict=strict)
     BenchmarkSuite.print_report(payload)
     if !isnothing(json_path)
-        println("Wrote benchmark JSON to $json_path")
+        println("Wrote benchmark JSON to $(payload["json_path"])")
     end
     return 0
 end
@@ -329,9 +328,16 @@ function main(args::Vector{String}=ARGS)
     throw(ArgumentError("Unknown command '$cmd'"))
 end
 
-try
-    exit(main())
-catch e
-    println(stderr, "ERROR: ", sprint(showerror, e))
-    exit(2)
+# Exceptions become exit code 2. Guarded so tests can `include` this file and call `main` in-process.
+function run_cli(args::Vector{String}=ARGS)
+    try
+        return main(args)
+    catch e
+        println(stderr, "ERROR: ", sprint(showerror, e))
+        return 2
+    end
+end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    exit(run_cli())
 end

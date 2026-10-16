@@ -4,6 +4,7 @@ using Fractals
 using LinearAlgebra
 using Printf
 import Gtk
+import Rsvg
 
 export GUIState,
        launch_gui,
@@ -14,8 +15,6 @@ export GUIState,
        parse_matrix_text,
        matrix_to_text,
        parse_ifs_definition_for_gui,
-       load_ifs_definition,
-       load_ifs_definition!,
        load_ifs_definition_gui!,
        apply_eq_matrix!
 
@@ -127,14 +126,18 @@ function _refresh_placeholder!(state::GUIState)
 end
 
 function _refresh_svg!(state::GUIState; width::Int=520, height::Int=520)
+    old_path = state.svg_temp_path
     requested = tempname() * ".svg"
     actual = Fractals.render_transformations_svg(state.ifs; outpath=requested, width=width, height=height)
     state.svg_temp_path = actual
     state.svg_string = read(actual, String)
+    if !isempty(old_path) && old_path != actual && isfile(old_path)
+        rm(old_path; force=true)
+    end
     return actual
 end
 
-function make_default_state(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))::GUIState
+function make_default_state(; data_dir::AbstractString=ifs_data_dir())::GUIState
     eq = copy(_DEFAULT_ROW)
     ifs = IFS(eq; npoints=20_000, name="Template", docs="FractalsGUI template")
     state = GUIState(
@@ -182,16 +185,6 @@ function apply_eq_matrix!(state::GUIState, eq::AbstractMatrix{<:Real})::Bool
     end
 end
 
-function _load_definition(path::AbstractString; definition_index::Int=1)
-    defs = Fractals.parse_ifs_definitions_file(path)
-    isempty(defs) && throw(ArgumentError("no definitions found in $path"))
-    (1 <= definition_index <= length(defs)) || throw(ArgumentError("definition index $definition_index out of range 1:$(length(defs))"))
-    selected = defs[definition_index]
-    eq = normalize_eq_matrix(selected.eq)
-    names = [String(d.name) for d in defs]
-    return (eq=eq, docs=String(selected.docs), name=String(selected.name), names=names)
-end
-
 function _resolve_definition_index(defs;
                                    definition_index::Union{Nothing,Int}=nothing,
                                    definition_name::Union{Nothing,AbstractString}=nothing)::Int
@@ -229,21 +222,6 @@ function parse_ifs_definition_for_gui(path::AbstractString;
             name=String(selected.name),
             names=names,
             definition_index=idx)
-end
-
-function load_ifs_definition(path::AbstractString; definition_index::Int=1)
-    return _load_definition(path; definition_index=definition_index)
-end
-
-function load_ifs_definition!(state::GUIState, path::AbstractString; definition_index::Int=1)::Bool
-    loaded = _load_definition(path; definition_index=definition_index)
-    state.source_file = abspath(path)
-    state.definition_index = definition_index
-    state.definition_name = loaded.name
-    state.docs = loaded.docs
-    state.eq_matrix = loaded.eq
-    state.loaded_eq_matrix = copy(loaded.eq)
-    return apply_eq_matrix!(state, loaded.eq)
 end
 
 function load_ifs_definition_gui!(state::GUIState, path::AbstractString;
@@ -368,7 +346,7 @@ function _build_function_row(eq::AbstractMatrix{<:Real}, i::Int)
     return (widget=row_box, entries=entries, color_icon=color_icon)
 end
 
-function launch_gui(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))
+function launch_gui(; data_dir::AbstractString=ifs_data_dir())
     state = make_default_state(; data_dir=data_dir)
 
     window = Gtk.GtkWindow("FractalsGUI", 1580, 860)
@@ -536,7 +514,6 @@ function launch_gui(; data_dir::AbstractString=joinpath("Fractals.jl", "data"))
             return
         end
         if apply_eq_matrix!(state, parsed)
-            state.loaded_eq_matrix = copy(state.eq_matrix)
             _write_eq_to_rows!(state.eq_matrix)
         end
         set_status!()

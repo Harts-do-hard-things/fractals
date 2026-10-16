@@ -30,42 +30,31 @@ function _parse_render_method(method::Symbol)
     elseif m == :deterministic
         throw(ArgumentError("Method '$method' was removed. Use point_deterministic."))
     end
-    throw(ArgumentError("Invalid method '$method'. Supported methods: chaos, parallel, point_deterministic, image_iterate, inverse, render_transformations"))
+    throw(
+        ArgumentError(
+            "Invalid method '$method'. Supported methods: chaos, parallel, point_deterministic, image_iterate, inverse, render_transformations",
+        ),
+    )
 end
 
 function _parse_render_method(method::AbstractString)
     return _parse_render_method(Symbol(lowercase(strip(method))))
 end
 
-function _normalize_media_outpath(outpath::AbstractString)
-    raw = String(outpath)
-    media_prefix = string(DEFAULT_MEDIA_DIR, Base.Filesystem.path_separator)
-    normalized = normpath(raw)
-
-    if normalized == DEFAULT_MEDIA_DIR || startswith(normalized, media_prefix)
-        mkpath(dirname(normalized))
-        return normalized
-    end
-
-    final = joinpath(DEFAULT_MEDIA_DIR, basename(normalized))
-    mkpath(dirname(final))
-    return final
-end
-
 const _PNG_SIGNATURE = UInt8[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 const _PNG_SOURCE_LIMITS_KEYWORD = "fractals.source_limits"
 const _PNG_SOURCE_LIMITS_VERSION = 1
 const _PNG_CRC32_TABLE = let table = Vector{UInt32}(undef, 256)
-    for i in 0:255
+    for i = 0:255
         crc = UInt32(i)
-        for _ in 1:8
+        for _ = 1:8
             if isodd(crc)
                 crc = (crc >> 1) ⊻ 0xedb88320
             else
                 crc >>= 1
             end
         end
-        table[i + 1] = crc
+        table[i+1] = crc
     end
     table
 end
@@ -74,20 +63,15 @@ end
     return lowercase(splitext(String(path))[2]) == ".png"
 end
 
-@inline function _limits_tuple(
-    x1::Real,
-    x2::Real,
-    y1::Real,
-    y2::Real,
-)
+@inline function _limits_tuple(x1::Real, x2::Real, y1::Real, y2::Real)
     return ((Float64(x1), Float64(x2)), (Float64(y1), Float64(y2)))
 end
 
 function _serialize_source_limits_payload(limits)
     return JSON3.write((
-        version=_PNG_SOURCE_LIMITS_VERSION,
-        x=[limits[1][1], limits[1][2]],
-        y=[limits[2][1], limits[2][2]],
+        version = _PNG_SOURCE_LIMITS_VERSION,
+        x = [limits[1][1], limits[1][2]],
+        y = [limits[2][1], limits[2][2]],
     ))
 end
 
@@ -107,9 +91,9 @@ end
 
 @inline function _png_read_u32be(bytes::AbstractVector{UInt8}, pos::Int)
     return (UInt32(bytes[pos]) << 24) |
-           (UInt32(bytes[pos + 1]) << 16) |
-           (UInt32(bytes[pos + 2]) << 8) |
-           UInt32(bytes[pos + 3])
+           (UInt32(bytes[pos+1]) << 16) |
+           (UInt32(bytes[pos+2]) << 8) |
+           UInt32(bytes[pos+3])
 end
 
 function _png_write_u32be(value::UInt32)
@@ -149,10 +133,10 @@ function _parse_png_chunks(bytes::AbstractVector{UInt8})
         crc_end = data_end + 4
         crc_end <= length(bytes) || throw(ArgumentError("Truncated PNG chunk"))
 
-        chunk_type = String(Char.(bytes[type_start:type_start + 3]))
+        chunk_type = String(Char.(bytes[type_start:type_start+3]))
         chunk_data = len == 0 ? UInt8[] : Vector{UInt8}(bytes[data_start:data_end])
         raw = Vector{UInt8}(bytes[raw_start:crc_end])
-        push!(chunks, (type=chunk_type, data=chunk_data, raw=raw))
+        push!(chunks, (type = chunk_type, data = chunk_data, raw = raw))
 
         pos = crc_end + 1
         chunk_type == "IEND" && break
@@ -166,7 +150,7 @@ function _png_text_keyword_and_value(data::AbstractVector{UInt8})
     nul = findfirst(==(0x00), data)
     nul === nothing && return nothing
     keyword = String(Char.(data[1:nul-1]))
-    value = String(Char.(data[nul + 1:end]))
+    value = String(Char.(data[nul+1:end]))
     return keyword => value
 end
 
@@ -179,9 +163,10 @@ function _png_make_text_chunk(keyword::AbstractString, value::AbstractString)
     return UInt8[_png_write_u32be(UInt32(length(data))); type_bytes; data; _png_write_u32be(crc)]
 end
 
-function _embed_png_text_chunk(path::AbstractString, keyword::AbstractString, value::AbstractString)
+function _embed_png_text_chunks(path::AbstractString, text_chunks::AbstractVector{<:Pair})
     bytes = read(path)
     chunks = _parse_png_chunks(bytes)
+    keywords = Set(String(first(p)) for p in text_chunks)
     out = copy(_PNG_SIGNATURE)
     inserted = false
 
@@ -189,7 +174,7 @@ function _embed_png_text_chunk(path::AbstractString, keyword::AbstractString, va
         keep = true
         if chunk.type == "tEXt"
             pair = _png_text_keyword_and_value(chunk.data)
-            if !isnothing(pair) && first(pair) == keyword
+            if !isnothing(pair) && first(pair) in keywords
                 keep = false
             end
         end
@@ -199,7 +184,9 @@ function _embed_png_text_chunk(path::AbstractString, keyword::AbstractString, va
         end
 
         if !inserted && chunk.type == "IHDR"
-            append!(out, _png_make_text_chunk(keyword, value))
+            for (keyword, value) in text_chunks
+                append!(out, _png_make_text_chunk(keyword, value))
+            end
             inserted = true
         end
     end
@@ -223,7 +210,8 @@ function _read_png_text_chunk(path::AbstractString, keyword::AbstractString)
             end
         end
     catch err
-        @warn "Failed to read PNG metadata from '$path'; falling back to default limits." exception=(err, catch_backtrace())
+        @warn "Failed to read PNG metadata from '$path'; falling back to default limits." exception =
+            (err, catch_backtrace())
     end
 
     return nothing
@@ -236,21 +224,10 @@ function _read_png_source_limits(path::AbstractString)
     try
         return _deserialize_source_limits_payload(payload)
     catch err
-        @warn "Failed to parse source limits metadata from '$path'; falling back to default limits." exception=(err, catch_backtrace())
+        @warn "Failed to parse source limits metadata from '$path'; falling back to default limits." exception =
+            (err, catch_backtrace())
         return nothing
     end
-end
-
-function _save_image_with_source_limits(
-    outpath::AbstractString,
-    img,
-    limits,
-)
-    save(outpath, img)
-    if _has_png_extension(outpath)
-        _embed_png_text_chunk(outpath, _PNG_SOURCE_LIMITS_KEYWORD, _serialize_source_limits_payload(limits))
-    end
-    return outpath
 end
 
 function _ifs_with_limits(ifs, limits)
@@ -261,18 +238,35 @@ end
     return join(string.(supported_initial_polygons()), ", ")
 end
 
+"""
+    supported_initial_polygons()
+
+Names of the built-in [`InitialPolygonPreset`](@ref)s, e.g.
+`[:default, :equilateral_triangle, :line_arrow, :line]`.
+"""
 function supported_initial_polygons()
     return [preset.name for preset in _INITIAL_POLYGON_REGISTRY]
 end
 
-function initial_polygon(name::Symbol=:default)
+"""
+    initial_polygon(name::Symbol = :default)
+
+Look up an [`InitialPolygonPreset`](@ref) by name (case-insensitive). `:default` is an
+oriented unit square with internal segments. Throws `ArgumentError` listing the valid names
+for an unknown preset.
+"""
+function initial_polygon(name::Symbol = :default)
     normalized = Symbol(lowercase(String(name)))
     for preset in _INITIAL_POLYGON_REGISTRY
         if preset.name == normalized
             return preset
         end
     end
-    throw(ArgumentError("Invalid initial_polygon '$name'. Supported: $(_initial_polygon_names_text())"))
+    throw(
+        ArgumentError(
+            "Invalid initial_polygon '$name'. Supported: $(_initial_polygon_names_text())",
+        ),
+    )
 end
 
 @inline function _resolve_initial_polygon(preset::InitialPolygonPreset)
@@ -283,11 +277,13 @@ end
     return initial_polygon(name)
 end
 
-@inline function _base_limits_image(initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=:default)
+@inline function _base_limits_image(
+    initial_polygon_spec::Union{InitialPolygonPreset,Symbol} = :default,
+)
     return _resolve_initial_polygon(initial_polygon_spec).limits
 end
 
-@inline function _base_l_image(initial_polygon_spec::Union{InitialPolygonPreset,Symbol}=:default)
+@inline function _base_l_image(initial_polygon_spec::Union{InitialPolygonPreset,Symbol} = :default)
     return _resolve_initial_polygon(initial_polygon_spec).segments
 end
 
@@ -300,7 +296,9 @@ end
 end
 
 @inline function _gpu_backend_unavailable_error()
-    return ArgumentError("GPU backend is not available. Install CUDA.jl and ensure a functional CUDA runtime, or use backend=:cpu/:auto.")
+    return ArgumentError(
+        "GPU backend is not available. Install CUDA.jl and ensure a functional CUDA runtime, or use backend=:cpu/:auto.",
+    )
 end
 
 @inline function _validate_backend(backend::Symbol)
@@ -313,8 +311,8 @@ function _dispatch_backend(
     backend::Symbol,
     cpu_fn,
     gpu_fn;
-    gpu_available::Bool=_gpu_backend_available(Val(:cuda)),
-    auto_fallback_exceptions::Tuple{Vararg{DataType}}=(ArgumentError,),
+    gpu_available::Bool = _gpu_backend_available(Val(:cuda)),
+    auto_fallback_exceptions::Tuple{Vararg{DataType}} = (ArgumentError,),
 )
     _validate_backend(backend)
 
@@ -378,7 +376,7 @@ function _apply_alpha_mask(img::AbstractMatrix{Float32})
     out = Matrix{GrayA{Float32}}(undef, size(img)...)
     @inbounds for i in eachindex(img)
         value = img[i]
-        out[i] = GrayA{Float32}(value, value > 0f0 ? 1f0 : 0f0)
+        out[i] = GrayA{Float32}(value, value > 0.0f0 ? 1.0f0 : 0.0f0)
     end
     return out
 end
@@ -387,7 +385,7 @@ function _apply_alpha_mask(img::AbstractMatrix{Gray{Float32}})
     out = Matrix{GrayA{Float32}}(undef, size(img)...)
     @inbounds for i in eachindex(img)
         value = Float32(img[i])
-        out[i] = GrayA{Float32}(value, value > 0f0 ? 1f0 : 0f0)
+        out[i] = GrayA{Float32}(value, value > 0.0f0 ? 1.0f0 : 0.0f0)
     end
     return out
 end
@@ -396,7 +394,7 @@ function _apply_alpha_mask(img::AbstractMatrix{RGB{Float32}})
     out = Matrix{RGBA{Float32}}(undef, size(img)...)
     @inbounds for i in eachindex(img)
         px = img[i]
-        a = (px.r > 0f0 || px.g > 0f0 || px.b > 0f0) ? 1f0 : 0f0
+        a = (px.r > 0.0f0 || px.g > 0.0f0 || px.b > 0.0f0) ? 1.0f0 : 0.0f0
         out[i] = RGBA{Float32}(px.r, px.g, px.b, a)
     end
     return out
