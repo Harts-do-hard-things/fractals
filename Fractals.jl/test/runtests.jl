@@ -8,10 +8,24 @@ using Colors
 using JSON3
 using Printf
 
-# The test bodies are huge one-shot closures (`mktempdir() do ... end` full of `@test`s) that run
+# The test bodies are huge one-shot closures (`_with_tmpdir() do ... end` full of `@test`s) that run
 # exactly once, so optimizing/type-inferring them is pure compile-time overhead: most of the suite
 # used to be spent in LLVM. The package itself is precompiled and unaffected by this setting.
 Base.Experimental.@compiler_options optimize = 0 compile = min infer = false
+
+# `mktempdir() do ... end` compiles a fresh `mktempdir` method instance for every test-body
+# closure (~100 ms each, 35+ times). This helper takes the closure untyped, so it compiles once.
+function _with_tmpdir(@nospecialize(f))
+    dir = mktempdir()
+    try
+        return f(dir)
+    finally
+        try
+            rm(dir; recursive = true, force = true)
+        catch
+        end
+    end
+end
 
 # Route all package output into a scratch directory so tests never write into the DrWatson
 # project's plots/.
@@ -32,7 +46,7 @@ end
 # Run `bin/fractals.jl` with `args` in-process, capturing output; `code` is the exit code the
 # script would return (exceptions → 2).
 function _run_cli(args::AbstractString...)
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         out_path = joinpath(tmp, "stdout")
         err_path = joinpath(tmp, "stderr")
         code = open(out_path, "w") do out
@@ -360,7 +374,7 @@ end
         name = "right",
     )
 
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         result = render_interpolation_frames(
             left,
             right;
@@ -388,7 +402,7 @@ end
         @test all(size(img) == (24, 24) for img in imgs)
     end
 
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         result = render_interpolation_frames(
             left,
             right;
@@ -448,7 +462,7 @@ end
         name = "mismatch",
     )
 
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         @test_throws ArgumentError render_interpolation_frames(
             left,
             right;
@@ -489,7 +503,7 @@ end
 end
 
 @testset "Animation Export Helpers" begin
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         missing_dir = joinpath(tmp, "missing_frames")
         err = _capture_exception(
             () -> export_animation(
@@ -634,7 +648,7 @@ end
         img,
     )
 
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         seed = fill(GrayA{Float32}(0.15f0, 0.0f0), 20, 20)
         seed[7:14, 7:14] .= GrayA{Float32}(0.85f0, 1.0f0)
         seed_path = joinpath(tmp, "seed_graya.png")
@@ -1394,7 +1408,7 @@ end
 end
 
 @testset "DrWatson Output Management" begin
-    mktempdir() do d
+    _with_tmpdir() do d
         plots = joinpath(abspath(d), "plots")
 
         @testset "output root precedence" begin
@@ -1549,7 +1563,7 @@ end
 
 @testset "Affine Map SVG Rendering" begin
     ifs = IFS(SMALL_EQ; npoints = 50)
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         suffix = randstring(8)
         svg_path = render_transformations_svg(
             ifs;
@@ -1649,7 +1663,7 @@ end
 
 @testset "Affine Map Color Assignment By Map" begin
     ifs = IFS(EISENSTEIN; npoints = 50)
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         suffix = randstring(8)
         svg_path = render_transformations_svg(
             ifs;
@@ -1704,7 +1718,7 @@ end
         (45.0, true, "45_cw"),
     ]
 
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         for (deg, clockwise, label) in cases
             eq = rotation_eq(deg; clockwise = clockwise)
             ifs = IFS(eq; npoints = 10)
@@ -1756,7 +1770,7 @@ end
     presets = (:default, :equilateral_triangle, :line_arrow, :line)
     width, height = 320, 320
     ifs = IFS(reshape([1.0 0.0 0.0 1.0 0.0 0.0 1.0], 1, 7); npoints = 10)
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         centers = Tuple{Float64,Float64}[]
         for preset in presets
             out = render_transformations_png(
@@ -1792,7 +1806,7 @@ end
     shifted_ifs = IFS(shifted_eq; npoints = 10)
     width, height = 320, 320
 
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         function rendered_bbox_center_and_span(out)
             img = load(out)
             xs = Int[]
@@ -1854,7 +1868,7 @@ end
     ifs = IFS(eq; npoints = 10)
     width, height = 320, 320
 
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         svg_path = render_transformations_svg(
             ifs;
             outpath = joinpath(tmp, "rot.svg"),
@@ -1899,7 +1913,7 @@ end
     eq = reshape([1.0 0.0 0.0 1.0 0.0 10.0 1.0], 1, 7)
     ifs = IFS(eq; npoints = 10)
 
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         zero_iter_path = render_transformations_svg(
             ifs;
             outpath = joinpath(tmp, "limits0.svg"),
@@ -1952,7 +1966,7 @@ end
     )
 
     ifs = IFS(SMALL_EQ; npoints = 20)
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         suffix = randstring(8)
 
         png_triangle = render_transformations_png(
@@ -2028,7 +2042,7 @@ end
 end
 
 @testset "Render Entrypoint" begin
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         suffix = randstring(8)
 
         out1 = render(
@@ -2147,7 +2161,7 @@ end
     @test_throws ArgumentError render(SMALL_EQ; method = :deterministic)
 
     # render() must delegate to render_*() — verify output parity for deterministic methods
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         res = (32, 32)
         ifs = IFS(SMALL_EQ; npoints = 50)
 
@@ -2186,7 +2200,7 @@ end
 end
 
 @testset "Render Image Iterate API" begin
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         @info "Render Image Iterate API: basic source-path coverage"
         suffix = randstring(8)
 
@@ -2477,7 +2491,7 @@ end
     end
 
     @testset "Render Image Iterate API: polygon geometry public guard" begin
-        mktempdir() do tmp
+        _with_tmpdir() do tmp
             @info "Render Image Iterate API: polygon geometry public guard"
             rot_eq = reshape([cos(pi / 6) sin(pi / 6) -sin(pi / 6) cos(pi / 6) 0.0 0.0 1.0], 1, 7)
             rot_ifs = IFS(rot_eq; npoints = 10)
@@ -2559,7 +2573,7 @@ end
     end
 
     @testset "Render Image Iterate API: polygon overlays and alpha" begin
-        mktempdir() do tmp
+        _with_tmpdir() do tmp
             rot_eq = reshape([cos(pi / 6) sin(pi / 6) -sin(pi / 6) cos(pi / 6) 0.0 0.0 1.0], 1, 7)
             rot_ifs = IFS(rot_eq; npoints = 10)
             base_off = render(
@@ -2632,7 +2646,7 @@ end
 end
 
 @testset "Image Source Resolution" begin
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         ifs = IFS(SMALL_EQ; npoints = 400)
         res = (32, 32)
 
@@ -2813,7 +2827,7 @@ end
 end
 
 @testset "PNG Source Limits Metadata" begin
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         res = (32, 32)
         src = fill(Gray{Float32}(0.0f0), res...)
         src[8:24, 8:24] .= Gray{Float32}(1.0f0)
@@ -2869,7 +2883,7 @@ end
 end
 
 @testset "Render Outputs Embed Source Limits Metadata" begin
-    mktempdir() do tmp
+    _with_tmpdir() do tmp
         chaos_out = render(
             SMALL_EQ;
             method = :chaos,
@@ -2899,7 +2913,7 @@ end
 end
 
 @testset "Snapshot Image Tests" begin
-    mktempdir() do d
+    _with_tmpdir() do d
         old = pwd()
         cd(d)
         try
@@ -2957,7 +2971,7 @@ end
     mktemp() do path, io
         write(io, text)
         close(io)
-        mktempdir() do tmp
+        _with_tmpdir() do tmp
             suffix = randstring(8)
             out_idx = render(
                 path;
@@ -3091,7 +3105,7 @@ end
     }
     """
 
-    mktempdir() do d
+    _with_tmpdir() do d
         old = pwd()
         cd(d)
         try
@@ -3148,7 +3162,7 @@ end
 end
 
 @testset "Render Color API" begin
-    mktempdir() do d
+    _with_tmpdir() do d
         old = pwd()
         cd(d)
         try
@@ -3208,7 +3222,7 @@ end
 end
 
 @testset "Render Alpha API" begin
-    mktempdir() do d
+    _with_tmpdir() do d
         old = pwd()
         cd(d)
         try
@@ -3278,7 +3292,7 @@ if _env_flag("FRACTALS_RUN_CLI_BENCH_TESTS")
         }
         """
 
-        mktempdir() do d
+        _with_tmpdir() do d
             ifs_path = joinpath(d, "cli.ifs")
             write(ifs_path, sample)
             invalid_ifs_path = joinpath(d, "cli_invalid.ifs")
@@ -3461,7 +3475,7 @@ if _env_flag("FRACTALS_RUN_CLI_BENCH_TESTS")
     end
 
     @testset "CLI Benchmarks" begin
-        mktempdir() do d
+        _with_tmpdir() do d
             bench_args = (
                 "benchmark",
                 "--profile",

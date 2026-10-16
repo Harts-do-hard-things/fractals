@@ -186,7 +186,11 @@ _savename_value(v) = v
 DrWatson `savename` for an output file: `name` (sanitized) as prefix, `params` as `key=value`
 pairs. `false`/`nothing` values and `_NAME_EXCLUDED_KEYS` are dropped to keep names short.
 """
-function _output_name(name::AbstractString, params::NamedTuple, ext::AbstractString)
+Base.@nospecializeinfer function _output_name(
+    name::AbstractString,
+    @nospecialize(params::NamedTuple),
+    ext::AbstractString,
+)
     kept = Dict{String,Any}()
     for (k, v) in pairs(params)
         (k in _NAME_EXCLUDED_KEYS || v === nothing || v === false) && continue
@@ -207,6 +211,8 @@ end
 
 # `gitdescribe` scans the working tree for the dirty flag (~60 ms), so results are reused briefly
 # across back-to-back saves (batch renders, GUI preview refreshes).
+# The precompile workload sets this: shelling out to `git` there is slow and records nothing useful.
+const _SKIP_GIT = ScopedValue(false)
 const _GITCOMMIT_TTL_SECONDS = 2.0
 const _GITCOMMIT_CACHE = Ref{Tuple{String,Float64,Union{Nothing,String}}}(("", -Inf, nothing))
 
@@ -217,6 +223,7 @@ const _GITCOMMIT_CACHE = Ref{Tuple{String,Float64,Union{Nothing,String}}}(("", -
 project is not inside a Git repository.
 """
 function _gitcommit()
+    _SKIP_GIT[] && return nothing
     root = projectdir()
     cached_root, stamp, cached = _GITCOMMIT_CACHE[]
     cached_root == root && time() - stamp < _GITCOMMIT_TTL_SECONDS && return cached
@@ -229,14 +236,23 @@ _provenance_value(v::Symbol) = String(v)
 _provenance_value(v::Tuple) = collect(v)
 _provenance_value(v) = v
 
-function _provenance_payload(params::NamedTuple; gitcommit = _gitcommit())
-    return JSON3.write((
+Base.@nospecializeinfer function _provenance_payload(
+    @nospecialize(params::NamedTuple);
+    gitcommit = _gitcommit(),
+)
+    # A fixed field type for `gitcommit` (String or nothing) keeps one JSON3.write specialization.
+    payload = (;
         version = _PROVENANCE_VERSION,
-        gitcommit = gitcommit,
+        gitcommit = gitcommit isa Union{Nothing,String} ? gitcommit : string(gitcommit),
         created = string(now()),
         fractals_version = string(pkgversion(@__MODULE__)),
-        params = Dict(String(k) => _provenance_value(v) for (k, v) in pairs(params)),
-    ))
+        params = Dict{String,Any}(String(k) => _provenance_value(v) for (k, v) in pairs(params)),
+    )
+    return JSON3.write(
+        NamedTuple{keys(payload),Tuple{Int,Union{Nothing,String},String,String,Dict{String,Any}}}(
+            values(payload),
+        ),
+    )
 end
 
 """

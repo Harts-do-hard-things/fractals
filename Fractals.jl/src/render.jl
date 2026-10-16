@@ -10,8 +10,8 @@ function _save_render_output(
     ifs::IFS,
     limits;
     method::Symbol,
-    params::NamedTuple,
-    name_keys::Tuple,
+    @nospecialize(params::NamedTuple),
+    @nospecialize(name_keys::Tuple),
 )
     all_params = merge((; method, ifs_name = ifs.name), params)
     name_params = merge((; method), NamedTuple{name_keys}(params))
@@ -34,7 +34,7 @@ pass. Inputs, shared keywords, and the returned `(ifs, image, outpath, method)` 
 as in [`render`](@ref).
 """
 function render_chaos(
-    input;
+    @nospecialize(input);
     npoints::Union{Nothing,Integer} = nothing,
     warmup::Integer = DEFAULT_WARMUP,
     color::Bool = false,
@@ -91,7 +91,7 @@ Expand the point cloud with [`deterministic_iterate`](@ref) to depth `iterations
 [`render_chaos`](@ref).
 """
 function render_point_deterministic(
-    input;
+    @nospecialize(input);
     npoints::Union{Nothing,Integer} = nothing,
     warmup::Integer = DEFAULT_WARMUP,
     iterations::Integer = 1,
@@ -157,7 +157,7 @@ depth `iterations` (`>= 0`). `show_divergence_scale=false` produces a binary mas
 keywords and the return value are as in [`render_chaos`](@ref).
 """
 function render_inverse(
-    input;
+    @nospecialize(input);
     npoints::Union{Nothing,Integer} = nothing,
     warmup::Integer = DEFAULT_WARMUP,
     iterations::Integer = 8,
@@ -215,7 +215,7 @@ function render_inverse(
 end
 
 function _render_image_iterate_impl(
-    input;
+    @nospecialize(input);
     npoints::Union{Nothing,Integer} = nothing,
     warmup::Integer = DEFAULT_WARMUP,
     iterations::Integer = 1,
@@ -387,7 +387,7 @@ Build a seed image, then apply the IFS to it `image_iterations` times with
 Other keywords and the return value are as in [`render_chaos`](@ref).
 """
 function render_image_iterate(
-    input;
+    @nospecialize(input);
     npoints::Union{Nothing,Integer} = nothing,
     warmup::Integer = DEFAULT_WARMUP,
     iterations::Integer = 1,
@@ -435,7 +435,7 @@ function render_image_iterate(
 end
 
 function _render_transformations_impl(
-    input;
+    @nospecialize(input);
     npoints::Union{Nothing,Integer} = nothing,
     show_base::Bool = false,
     axis::Bool = false,
@@ -512,7 +512,7 @@ Inputs and the return value are as in [`render`](@ref). For SVG output, see
 [`render_transformations_svg`](@ref).
 """
 function render_transformations(
-    input;
+    @nospecialize(input);
     npoints::Union{Nothing,Integer} = nothing,
     show_base::Bool = false,
     axis::Bool = false,
@@ -651,7 +651,7 @@ out.outpath   # .../plots/ifs_method=chaos_npoints=250000_resolution=1024x1024.p
 ```
 """
 function render(
-    input;
+    @nospecialize(input);
     method::Union{RenderMethod,Symbol,AbstractString} = Chaos,
     npoints::Union{Nothing,Integer} = nothing,
     warmup::Integer = DEFAULT_WARMUP,
@@ -666,6 +666,7 @@ function render(
     save_data::Bool = false,
     kwargs...,
 )
+    @nospecialize kwargs
     parsed_method = _parse_render_method(method)
     render_method = parsed_method == Parallel ? Chaos : parsed_method
 
