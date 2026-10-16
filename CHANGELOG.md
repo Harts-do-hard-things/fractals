@@ -25,6 +25,9 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
   - Project scripts moved from `Fractals.jl/bin/` to `scripts/` with `@quickactivate "fractals"`: `animate_image_iterate.jl`, `export_gif.jl`, `export_mp4.jl`, `generate_rotation_examples.jl`. `Fractals.jl/bin/fractals.jl` remains the package CLI.
   - Relative `fractals.jl benchmark --json` paths resolve under DrWatson's `datadir("exp_pro")` via the new `data_output_dir(...)`, and existing files get `_#N` backups.
   - `.gitignore` is DrWatson's template, with `/data` narrowed to `data/sims` and `data/exp_pro` so `data/exp_raw` stays tracked.
+- Documentation moved from MkDocs to a Documenter.jl site in `docs/` (`docs/make.jl`, pages in `docs/src/`), built in CI without deployment.
+  - The former `Fractals.jl/DOCUMENTATION.md` is split into manual pages (render methods, animation, output files, IFS text format, development) plus an API reference generated from docstrings; `mkdocs.yml` is removed.
+  - Every exported name now has a docstring, and the docs build fails on undocumented exports, broken cross-references, or failing doctests.
 - Breaking: output moved from a working-directory-relative `media/` to DrWatson's `plotsdir()` (`<repo>/plots/` with `--project=.`).
   - Relative paths keep their subdirectories under `plots/` instead of being flattened into `media/`, and absolute paths are now honored as given.
   - `outpath` defaults are `nothing` (auto-named) instead of fixed names like `media/render.png`.

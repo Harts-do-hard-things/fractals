@@ -20,7 +20,7 @@ The package includes:
 - `data/exp_raw/`: curated `.ifs` input library (tracked; `ifs_data_dir()` returns this path)
 - `data/exp_pro/`, `data/sims/`: generated data such as benchmark JSON (git-ignored; `data_output_dir()`)
 - `plots/`: rendered images and animations (git-ignored, created on demand; `output_dir()`)
-- `site/`: generated static docs site artifacts
+- `docs/`: Documenter.jl documentation site (`docs/make.jl`, pages in `docs/src/`)
 
 The layout follows DrWatson's default project template; `notebooks/`, `papers/`, `videos/` and `_research/` are
 created on demand (all but `papers/` are git-ignored, per DrWatson's `.gitignore` template).
@@ -156,12 +156,19 @@ iterate!(ifs)
 
 ## Documentation
 
-Docs-site source is in `docs/` with MkDocs config in `mkdocs.yml`.
-Quick recipes page: `docs/quick-recipes.md`.
-CLI usage page: `docs/cli.md`.
-Benchmark usage page: `docs/benchmarks.md`.
-Troubleshooting notes: `docs/troubleshooting.md`.
-Detailed package reference is in `Fractals.jl/DOCUMENTATION.md`.
+The documentation is a [Documenter.jl](https://documenter.juliadocs.org/stable/) site in `docs/`:
+
+- `docs/src/index.md`: home page.
+- `docs/src/manual/`: render methods, quick recipes, animation, output files, IFS text format, CLI, benchmarks, troubleshooting, and development notes.
+- `docs/src/api.md`: API reference generated from the package docstrings.
+
+Build it locally and open `docs/build/index.html`:
+
+```powershell
+julia --startup-file=no --project=docs -e "using Pkg; Pkg.instantiate()"
+julia --startup-file=no --project=docs docs/make.jl
+```
+
 Benchmark target envelopes are versioned in `Fractals.jl/bench/perf_targets.toml` (latency + allocation thresholds).
 
 ## Output Files (DrWatson)

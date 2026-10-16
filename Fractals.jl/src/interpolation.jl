@@ -251,6 +251,22 @@ function interpolate_ifs(
     )
 end
 
+"""
+    render_interpolation_frames(left, right; frames, outdir=nothing, basename="frame", t_start=0.0, t_end=1.0,
+                                render_method=RenderTransformations, limits_mode=:interpolate,
+                                interpolation_mode=:rotation_scale, npoints, kwargs...)
+
+Render `frames` evenly spaced interpolation steps from `left` to `right` (see
+[`interpolate_ifs`](@ref)) as numbered PNGs `basename_0001.png`, `basename_0002.png`, ... and
+return `(outdir, paths, ts, render_method)`. Both systems need the same number of maps.
+
+`render_method` is `RenderTransformations` (accepting `initial_polygon`, `show_base`,
+`axis`, `color`, `alpha`, `polygon_limits_iterations`, `resolution`) or `Chaos` (accepting
+`warmup`, `color`, `alpha`, `resolution`, `backend`), passed as `kwargs`. `outdir=nothing`
+writes to an auto-named sequence directory under `output_dir("frames")`. Every frame
+records its `t` and settings in provenance. Feed the frames to
+[`export_animation`](@ref).
+"""
 function render_interpolation_frames(
     left::IFS,
     right::IFS;

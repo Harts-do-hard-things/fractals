@@ -12,11 +12,11 @@ Two Julia packages for generating and rasterizing 2D IFS (iterated function syst
 
 Adding a dependency to `Fractals.jl/Project.toml` also requires re-resolving the root and `FractalsGUI.jl` manifests (`Pkg.resolve()` with each project active).
 
-User-facing docs: `README.md`, `Fractals.jl/DOCUMENTATION.md` (detailed API reference), `docs/` (MkDocs site: quick recipes, CLI, benchmarks, troubleshooting). `CHANGELOG.md` follows Keep a Changelog — add user-visible changes under `[Unreleased]`.
+User-facing docs: `README.md` and a Documenter.jl site in `docs/` (`docs/make.jl`; manual pages in `docs/src/manual/`, API reference in `docs/src/api.md` built from docstrings). `CHANGELOG.md` follows Keep a Changelog — add user-visible changes under `[Unreleased]`.
 
 ## Commands
 
-Always pass `--startup-file=no` (CI does; a user `startup.jl` can break precompilation/tests — see `docs/troubleshooting.md`). Run from the repo root.
+Always pass `--startup-file=no` (CI does; a user `startup.jl` can break precompilation/tests — see `docs/src/manual/troubleshooting.md`). Run from the repo root.
 
 ```bash
 julia --startup-file=no --project=. -e "using Pkg; Pkg.instantiate()"
@@ -42,7 +42,16 @@ Formatting (JuliaFormatter pinned to 1.0.62, `.JuliaFormatter.toml`: default sty
 julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1.0.62\"); using JuliaFormatter; format([\"Fractals.jl/src\", \"Fractals.jl/test\"]; overwrite=true, verbose=true)"
 ```
 
-CLI (`render`, `batch-render`, `validate-ifs`, `benchmark`; see `docs/cli.md`):
+Docs (Documenter.jl; `docs/Project.toml` gets `Fractals` via a `[sources]` path, and `docs/Manifest.toml`/`docs/build/` are gitignored):
+
+```bash
+julia --startup-file=no --project=docs -e "using Pkg; Pkg.instantiate()"
+julia --startup-file=no --project=docs docs/make.jl
+```
+
+The build (also run in CI) uses `checkdocs = :exports` and runs `jldoctest` blocks, so every exported name needs a docstring and a `@docs` entry in `docs/src/api.md`, and broken `@ref` links fail the build. Doctests run with `FRACTALS_OUTPUT_ROOT` set to a temp dir.
+
+CLI (`render`, `batch-render`, `validate-ifs`, `benchmark`; see `docs/src/manual/cli.md`):
 
 ```bash
 julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl help

@@ -238,10 +238,23 @@ end
     return join(string.(supported_initial_polygons()), ", ")
 end
 
+"""
+    supported_initial_polygons()
+
+Names of the built-in [`InitialPolygonPreset`](@ref)s, e.g.
+`[:default, :equilateral_triangle, :line_arrow, :line]`.
+"""
 function supported_initial_polygons()
     return [preset.name for preset in _INITIAL_POLYGON_REGISTRY]
 end
 
+"""
+    initial_polygon(name::Symbol = :default)
+
+Look up an [`InitialPolygonPreset`](@ref) by name (case-insensitive). `:default` is an
+oriented unit square with internal segments. Throws `ArgumentError` listing the valid names
+for an unknown preset.
+"""
 function initial_polygon(name::Symbol = :default)
     normalized = Symbol(lowercase(String(name)))
     for preset in _INITIAL_POLYGON_REGISTRY

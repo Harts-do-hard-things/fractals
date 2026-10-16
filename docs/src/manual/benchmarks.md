@@ -2,18 +2,7 @@
 
 The benchmark suite provides standard workloads for performance tracking.
 
-## Render Method Context
-
-Render methods are documented in canonical order: `Chaos`, `PointDeterministic`, `ImageIterate`, `Inverse`.
-`Parallel` is a compatibility alias for `Chaos` and may be deprecated in a future release.
-
-Method-specific render arguments:
-- `Chaos`: `npoints`, `backend`, `resolution`, `outpath`
-- `PointDeterministic`: `iterations`, `npoints`, `backend`, `resolution`, `outpath`
-- `ImageIterate`: `image_source`, `image_path`, `image_iterations`, `polygon_limits_mode`, `initial_polygon`, `backend`, `resolution`, `outpath`
-- `Inverse`: `iterations`, `show_divergence_scale`, `backend`, `resolution`, `outpath`
-
-These render arguments are separate from benchmark CLI flags on this page.
+Benchmark flags are separate from render arguments; see [Render methods](@ref) for those.
 
 ## Run via CLI
 
@@ -53,10 +42,13 @@ julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchm
 
 ## Profiles
 
-- `small`: fast smoke benchmark
-- `medium`: balanced local performance check
-- `large`: heavy run for throughput baselining
-- `all`: run all three profiles
+| Profile | Purpose | `npoints` | `resolution` | `inverse_iterations` |
+|:--------|:--------|----------:|:-------------|---------------------:|
+| `small` | fast smoke benchmark | 20,000 | `(128, 128)` | 2 |
+| `medium` | balanced local performance check | 100,000 | `(256, 256)` | 3 |
+| `large` | heavy run for throughput baselining | 300,000 | `(512, 512)` | 4 |
+
+`--profile all` runs all three.
 
 ## Metrics
 
@@ -99,3 +91,30 @@ The JSON lands in `data/exp_pro/benchmarks/bench_ci.json` and is uploaded as the
 Behavior:
 - `warn`: CI job stays green and emits workflow warnings.
 - `fail`: CI job fails.
+
+## Target envelopes
+
+Latency and allocation targets are versioned in `Fractals.jl/bench/perf_targets.toml`.
+Each operation's measured/target ratio is classified with the thresholds in that file
+(`warn_ratio = 1.15`, `fail_ratio = 1.30`):
+
+- `pass`: ratio `<= warn_ratio`
+- `warn`: `warn_ratio <` ratio `<= fail_ratio`
+- `fail`: ratio `> fail_ratio`
+
+Run with target comparison, optionally failing on `fail` with `--strict`:
+
+```bash
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile all --repeats 3 --targets Fractals.jl/bench/perf_targets.toml
+julia --startup-file=no --project=Fractals.jl Fractals.jl/bin/fractals.jl benchmark --profile all --repeats 3 --targets Fractals.jl/bench/perf_targets.toml --strict
+```
+
+Interpreting the envelopes:
+
+- Chaos throughput is roughly `npoints / mean_s` for `iterate!`.
+- Raster throughput is roughly `(height * width) / mean_s` for `make_image` and inverse
+  rasterization.
+- Memory is bounded by `mean_alloc_bytes` within the same warn/fail thresholds.
+
+Only compare runs with the same Julia version, thread count, OS/CPU class, profile, and
+repeat count.

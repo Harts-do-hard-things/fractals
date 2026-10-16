@@ -2,11 +2,13 @@
 # Example Systems
 # --------------------------------
 
+"Equation matrix for the two-map Heighway dragon (6 columns; weights from determinants)."
 const HEIGHWAY_DRAGON = [
     0.5 -0.5 0.5 0.5 0.0 0.0
     -0.5 -0.5 0.5 -0.5 1.0 0.0
 ]
 
+"Equation matrix for a four-map Eisenstein-integer fractal with equal probabilities."
 const EISENSTEIN = [
     -0.5 0.0 0.0 -0.5 0.0 0.0 0.25
     -0.5 0.0 0.0 -0.5 -0.5 0.0 0.25

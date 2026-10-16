@@ -73,6 +73,17 @@ function _iterate_parallel!(
     return ifs
 end
 
+"""
+    iterate!(ifs; warmup=DEFAULT_WARMUP, seed=nothing) -> ifs
+
+Run the chaos game in place, filling `ifs.points`: starting from the origin, discard
+`warmup` steps, then record one point per step by applying a map chosen by `ifs.weights`.
+
+Threaded automatically when Julia runs with more than one thread (each thread fills a chunk
+of points). Pass an integer `seed` for reproducible output; results are deterministic for a
+fixed seed, input, and thread count. `ifs.limits` is not changed (see
+[`refresh_limits`](@ref)).
+"""
 function iterate!(ifs::IFS; warmup = DEFAULT_WARMUP, seed::Union{Nothing,Integer} = nothing)
     if nthreads() > 1
         return _iterate_parallel!(ifs; warmup = warmup, seed = seed)
@@ -80,7 +91,11 @@ function iterate!(ifs::IFS; warmup = DEFAULT_WARMUP, seed::Union{Nothing,Integer
     return _iterate_serial!(ifs; warmup = warmup, seed = seed)
 end
 
-# Backward-compatible entrypoint. Iteration is now automatically threaded via iterate!.
+"""
+    iterate_parallel!(ifs; warmup=DEFAULT_WARMUP, seed=nothing) -> ifs
+
+Compatibility alias for [`iterate!`](@ref), which is already threaded.
+"""
 function iterate_parallel!(
     ifs::IFS;
     warmup = DEFAULT_WARMUP,

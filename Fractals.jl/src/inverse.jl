@@ -33,6 +33,20 @@ end
 # Inverse iteration (no comprehension allocations)
 # -------------------------------------------------
 
+"""
+    inverse_iterate(ifs, n, p0, p1, p2) -> Float32
+    inverse_iterate(inverse_maps, limits, n, p0, p1, p2) -> Float32
+
+Push the triangle `(p0, p1, p2)` (world coordinates, typically one pixel's corners) back
+through every inverse map for up to `n` rounds, discarding branches that leave `limits`
+(`ifs.limits` for the first form). Returns:
+
+- `1.0` as soon as any branch's triangle contains the origin;
+- `j / n * 0.5` if every branch has left the limits by round `j` (diverged);
+- `0.0` if branches remain after `n` rounds without containing the origin.
+
+This is the per-pixel kernel of [`rasterize_image_inversely`](@ref).
+"""
 function inverse_iterate(
     inverse_maps::Vector{AffineMap{Float64}},
     limits::Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}},
@@ -297,6 +311,19 @@ function _rasterize_image_inversely_gpu_or_throw(
     )
 end
 
+"""
+    rasterize_image_inversely(ifs, n, limits; resolution=RESOLUTION, show_divergence_scale=true, backend=:cpu, mode=:exact)
+
+Render `ifs` by inverse iteration: each pixel of a `(rows, cols)` image over world `limits`
+is scored with [`inverse_iterate`](@ref) to depth `n`, returning a `Float32` matrix.
+
+- `show_divergence_scale=true` keeps the graded divergence values.
+- `show_divergence_scale=false` returns a binary mask: white (`1.0`) where branches never
+  diverged or reached the origin, black (`0.0`) where they diverged.
+- `mode=:exact` tracks every branch (CPU semantics); `mode=:preview` caps the tracked
+  frontier for faster, approximate GPU renders.
+- `backend` behaves as in [`make_image`](@ref).
+"""
 function rasterize_image_inversely(
     ifs::IFS,
     n::Integer,

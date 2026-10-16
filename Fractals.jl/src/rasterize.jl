@@ -2,6 +2,14 @@
 # Rasterization
 # --------------------------------
 
+"""
+    make_pixelate_map(limits; resolution=RESOLUTION) -> AffineMap
+
+The world-to-pixel [`AffineMap`](@ref) used by every raster: maps world `limits`
+`((xmin, xmax), (ymin, ymax))` onto a `(rows, cols)` image with equal x/y scale, centered
+in the longer dimension. Pixel coordinates are `(column, row)`, starting at 1. Degenerate
+(zero-width) limits are widened by ±0.5.
+"""
 function make_pixelate_map(limits; resolution = RESOLUTION)
 
     rows, cols = resolution
@@ -83,6 +91,16 @@ function _make_image_gpu(ifs::IFS, ::Val; resolution::Tuple{Int,Int} = RESOLUTIO
     throw(_gpu_backend_unavailable_error())
 end
 
+"""
+    make_image(ifs; resolution=RESOLUTION, backend=:cpu) -> Matrix{Float32}
+
+Rasterize `ifs.points` within `ifs.limits` into a `(rows, cols)` density heatmap,
+log-normalized to `[0, 1]`. Run [`iterate!`](@ref) (or [`deterministic_iterate`](@ref))
+first to fill the points.
+
+`backend=:cpu` always uses the CPU; `:gpu` uses the CUDA extension and throws if it's
+unavailable; `:auto` falls back to the CPU when no GPU is available.
+"""
 function make_image(ifs::IFS; resolution::Tuple{Int,Int} = RESOLUTION, backend::Symbol = :cpu)
     return _dispatch_backend(
         backend,

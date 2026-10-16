@@ -1,4 +1,4 @@
-# Quick Recipes
+# Quick recipes
 
 ## Prerequisites
 

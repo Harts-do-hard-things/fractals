@@ -29,6 +29,16 @@ function _deterministic_expand_points(
     return current
 end
 
+"""
+    deterministic_iterate(ifs, n; warmup=DEFAULT_WARMUP, seed=nothing) -> IFS
+
+Seed a copy of `ifs` with one chaos-game pass ([`iterate!`](@ref) with `warmup`/`seed`),
+then apply every map to every point `n` times, returning a new `IFS` (the input is not
+mutated). Each round maps the same snapshot of points through all maps.
+
+The point count grows as `length(ifs.points) * length(ifs.maps)^n`, and the expansion
+asserts the result stays below `10^8` points, so keep `npoints` small for large `n`.
+"""
 function deterministic_iterate(
     ifs::IFS,
     n::Integer;

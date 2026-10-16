@@ -23,6 +23,16 @@ end
 # Method-specific render functions
 # --------------------------------
 
+"""
+    render_chaos(input; npoints=nothing, warmup=DEFAULT_WARMUP, color=false, alpha=false,
+                 resolution=RESOLUTION, outpath=nothing, backend=:cpu, ifs_index=nothing,
+                 ifs_name=nothing, input_fn=readline)
+
+Run the chaos game ([`iterate!`](@ref)) and rasterize the point cloud with
+[`make_image`](@ref). `color=true` colors the result with one [`iterate_image`](@ref)
+pass. Inputs, shared keywords, and the returned `(ifs, image, outpath, method)` tuple are
+as in [`render`](@ref).
+"""
 function render_chaos(
     input;
     npoints::Union{Nothing,Integer} = nothing,
@@ -72,6 +82,14 @@ function render_chaos(
     return (ifs = ifs, image = img, outpath = final_outpath, method = :chaos)
 end
 
+"""
+    render_point_deterministic(input; iterations=1, npoints=nothing, warmup=DEFAULT_WARMUP, kwargs...)
+
+Expand the point cloud with [`deterministic_iterate`](@ref) to depth `iterations`
+(`>= 0`), then rasterize it. Keep `npoints` small: the point count grows as
+`npoints * nmaps^iterations`. Other keywords and the return value are as in
+[`render_chaos`](@ref).
+"""
 function render_point_deterministic(
     input;
     npoints::Union{Nothing,Integer} = nothing,
@@ -131,6 +149,13 @@ function render_point_deterministic(
     return (ifs = rendered_ifs, image = img, outpath = final_outpath, method = :point_deterministic)
 end
 
+"""
+    render_inverse(input; iterations=8, show_divergence_scale=true, kwargs...)
+
+Render by inverse iteration over `ifs.limits` with [`rasterize_image_inversely`](@ref) to
+depth `iterations` (`>= 0`). `show_divergence_scale=false` produces a binary mask. Other
+keywords and the return value are as in [`render_chaos`](@ref).
+"""
 function render_inverse(
     input;
     npoints::Union{Nothing,Integer} = nothing,
@@ -340,6 +365,27 @@ function _render_image_iterate_impl(
     return (ifs = raster_ifs, image = img, outpath = final_outpath, method = :image_iterate)
 end
 
+"""
+    render_image_iterate(input; image_source=:polygon, image_iterations=1, image_path=nothing,
+                         polygon_limits_mode=:geometry, polygon_limits_iterations=nothing,
+                         initial_polygon=:default, show_base=false, axis=false, kwargs...)
+
+Build a seed image, then apply the IFS to it `image_iterations` times with
+[`iterate_image`](@ref). `color=true` colors the final pass.
+
+`image_source` picks the seed:
+
+- `:polygon`: the [`initial_polygon`](@ref) preset rendered in pixel space. Only this source
+  accepts `polygon_limits_mode` (`:geometry` frames by the polygon's iterated geometry, or
+  `:ifs` by `ifs.limits`; `:default` is treated as `:geometry` with a warning),
+  `polygon_limits_iterations` (defaults to `image_iterations`), and the `show_base`/`axis`
+  overlays.
+- `:chaos`, `:point_deterministic` (depth `iterations`), or `:inverse` (depth `iterations`,
+  with `show_divergence_scale`): renders from the other methods.
+- `:file`: the image at `image_path`. Its embedded source limits are used when present.
+
+Other keywords and the return value are as in [`render_chaos`](@ref).
+"""
 function render_image_iterate(
     input;
     npoints::Union{Nothing,Integer} = nothing,
@@ -454,6 +500,17 @@ function _render_transformations_impl(
     return (ifs = ifs, image = img, outpath = final_outpath, method = :render_transformations)
 end
 
+"""
+    render_transformations(input; initial_polygon=:default, polygon_limits_iterations=1, show_base=false,
+                           axis=false, color=true, alpha=false, resolution=RESOLUTION, outpath=nothing, ...)
+
+Draw each affine map applied to the [`initial_polygon`](@ref) seed as a PNG, without
+iterating the IFS. The frame comes from the polygon after `polygon_limits_iterations`
+iterations. `show_base` overlays the untransformed polygon, and `axis` draws the coordinate
+axes. Angles follow the math convention: positive is counterclockwise and `+y` is up.
+Inputs and the return value are as in [`render`](@ref). For SVG output, see
+[`render_transformations_svg`](@ref).
+"""
 function render_transformations(
     input;
     npoints::Union{Nothing,Integer} = nothing,
@@ -556,6 +613,41 @@ end
 # High-level render entrypoint (thin delegator)
 # --------------------------------
 
+"""
+    render(input; method=Chaos, npoints=nothing, warmup=DEFAULT_WARMUP, color=nothing, alpha=false,
+           resolution=RESOLUTION, outpath=nothing, backend=:cpu, ifs_index=nothing, ifs_name=nothing,
+           input_fn=readline, kwargs...)
+
+Render `input` with one [`RenderMethod`](@ref) and save the image. Returns a named tuple
+`(ifs, image, outpath, method)`.
+
+`input` is an equation matrix, an [`IFS`](@ref), or `.ifs` text or a path to a `.ifs`
+file. For multi-definition `.ifs` input, choose a definition with `ifs_index` or `ifs_name`.
+With neither, you're asked (via `input_fn`) to confirm rendering the first definition.
+Unknown selectors throw `ArgumentError` listing the available definitions.
+
+`method` accepts the enum (`Chaos`, `PointDeterministic`, ...), a symbol, or a lowercase
+string (`:point_deterministic`, `"inverse"`, ...). `Parallel` renders as `Chaos`.
+Method-specific keywords go in `kwargs` and are forwarded to the matching function:
+[`render_chaos`](@ref), [`render_point_deterministic`](@ref), [`render_inverse`](@ref),
+[`render_image_iterate`](@ref), or [`render_transformations`](@ref).
+
+Shared keywords:
+
+- `npoints`: point count; `nothing` keeps an `IFS`'s count or uses `DEFAULT_SAMPLES`.
+- `color`: tint by map; defaults to `false`, except `true` for `RenderTransformations`.
+- `alpha`: save with transparency where the image is zero.
+- `resolution`: `(rows, cols)`.
+- `backend`: `:cpu`, `:gpu`, or `:auto` (see [`make_image`](@ref)).
+- `outpath`: `nothing` names the file with DrWatson's `savename` under [`output_dir`](@ref);
+  relative paths resolve there and absolute paths are used as given. Existing files are
+  kept as `_#N` backups, and PNGs carry provenance (see [`read_provenance`](@ref)).
+
+```julia
+out = render(EISENSTEIN; method = Chaos, npoints = 250_000, resolution = (1024, 1024))
+out.outpath   # .../plots/ifs_method=chaos_npoints=250000_resolution=1024x1024.png
+```
+"""
 function render(
     input;
     method::Union{RenderMethod,Symbol,AbstractString} = Chaos,

@@ -116,6 +116,18 @@ end
 # Interactive IFS selection + render entrypoint
 # -------------------------------------------------
 
+"""
+    prompt_ifs_and_render(path; npoints=DEFAULT_SAMPLES, resolution=RESOLUTION, outpath=nothing, input_fn=readline)
+
+Interactively render a definition from the `.ifs` file at `path`. Lists the definitions,
+then prompts for the definition, the method (chaos or point-deterministic), the point
+count, the image size, and the output path, with each prompt defaulting to the keyword
+values. Invalid or non-positive numbers fall back to the default. Renders through
+[`render_chaos`](@ref) or [`render_point_deterministic`](@ref) and returns the rendered
+`IFS`, or `nothing` if the file has no definitions.
+
+`input_fn` supplies each answer (default `readline`), so tests can script the session.
+"""
 function prompt_ifs_and_render(
     path::AbstractString;
     npoints::Integer = DEFAULT_SAMPLES,

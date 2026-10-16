@@ -368,6 +368,17 @@ function _iterate_image_cpu(
     return _rgb_image_from_buffers(rimg, gimg, bimg)
 end
 
+"""
+    iterate_image(ifs, img; colors=false, seed=nothing, backend=:cpu)
+
+Apply every map of `ifs` to an image in pixel space (framed by `ifs.limits`) and return the
+log-normalized sum: one IFS step applied to a picture instead of a point cloud. The input is
+converted to grayscale first, so the call can be repeated on its own output to approximate
+the attractor.
+
+`colors=false` returns a grayscale `Float32` matrix; `colors=true` tints each map's
+contribution and returns `RGB{Float32}`. `backend` behaves as in [`make_image`](@ref).
+"""
 function iterate_image(
     ifs::IFS,
     img::AbstractMatrix;

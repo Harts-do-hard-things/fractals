@@ -579,8 +579,8 @@ pythonenv*
 # Rope project settings
 .ropeproject
 
-# mkdocs documentation
-/site
+# Documenter.jl docs environment (resolved locally/in CI from docs/Project.toml)
+/docs/Manifest.toml
 
 # mypy
 .mypy_cache/

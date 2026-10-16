@@ -2,6 +2,31 @@
 # Affine Map
 # --------------------------------
 
+"""
+    AffineMap(A::AbstractMatrix, b::AbstractVector)
+    AffineMap(a11, a12, a21, a22, b1, b2)
+
+A 2D affine map `x -> A*x + b`, stored as a static 2×2 matrix `A` and offset `b`.
+
+Maps are callable on `SVector{2}` points (`m(x)`) and invertible with `inv(m)`. The
+six-argument form takes coefficients in equation-matrix row order (see [`IFS`](@ref)).
+
+```jldoctest
+julia> using StaticArrays
+
+julia> m = AffineMap(0.5, 0.0, 0.0, 0.5, 1.0, 0.0);
+
+julia> m(SVector(2.0, 2.0))
+2-element SVector{2, Float64} with indices SOneTo(2):
+ 2.0
+ 1.0
+
+julia> inv(m)(m(SVector(2.0, 2.0)))
+2-element SVector{2, Float64} with indices SOneTo(2):
+ 2.0
+ 2.0
+```
+"""
 struct AffineMap{T<:AbstractFloat}
     A::SMatrix{2,2,T,4}
     b::SVector{2,T}
@@ -47,6 +72,30 @@ AffineMap(a11::T, a12::T, a21::T, a22::T, b1::T, b2::T) where {T<:AbstractFloat}
 # IFS Type
 # --------------------------------
 
+"""
+    IFS(eq::AbstractMatrix; npoints=DEFAULT_SAMPLES, name="", docs="")
+    IFS(maps::Vector{AffineMap{Float64}}, weights; npoints=DEFAULT_SAMPLES, name="", docs="", limits)
+
+One iterated function system: its affine `maps`, their sampling `weights`, a `points`
+cloud (initialized at the origin; filled by [`iterate!`](@ref) or
+[`deterministic_iterate`](@ref)), world-space `limits` `((xmin, xmax), (ymin, ymax))` used
+to frame every raster, and descriptive `name`/`docs`.
+
+The equation-matrix form takes one row per map, `a11 a12 a21 a22 b1 b2 [p]` (Fractint
+`.ifs` order). Without the 7th probability column, weights are derived from `|det(A)|`.
+`limits` are estimated by sampling the chaos game (see [`refresh_limits`](@ref)).
+
+Matrix inputs are validated: at least one row, exactly 6 or 7 columns, all entries finite,
+and (with a probability column) nonnegative probabilities with a positive total. Invalid
+input throws `ArgumentError`.
+
+```jldoctest
+julia> ifs = IFS(HEIGHWAY_DRAGON; npoints = 1_000, name = "Heighway Dragon");
+
+julia> length(ifs.maps), length(ifs.points)
+(2, 1000)
+```
+"""
 struct IFS
     name::String
     docs::String
@@ -194,6 +243,14 @@ function _sample_contractive_row(
     throw(ArgumentError("Unable to sample a contractive affine map within max_tries=$max_tries"))
 end
 
+"""
+    random_eq(; nmaps=2:4, translation_range=1.0, with_probs=true, rng=Random.default_rng(), max_tries=10_000)
+
+Sample a random equation matrix of contractive affine maps (one row per map). `nmaps` is a
+count or a range to draw from; translations are uniform in `±translation_range`. With
+`with_probs=true` a normalized 7th probability column is added. Throws `ArgumentError` if a
+contractive map isn't found within `max_tries` samples. See also [`random_ifs`](@ref).
+"""
 function random_eq(;
     nmaps::Union{Integer,UnitRange{Int}} = 2:4,
     translation_range::Real = 1.0,
@@ -225,6 +282,13 @@ function random_eq(;
     return eq
 end
 
+"""
+    random_ifs(; npoints=DEFAULT_SAMPLES, name="", docs="", kwargs...)
+
+Build an [`IFS`](@ref) from [`random_eq`](@ref); the remaining keywords (`nmaps`,
+`translation_range`, `with_probs`, `rng`, `max_tries`) are passed through. Pass a seeded
+`rng` for a reproducible system.
+"""
 function random_ifs(;
     npoints::Integer = DEFAULT_SAMPLES,
     name::AbstractString = "",
@@ -336,6 +400,14 @@ function compute_limits(
     throw(ArgumentError("Invalid limits source '$source'. Supported: :maps, :points"))
 end
 
+"""
+    refresh_limits(ifs; source=:maps, warmup=DEFAULT_WARMUP, n=10_000, seed=0)
+
+Return a copy of `ifs` with recomputed `limits` (a square box with 5% padding).
+`source=:maps` samples `n` chaos-game points (after `warmup`, seeded for reproducibility);
+`source=:points` bounds the current `ifs.points`. Use it after replacing points or maps,
+since `limits` are not updated automatically.
+"""
 function refresh_limits(
     ifs::IFS;
     source::Symbol = :maps,

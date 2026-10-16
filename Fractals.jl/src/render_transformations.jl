@@ -430,6 +430,16 @@ $body
     return _save_svg(final_outpath, svg; params = params)
 end
 
+"""
+    render_transformations_svg(ifs; outpath=nothing, width=1200, height=1200, show_base=false,
+                               initial_polygon=initial_polygon(), polygon_limits_iterations=1,
+                               stroke_width=2.0, axis=false) -> String
+
+Write an SVG of each affine map applied to the seed polygon (one stroke color per map) and
+return its path. Framing, `show_base`, and `axis` work as in
+[`render_transformations`](@ref). `outpath` is resolved like `render`'s; the file starts
+with a `<!-- fractals.provenance: ... -->` comment.
+"""
 function render_transformations_svg(
     ifs;
     outpath::Union{Nothing,AbstractString} = nothing,
@@ -762,6 +772,15 @@ function _render_transformations_png_impl(
     return _save_image(final_outpath, img, raster_ifs.limits; params = params)
 end
 
+"""
+    render_transformations_png(ifs; outpath=nothing, width=1200, height=1200, show_base=false,
+                               initial_polygon=initial_polygon(), polygon_limits_iterations=1,
+                               color=true, axis=false, alpha=false) -> String
+
+PNG counterpart of [`render_transformations_svg`](@ref): rasterize the transformed seed
+polygon and return the saved path (with source-limits and provenance metadata). This is the
+lower-level writer behind [`render_transformations`](@ref).
+"""
 function render_transformations_png(
     ifs;
     outpath::Union{Nothing,AbstractString} = nothing,
