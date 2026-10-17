@@ -287,15 +287,7 @@ struct Render{M<:RenderMethod,F<:OutputFormat}
             "and ImageIterate(PolygonSource())",
         )
         rows, cols = Int(resolution[1]), Int(resolution[2])
-        return new{M,F}(
-            ifs,
-            method,
-            (rows, cols),
-            color,
-            alpha,
-            collect(Overlay, overlays),
-            format,
-        )
+        return new{M,F}(ifs, method, (rows, cols), color, alpha, collect(Overlay, overlays), format)
     end
 end
 """

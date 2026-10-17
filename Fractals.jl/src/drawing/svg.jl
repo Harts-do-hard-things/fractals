@@ -1,4 +1,4 @@
-# SVG output for the render pipeline: `finish(::Render{<:Any,SVG}, ::SegmentImage, limits)` turns
+# SVG output for the render pipeline: `finish(::Render{<:RenderMethod,SVG}, ::SegmentImage, limits)` turns
 # vector geometry plus the render's color, alpha and overlays into the document text.
 
 function _svg_line(x1, y1, x2, y2, stroke, stroke_width; opacity = nothing, role = nothing)
@@ -22,10 +22,7 @@ function _svg_base_polygon_lines(o::BasePolygon, r::Render, sx, sy, ox, oy)
     for (p1, p2) in _resolve_initial_polygon(o.polygon).segments
         x1, y1 = _to_svg_xy(p1, sx, sy, ox, oy)
         x2, y2 = _to_svg_xy(p2, sx, sy, ox, oy)
-        push!(
-            lines,
-            _svg_line(x1, y1, x2, y2, stroke, r.format.stroke_width; opacity = 0.65),
-        )
+        push!(lines, _svg_line(x1, y1, x2, y2, stroke, r.format.stroke_width; opacity = 0.65))
     end
     return lines
 end

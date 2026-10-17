@@ -245,7 +245,7 @@ end
 
 # SVG renders draw vector geometry (a `SegmentImage`) instead of a matrix. Only the methods with
 # `supports(method, SVG())` have these.
-function draw(m::Transformations, r::Render{<:Any,SVG})
+function draw(m::Transformations, r::Render{<:RenderMethod,SVG})
     _, _, groups, _ = _collect_transformed_base_segments(r.ifs; initial_polygon_spec = m.polygon)
     limits = _limits_from_polygon_point_iterations(
         r.ifs;
@@ -255,7 +255,7 @@ function draw(m::Transformations, r::Render{<:Any,SVG})
     return SegmentImage(groups), limits
 end
 
-function draw(m::ImageIterate{PolygonSource}, r::Render{<:Any,SVG})
+function draw(m::ImageIterate{PolygonSource}, r::Render{<:RenderMethod,SVG})
     limits = _polygon_source_limits(m.source, r)
     segments = _resolve_initial_polygon(m.source.polygon).segments
     return SegmentImage(_iterate_segments(r.ifs, segments, m.iterations)), limits
@@ -329,7 +329,7 @@ function overlay!(img, ::Axes, r::Render, limits)
 end
 
 # SVG: the finished image is the document text.
-finish(r::Render{<:Any,SVG}, img::SegmentImage, limits) = _svg_document(r, img, limits)
+finish(r::Render{<:RenderMethod,SVG}, img::SegmentImage, limits) = _svg_document(r, img, limits)
 
 function finish(r::Render, img, limits)
     r.color && (img = colorize(r.method, r, img, limits))
