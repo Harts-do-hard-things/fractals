@@ -1337,14 +1337,15 @@ end
         @test length(collect(eachmatch(r"data-role=\"axis-x-tick\"", svg_axis_text))) >= 2
         @test length(collect(eachmatch(r"data-role=\"axis-y-tick\"", svg_axis_text))) >= 2
 
-        png_path = render(
-            ifs,
-            Transformations();
-            outpath = joinpath(tmp, "maps_$suffix.png"),
-            resolution = (256, 256),
-            color = true,
-            alpha = true,
-        ).outpath
+        png_path =
+            render(
+                ifs,
+                Transformations();
+                outpath = joinpath(tmp, "maps_$suffix.png"),
+                resolution = (256, 256),
+                color = true,
+                alpha = true,
+            ).outpath
         @test isfile(png_path)
         @test filesize(png_path) > 0
         png_img = load(png_path)
@@ -1355,14 +1356,15 @@ end
         )
         @test colored_nonzero > 0
 
-        png_path_white = render(
-            ifs,
-            Transformations();
-            outpath = joinpath(tmp, "maps_white_$suffix.png"),
-            resolution = (256, 256),
-            color = false,
-            overlays = [BasePolygon()],
-        ).outpath
+        png_path_white =
+            render(
+                ifs,
+                Transformations();
+                outpath = joinpath(tmp, "maps_white_$suffix.png"),
+                resolution = (256, 256),
+                color = false,
+                overlays = [BasePolygon()],
+            ).outpath
         @test isfile(png_path_white)
         png_img_white = load(png_path_white)
         white_nonzero =
@@ -1371,21 +1373,23 @@ end
 
         eq_identity = reshape([1.0 0.0 0.0 1.0 0.0 0.0 1.0], 1, 7)
         ifs_identity = IFS(eq_identity)
-        png_no_axis = render(
-            ifs_identity,
-            Transformations(polygon = :line);
-            outpath = joinpath(tmp, "maps_no_axis_$suffix.png"),
-            resolution = (256, 256),
-            color = false,
-        ).outpath
-        png_with_axis = render(
-            ifs_identity,
-            Transformations(polygon = :line);
-            outpath = joinpath(tmp, "maps_with_axis_$suffix.png"),
-            resolution = (256, 256),
-            color = false,
-            overlays = [Axes()],
-        ).outpath
+        png_no_axis =
+            render(
+                ifs_identity,
+                Transformations(polygon = :line);
+                outpath = joinpath(tmp, "maps_no_axis_$suffix.png"),
+                resolution = (256, 256),
+                color = false,
+            ).outpath
+        png_with_axis =
+            render(
+                ifs_identity,
+                Transformations(polygon = :line);
+                outpath = joinpath(tmp, "maps_with_axis_$suffix.png"),
+                resolution = (256, 256),
+                color = false,
+                overlays = [Axes()],
+            ).outpath
         @test isfile(png_no_axis)
         @test isfile(png_with_axis)
         img_no_axis = load(png_no_axis)
@@ -1486,13 +1490,14 @@ end
             @test dx_svg > 0
             @test signbit(dy_svg) != signbit(dy_math)
 
-            png_path = render(
-                ifs,
-                Transformations(polygon = :line);
-                outpath = joinpath(tmp, "rot_$label.png"),
-                resolution = (320, 320),
-                color = false,
-            ).outpath
+            png_path =
+                render(
+                    ifs,
+                    Transformations(polygon = :line);
+                    outpath = joinpath(tmp, "rot_$label.png"),
+                    resolution = (320, 320),
+                    color = false,
+                ).outpath
             @test isfile(png_path)
             img = load(png_path)
             @test count(_is_drawn_pixel, img) > 0
@@ -1507,13 +1512,14 @@ end
     _with_tmpdir() do tmp
         centers = Tuple{Float64,Float64}[]
         for preset in presets
-            out = render(
-                ifs,
-                Transformations(polygon = preset);
-                outpath = joinpath(tmp, "origin_$(preset).png"),
-                resolution = (height, width),
-                color = false,
-            ).outpath
+            out =
+                render(
+                    ifs,
+                    Transformations(polygon = preset);
+                    outpath = joinpath(tmp, "origin_$(preset).png"),
+                    resolution = (height, width),
+                    color = false,
+                ).outpath
             img = load(out)
             xs = Int[]
             ys = Int[]
@@ -1557,20 +1563,22 @@ end
             return xcenter, ycenter, yspan
         end
 
-        base_out = render(
-            ifs,
-            Transformations(polygon = :line_arrow);
-            outpath = joinpath(tmp, "line_arrow_base.png"),
-            resolution = (height, width),
-            color = false,
-        ).outpath
-        shifted_out = render(
-            shifted_ifs,
-            Transformations(polygon = :line_arrow);
-            outpath = joinpath(tmp, "line_arrow_shifted.png"),
-            resolution = (height, width),
-            color = false,
-        ).outpath
+        base_out =
+            render(
+                ifs,
+                Transformations(polygon = :line_arrow);
+                outpath = joinpath(tmp, "line_arrow_base.png"),
+                resolution = (height, width),
+                color = false,
+            ).outpath
+        shifted_out =
+            render(
+                shifted_ifs,
+                Transformations(polygon = :line_arrow);
+                outpath = joinpath(tmp, "line_arrow_shifted.png"),
+                resolution = (height, width),
+                color = false,
+            ).outpath
         @test isfile(base_out)
         @test isfile(shifted_out)
         bx, by, bspan = rendered_bbox_center_and_span(base_out)
@@ -1612,13 +1620,14 @@ end
         got1, got2 = line_endpoints_from_svg(svg_text)
         @test got1 != got2
 
-        png_path = render(
-            ifs,
-            Transformations(polygon = :line);
-            outpath = joinpath(tmp, "rot.png"),
-            resolution = (height, width),
-            color = false,
-        ).outpath
+        png_path =
+            render(
+                ifs,
+                Transformations(polygon = :line);
+                outpath = joinpath(tmp, "rot.png"),
+                resolution = (height, width),
+                color = false,
+            ).outpath
         @test isfile(png_path)
         img = load(png_path)
         @test count(_is_drawn_pixel, img) > 0
@@ -1699,36 +1708,39 @@ end
     _with_tmpdir() do tmp
         suffix = randstring(8)
 
-        png_triangle = render(
-            ifs,
-            Transformations(polygon = :equilateral_triangle);
-            outpath = joinpath(tmp, "maps_triangle_$suffix.png"),
-            resolution = (192, 192),
-            color = false,
-        ).outpath
+        png_triangle =
+            render(
+                ifs,
+                Transformations(polygon = :equilateral_triangle);
+                outpath = joinpath(tmp, "maps_triangle_$suffix.png"),
+                resolution = (192, 192),
+                color = false,
+            ).outpath
         @test isfile(png_triangle)
         tri_img = load(png_triangle)
         @test count(_is_drawn_pixel, tri_img) > 0
 
-        png_line = render(
-            ifs,
-            Transformations(polygon = :line);
-            outpath = joinpath(tmp, "maps_line_$suffix.png"),
-            resolution = (192, 192),
-            color = false,
-        ).outpath
+        png_line =
+            render(
+                ifs,
+                Transformations(polygon = :line);
+                outpath = joinpath(tmp, "maps_line_$suffix.png"),
+                resolution = (192, 192),
+                color = false,
+            ).outpath
         @test isfile(png_line)
         line_img = load(png_line)
         @test count(_is_drawn_pixel, line_img) > 0
 
         default_preset = initial_polygon()
-        png_default_preset = render(
-            ifs,
-            Transformations(polygon = default_preset.name);
-            outpath = joinpath(tmp, "maps_default_preset_$suffix.png"),
-            resolution = (192, 192),
-            color = false,
-        ).outpath
+        png_default_preset =
+            render(
+                ifs,
+                Transformations(polygon = default_preset.name);
+                outpath = joinpath(tmp, "maps_default_preset_$suffix.png"),
+                resolution = (192, 192),
+                color = false,
+            ).outpath
         @test isfile(png_default_preset)
         default_img = load(png_default_preset)
         @test count(_is_drawn_pixel, default_img) > 0

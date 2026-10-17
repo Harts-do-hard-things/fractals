@@ -113,12 +113,7 @@ seed = method.seed)`. A later `render(ifs, Chaos(npoints = method.npoints + n, .
 reuses it. An existing entry for the new count is overwritten. `seed` makes the extra steps
 reproducible; the original cloud is left in place. Returns the new cloud and its path.
 """
-function extend_fractal(
-    method::Chaos,
-    ifs::IFS,
-    n::Integer;
-    seed::Union{Nothing,Integer} = nothing,
-)
+function extend_fractal(method::Chaos, ifs::IFS, n::Integer; seed::Union{Nothing,Integer} = nothing)
     n > 0 || throw(ArgumentError("n must be > 0, got $n"))
     old, _, _ = cached_points(method, ifs)
     rng = isnothing(seed) ? Random.default_rng() : MersenneTwister(seed)
