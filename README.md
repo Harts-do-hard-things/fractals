@@ -117,7 +117,8 @@ result = render(ifs, Chaos(npoints = 250_000);
 ```
 
 A render is a value: `Render(ifs, method; resolution, color, alpha, overlays)`, run by `render`. The methods are `Chaos`, `PointDeterministic`, `Inverse`, `Transformations` and `ImageIterate` (whose source is a `PolygonSource`, a `FileSource`, or any other method), each validating its own parameters. `overlays` takes `BasePolygon(polygon)` and `Axes()`.
-`render` returns `(render, image, limits, outpath, record)`; `load_render(path)` reads a saved render back.
+`render` returns `(render, image, limits, outpath, record, cached)`; `load_render(path)` reads a saved render back.
+`Render(...; format = SVG())` writes `Transformations` and polygon-seeded `ImageIterate` renders as vector SVG (`PNG()` is the default; `Render(r; format = PNG())` converts).
 `make_image`, `iterate_image`, and `rasterize_image_inversely` still take `backend=:cpu|:gpu|:auto`, but the GPU code is not wired into `render`.
 `interpolate_eq_matrix(...)` and `interpolate_ifs(...)` provide transform interpolation primitives for animation-oriented workflows.
 `render_interpolation_frames(left, right, method; frames, ...)` renders deterministic numbered PNG frame sequences into a chosen directory for animation workflows, with any render method.

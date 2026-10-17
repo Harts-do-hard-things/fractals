@@ -127,9 +127,59 @@ out = render(IFS(EISENSTEIN),
 out = render(IFS(EISENSTEIN), ImageIterate(Chaos(npoints = 50_000); iterations = 2))
 ```
 
+## Output format: PNG or SVG
+
+`Render` takes a `format`: [`PNG`](@ref)`()` (the default, supported by every method) or
+[`SVG`](@ref)`(; stroke_width = 2.0)`, which writes the render as vector line segments instead of
+pixels. Only two kinds of render have vector geometry, so they alone support SVG:
+
+- [`Transformations`](@ref): each map applied once to the polygon preset;
+- [`ImageIterate`](@ref)`(`[`PolygonSource`](@ref)`(...))`: the polygon's segments pushed through every
+  map, `iterations` times over.
+
+Building a `Render` with any other method and `format = SVG()` throws `ArgumentError`.
+
+```julia
+ifs = IFS(HEIGHWAY_DRAGON; name = "Heighway Dragon")
+
+svg = render(ifs, Transformations(polygon = :line_arrow);
+             format = SVG(stroke_width = 1.5), color = true, overlays = [Axes()],
+             resolution = (800, 800))
+svg.outpath   # <repo>/plots/Heighway_Dragon_transformations_limits_iterations=1_polygon=line_arrow_800x800_color_svg.svg
+svg.image     # the SVG document text
+
+render(ifs, ImageIterate(PolygonSource(polygon = :line); iterations = 8); format = SVG())
+```
+
+**Segment iteration.** For `ImageIterate` every segment of the polygon is mapped by every map of
+the IFS, and the result is mapped again, `iterations` times, so an `ImageIterate` SVG holds
+`nsegments * nmaps^iterations` segments (grouped by the last map applied). The count is checked
+before anything is computed: a render that would draw more than 1,000,000 segments throws
+`ArgumentError` ("lower the iterations or render a PNG"). `Transformations` draws `nmaps *
+nsegments` segments. The frame (`limits`) is the same one the PNG render uses.
+
+**Color, overlays and alpha.** Segments are white on an opaque black background by default.
+`color = true` strokes each map's segments in that map's color (the same colors as the PNG
+renders). `alpha = true` omits the black background. [`BasePolygon`](@ref) overlays add the
+untransformed polygon's lines (semi-transparent, dark gray with `color = true`, otherwise white)
+and [`Axes`](@ref) adds axis lines with unit ticks on top; both stay vector lines. The image size
+is the SVG `viewBox` (`resolution = (rows, cols)`), and the file starts with a
+`<!-- fractals.provenance: ... -->` comment.
+
+**Converting.** A `Render` is a value, so changing the format is a copy:
+
+```julia
+render(Render(svg.render; format = PNG()))   # the same description as a raster image
+```
+
+SVG renders have their own file and record names (they end in `_svg.svg`), so a PNG and an SVG
+render of one description never overwrite each other. Reuse, `force` and `load_render` work as
+for PNGs; the cached SVG image is read back as text. [`render_transformations_svg`](@ref) is a
+thin wrapper that builds such a `Render` (always `force = true`).
+
 ## Saving, loading, reuse and file names
 
-[`save_render`](@ref) (called by `render`) writes the PNG (placed by `outpath`) and a `.jld2` record
+[`save_render`](@ref) (called by `render`) writes the PNG or SVG (placed by `outpath`) and a `.jld2` record
 holding the [`Render`](@ref) and its `limits` at [`render_record_path`](@ref)`(r)` under
 `data/sims/renders/`, tagged with the Git commit by DrWatson's `tagsave`.
 [`load_render`](@ref) reads a record back (pass the `.jld2`, or a PNG at its default location), so
@@ -172,4 +222,3 @@ img2 = make_image(expanded, eis.limits; resolution = (800, 800))
 Saving through `safesave` directly skips the render record that [`render`](@ref) writes. See
 [Output files](@ref).
 
-The SVG diagram of the maps is produced separately by [`render_transformations_svg`](@ref).

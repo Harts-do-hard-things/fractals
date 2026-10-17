@@ -46,7 +46,7 @@ out = render(IFS(EISENSTEIN; name = "Eisenstein"), Chaos(npoints = 100_000); res
 basename(out.outpath)   # "Eisenstein_chaos_npoints=100000_800x800.png"
 ```
 
-`Inverse(preview = true)` adds `preview=true` to the name; exact renders keep their names.
+`Inverse(preview = true)` adds `preview=true` to the name; exact renders keep their names. SVG renders (`format = SVG()`) end in `_svg.svg` instead of `.png`, so a PNG and an SVG render of one description have different file names and different render records.
 
 ## Render records and reuse
 
@@ -114,8 +114,11 @@ filter(r -> r.kind == :points && r.npoints > 1_000_000, fractal_catalog())
 
 ## SVG and provenance
 
-[`render_transformations_svg`](@ref) writes SVG diagrams that start with an
-`<!-- fractals.provenance: ... -->` comment (git commit, version, timestamp, parameters).
+SVG renders (`format = SVG()`, or [`render_transformations_svg`](@ref)) are written with DrWatson's
+`safesave` (an existing file is kept as `name_#1.svg`) and start with an
+`<!-- fractals.provenance: ... -->` comment (git commit, version, timestamp, parameters). Their render
+record holds the `Render` (with its `SVG` format) like a PNG's, and a reused SVG render returns the
+file read back as text.
 [`read_provenance`](@ref) reads the equivalent PNG text chunk from PNGs written by the
 `_save_image` helper, which the ImageIterate animation script uses; PNGs written by `render`
 carry no text chunks, because their render record holds that information.

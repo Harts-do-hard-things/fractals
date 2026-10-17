@@ -12,7 +12,6 @@ Render
 save_render
 load_render
 render_record_path
-render_record_path
 cached_points
 ifs_key
 RenderMethod

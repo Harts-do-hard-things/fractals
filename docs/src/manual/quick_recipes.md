@@ -101,6 +101,27 @@ result = render(IFS(HEIGHWAY_DRAGON), Transformations(polygon = :line_arrow);
                 outpath = "recipe_transformations.png")
 ```
 
+## Recipe: SVG output
+
+```julia
+using Fractals
+
+ifs = IFS(HEIGHWAY_DRAGON; name = "Heighway Dragon")
+
+# Each map applied to a polygon, one stroke color per map, transparent background.
+render(ifs, Transformations(polygon = :line_arrow);
+       format = SVG(stroke_width = 1.5), color = true, alpha = true,
+       overlays = [BasePolygon(:line_arrow), Axes()],
+       resolution = (900, 900), outpath = "recipe_transformations.svg")
+
+# The polygon iterated through the maps as line segments (at most 1,000,000 of them).
+render(ifs, ImageIterate(PolygonSource(polygon = :line); iterations = 10);
+       format = SVG(), outpath = "recipe_image_iterate.svg")
+```
+
+Only `Transformations` and polygon-seeded `ImageIterate` support `SVG()`; other methods throw
+`ArgumentError`. `Render(r; format = PNG())` converts an SVG description to a raster render.
+
 ## Recipe: Reload and repeat a render
 
 ```julia

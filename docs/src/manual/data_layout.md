@@ -29,7 +29,7 @@ files left from before generated data moved to `data/sims/`.
 
 | Directory | Contents | Written by |
 |:----------|:---------|:-----------|
-| `plots/` | PNG renders; `plots/frames/<sequence>/frame_NNNN.png`; `plots/animations/<basename>.gif` or `.mp4`; SVG diagrams | [`render`](@ref), [`render_interpolation_frames`](@ref), [`export_animation`](@ref), [`render_transformations_svg`](@ref) |
+| `plots/` | PNG and SVG renders; `plots/frames/<sequence>/frame_NNNN.png`; `plots/animations/<basename>.gif` or `.mp4` | [`render`](@ref), [`render_interpolation_frames`](@ref), [`export_animation`](@ref), [`render_transformations_svg`](@ref) |
 | `data/sims/renders/` | a `.jld2` per render: the [`Render`](@ref) description and its `limits`; frames in `renders/frames/<sequence>/` | [`save_render`](@ref) (via `render`) |
 | `data/sims/points/` | a `.jld2` per point cloud: `points` (2×N), the `method`, the IFS key | [`cached_points`](@ref), [`extend_fractal`](@ref) |
 | `data/sims/ifs/<file stem>/` | `ifs_<key>.jld2` per function system: equation matrix, weights, name, docs, source file | [`build_ifs_library`](@ref) |
@@ -38,12 +38,12 @@ files left from before generated data moved to `data/sims/`.
 ## File names
 
 - **PNGs** are named by DrWatson's `savename`: `<ifs name>_<method tag>_<method fields>_<rows>x<cols>`
-  plus `_color` and/or `_alpha`, for example
+  plus `_color` and/or `_alpha`, then `.png` (SVG renders end in `_svg.svg`), for example
   `Heighway_Dragon_chaos_npoints=200000_seed=1_1024x1024_color.png`. Only fields that matter to
   the method appear (`npoints` and `seed` for `Chaos`; `iterations` for `Inverse`, plus `preview`
   when set; `polygon` and `limits_iterations` for `Transformations`). An explicit `outpath`
   replaces the name (and may be relative to `plots/` or absolute).
-- **Render records** reuse the PNG's name with a `.jld2` extension, under `data/sims/renders/`
+- **Render records** reuse the image's name with a `.jld2` extension, under `data/sims/renders/`
   regardless of `outpath` ([`render_record_path`](@ref)). Frames keep their
   `frames/<sequence>/frame_NNNN` layout.
 - **Point clouds** are `<method tag>_ifs=<key>_<every method field>.jld2`, for example
@@ -61,7 +61,7 @@ files left from before generated data moved to `data/sims/`.
 
 - Render records are written with DrWatson's `tagsave`, so they carry a `gitcommit` entry
   (`gitdescribe`, with `-dirty` for uncommitted changes).
-- Cached point clouds carry the same `gitcommit` entry.
+- Cached point clouds carry the same `gitcommit` entry when the project is in a Git repository (no entry is written otherwise).
 - Benchmark records are `tagsave`d too, and `compare_benchmarks` prints the two commits.
 - IFS library records and PNGs are not tagged (a PNG's record is).
 
@@ -69,12 +69,12 @@ files left from before generated data moved to `data/sims/`.
 
 | File | Behavior |
 |:-----|:---------|
-| render PNG and record | Reused when both exist and describe the same render (`cached = true`); redrawn and overwritten when the description differs or with `force = true`. |
+| render PNG/SVG and record | Reused when both exist and describe the same render (`cached = true`); redrawn and overwritten when the description differs or with `force = true`. |
 | point cloud | Reused (loaded) when the file exists; `cached_points(...; force = true)` recomputes it. [`extend_fractal`](@ref) overwrites the entry for the larger `npoints`. |
 | IFS library record | Reused when the key matches; `build_ifs_library(force = true)` rewrites. |
 | benchmark record | Never overwritten: names include the date and time. |
 | animation (GIF/MP4) | Overwritten by [`export_animation`](@ref). |
-| SVG diagrams, `_save_image` PNGs | Written with DrWatson's `safesave`: an existing file is kept as `name_#1.ext` (older ones `#2`, ...). |
+| SVG output, `_save_image` PNGs | Written with DrWatson's `safesave`: an existing file is kept as `name_#1.ext` (older ones `#2`, ...), so redrawing an SVG (`force = true`, or `render_transformations_svg`) leaves the previous file as a backup. PNGs written by `render` are simply overwritten. |
 
 Because generated files are git-ignored, delete `data/sims/points/` to free space (every cloud is
 recomputed on demand) and `data/sims/renders/` to forget which renders exist (the PNGs are just
