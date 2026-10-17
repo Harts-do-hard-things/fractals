@@ -10,6 +10,7 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
 - Rendering is redesigned around values: `Render(ifs, method; resolution, color, alpha, overlays)` is run by `render(r)` or `render(ifs, method; kwargs...)`, which returns `(render, image, limits, outpath, record)`. Methods are the types `Chaos`, `PointDeterministic`, `Inverse`, `Transformations` and `ImageIterate` (seeded by `PolygonSource`, `FileSource` or any method); overlays are `BasePolygon` and `Axes`. `save_render` writes the PNG plus a same-stem `.jld2` record and `load_render` reads it back. File names come from DrWatson `savename` over each method's fields.
 - `render_interpolation_frames(left, right, method; frames, ...)` takes any render method and returns `(outdir, paths, ts)`.
 - Select a definition from a `.ifs` file with `get_ifs(name; file)` or `parse_ifs_file(path)[i]` instead of `ifs_index`/`ifs_name`.
+- `scripts/export_gif.jl` and `scripts/export_mp4.jl` are merged into `scripts/export_animation.jl --format gif|mp4`; `export_animation` overwrites an existing output instead of keeping a `_#N` backup.
 
 ### Removed
 - `render(input; method = ...)`, the `render_*` wrappers, the `RenderMethod` enum (with `Parallel` and `RenderTransformations`), `render_fractal`, and interactive prompting (`prompt_ifs_and_render`).

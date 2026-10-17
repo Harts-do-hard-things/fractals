@@ -9,7 +9,7 @@ function _usage()
     println(
         """
 Usage:
-  export_gif.jl --frames-dir <dir> --basename <name> [--out <path>] [--fps <n>] [--ffmpeg <cmd>]
+  export_animation.jl --frames-dir <dir> --basename <name> [--format gif|mp4] [--out <path>] [--fps <n>] [--ffmpeg <cmd>]
 """
     )
 end
@@ -39,15 +39,18 @@ function main(args=ARGS)
     outpath = get(opts, "out", nothing)
     isnothing(frames_dir) && throw(ArgumentError("--frames-dir is required"))
     isnothing(basename) && throw(ArgumentError("--basename is required"))
+    format = Symbol(lowercase(get(opts, "format", "gif")))
+    format in (:gif, :mp4) ||
+        throw(ArgumentError("--format must be 'gif' or 'mp4', got '$format'"))
     fps = parse(Float64, get(opts, "fps", "12"))
     ffmpeg_cmd = get(opts, "ffmpeg", "ffmpeg")
-    result = export_animation(:gif;
+    result = export_animation(format;
                               frames_dir=frames_dir,
                               basename=basename,
                               outpath=outpath,
                               fps=fps,
                               ffmpeg_cmd=ffmpeg_cmd)
-    println("Wrote GIF to $(result.outpath)")
+    println("Wrote $(uppercase(String(format))) to $(result.outpath)")
     return 0
 end
 
