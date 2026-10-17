@@ -19,11 +19,9 @@ using DrWatson: plotsdir, datadir, projectdir, savename, safesave, gitdescribe
 include("config.jl")                 # constants, RenderMethod enum, polygon presets
 include("utils.jl")                  # shared utilities: PNG metadata, color maps, GPU stub
 include("output.jl")                 # DrWatson-managed output paths, naming, safesave, provenance
-# ifs_parse.jl is a self-contained submodule (no dependency on the files below); types.jl and
-# ifs_load.jl import from it
-include("ifs_parse.jl")              # IFSParse submodule: .ifs lexer/parser, prebuilt JLD2 library
-using .IFSParse
-using .IFSParse:
+# IFSParse is a standalone package (no dependency on Fractals); types.jl and ifs_load.jl import from it
+using IFSParse
+using IFSParse:
     _validated_ifs_definitions,
     _split_valid_ifs_definitions,
     _contractive_row,

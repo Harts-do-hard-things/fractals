@@ -37,10 +37,10 @@ jobs:
             Pkg.activate(temp=true)
             Pkg.add(name="JuliaFormatter", version="1.0.62")
             using JuliaFormatter
-            format(["Fractals.jl/src", "Fractals.jl/test"]; overwrite=true)
+            format(["Fractals.jl/src", "Fractals.jl/test", "IFSParse.jl/src"]; overwrite=true)
           '
-          if ! git diff --exit-code -- Fractals.jl/src Fractals.jl/test; then
-            echo "::error title=Formatting::Fractals.jl/src or Fractals.jl/test is not JuliaFormatter-formatted. Run the formatter (see README) and commit the result."
+          if ! git diff --exit-code -- Fractals.jl/src Fractals.jl/test IFSParse.jl/src; then
+            echo "::error title=Formatting::Fractals.jl/src, Fractals.jl/test or IFSParse.jl/src is not JuliaFormatter-formatted. Run the formatter (see README) and commit the result."
             exit 1
           fi
 

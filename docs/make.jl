@@ -8,6 +8,7 @@
 
 using Documenter
 using Fractals
+using IFSParse
 
 # Doctests run with Fractals (and StaticArrays for SVector) loaded, and write any render
 # output to a scratch directory rather than the project's plots/.
@@ -20,7 +21,7 @@ DocMeta.setdocmeta!(
 
 makedocs(;
     sitename = "Fractals.jl",
-    modules = [Fractals],
+    modules = [Fractals, IFSParse],
     authors = "cub525",
     format = Documenter.HTML(;
         prettyurls = get(ENV, "CI", "false") == "true",

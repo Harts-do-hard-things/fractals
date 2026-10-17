@@ -8,6 +8,7 @@ DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
 FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
 Fractals = "c711514a-ad55-41be-9602-f6ed5533a69e"
+IFSParse = "8d1d3a4e-6f52-4b0e-9a37-2c5e7b1f4a90"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
@@ -17,6 +18,7 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 
 [sources]
 Fractals = {path = "Fractals.jl"}
+IFSParse = {path = "IFSParse.jl"}
 
 [compat]
 DrWatson = "2"

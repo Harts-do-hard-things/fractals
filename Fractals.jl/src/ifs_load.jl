@@ -1,5 +1,5 @@
-# IFS-returning wrappers around the IFSParse submodule (which only knows plain equation
-# matrices). Must follow types.jl (IFS) and ifs_parse.jl.
+# IFS-returning wrappers around the IFSParse package (which only knows plain equation
+# matrices). Must follow types.jl (IFS) and the IFSParse package.
 
 """
     parse_ifs_string(input; npoints=DEFAULT_SAMPLES) -> Vector{IFS}

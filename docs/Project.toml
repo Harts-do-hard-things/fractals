@@ -1,10 +1,12 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 Fractals = "c711514a-ad55-41be-9602-f6ed5533a69e"
+IFSParse = "8d1d3a4e-6f52-4b0e-9a37-2c5e7b1f4a90"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [sources]
 Fractals = {path = "../Fractals.jl"}
+IFSParse = {path = "../IFSParse.jl"}
 
 [compat]
 Documenter = "1"

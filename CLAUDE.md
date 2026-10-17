@@ -4,13 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Two Julia packages for generating and rasterizing 2D IFS (iterated function system) fractals, supporting Julia 1.11 and 1.12 (CI uses 1.12). They sit inside a DrWatson scientific project:
+Three Julia packages for generating and rasterizing 2D IFS (iterated function system) fractals, supporting Julia 1.11 and 1.12 (CI uses 1.12). They sit inside a DrWatson scientific project:
 
 - Repo root (`Project.toml`, name `fractals`) — the DrWatson project. It depends on DrWatson, the local `Fractals` package (via `[sources]` path), and the packages the scripts and `bin/fractals.jl` load. It follows the DrWatson template: `scripts/` (project scripts, `@quickactivate "fractals"`), `ifs/` (curated `.ifs` inputs, tracked), `data/exp_pro/` and `data/sims/` (generated, git-ignored), `plots/` (images/animations, git-ignored). Run renders, CLI commands, and scripts with `--project=.`. `.gitignore` is DrWatson's template; generated data (including the prebuilt IFS library in `data/exp_pro/ifs/`) is ignored.
 - `Fractals.jl/` — the core package (with an optional CUDA extension). Tests and package development use `--project=Fractals.jl`.
+- `IFSParse.jl/` — the standalone `.ifs` parser and prebuilt-library package (depends only on DrWatson and JLD2, not on `Fractals`). `Fractals.jl` and `docs/` depend on it through `[sources]` path entries (and the root and `FractalsGUI.jl` projects list it too, since `[sources]` of dependencies are not inherited); tests for it currently live in `Fractals.jl/test/runtests.jl`.
 - `FractalsGUI.jl/` — a Gtk desktop GUI for editing IFS matrices and previewing transformation SVGs. Its `Manifest.toml` depends on `Fractals` by relative path (`../Fractals.jl`), so it always uses the working-tree version.
 
-Adding a dependency to `Fractals.jl/Project.toml` also requires re-resolving the root and `FractalsGUI.jl` manifests (`Pkg.resolve()` with each project active).
+Adding a dependency to `Fractals.jl/Project.toml` or `IFSParse.jl/Project.toml` also requires re-resolving the root, `Fractals.jl` (for IFSParse changes) and `FractalsGUI.jl` manifests (`Pkg.resolve()` with each project active).
 
 User-facing docs: `README.md` and a Documenter.jl site in `docs/` (`docs/make.jl`; manual pages in `docs/src/manual/`, API reference in `docs/src/api.md` built from docstrings). `CHANGELOG.md` follows Keep a Changelog — add user-visible changes under `[Unreleased]`.
 
@@ -36,10 +37,10 @@ Snapshot tests compare against PNGs in `Fractals.jl/test/snapshots/`; on mismatc
 julia --startup-file=no --project=Fractals.jl Fractals.jl/test/generate_snapshots.jl
 ```
 
-Formatting (JuliaFormatter pinned to 1.0.62, `.JuliaFormatter.toml`: default style, margin 100) covers `Fractals.jl/src` and `Fractals.jl/test`. CI fails on any unformatted code and prints the diff, so format before committing changes there (note this style uses spaces around keyword `=`, e.g. `f(x; kw = 1)`). Apply locally with:
+Formatting (JuliaFormatter pinned to 1.0.62, `.JuliaFormatter.toml`: default style, margin 100) covers `Fractals.jl/src`, `Fractals.jl/test` and `IFSParse.jl/src`. CI fails on any unformatted code and prints the diff, so format before committing changes there (note this style uses spaces around keyword `=`, e.g. `f(x; kw = 1)`). Apply locally with:
 
 ```bash
-julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1.0.62\"); using JuliaFormatter; format([\"Fractals.jl/src\", \"Fractals.jl/test\"]; overwrite=true, verbose=true)"
+julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1.0.62\"); using JuliaFormatter; format([\"Fractals.jl/src\", \"Fractals.jl/test\", \"IFSParse.jl/src\"]; overwrite=true, verbose=true)"
 ```
 
 Docs (Documenter.jl; `docs/Project.toml` gets `Fractals` via a `[sources]` path, and `docs/Manifest.toml`/`docs/build/` are gitignored):
@@ -97,7 +98,7 @@ GPU backends:
 - GPU paths are expected to match CPU output; parity tests enforce this.
 
 Parsing and interactivity:
-- `ifs_parse.jl` is the self-contained `IFSParse` submodule (included before `types.jl`, depends on nothing else in `Fractals`; owns `IFSDefinition`/`IFSToken`, the contractivity checks and works on plain equation matrices; the IFS-returning `parse_ifs_string`/`parse_ifs_file`/`get_ifs` wrappers are in `ifs_load.jl`) (pure lexer/parser: `lex_ifs` → `_parse_ifs_tokens` → `IFSDefinition`; `Fractals` re-exports its public names). Non-contractive definitions are skipped with a warning. `.ifs` sources live in `ifs/` (`projectdir("ifs")`); `build_ifs_library()` saves each function system as its own JLD2 record in `data/exp_pro/ifs/<file stem>/ifs_<key>.jld2` via `produce_or_load`, keyed by a hash of the equation matrix and weights only (name stored, not keyed). `list_ifs_files`, `list_ifs` and `get_ifs(name; file)` (`get_ifs_definition` in IFSParse) prefer prebuilt records and fall back to the `.ifs` files. `projectdir`/`datadir` follow the active project, so pass `dir=`/`libdir=` under `--project=Fractals.jl`.
+- `IFSParse.jl/` (`src/types.jl` IFSToken/IFSDefinition; `src/parse.jl` lexer → `_parse_ifs_tokens` → `IFSDefinition`, contractivity checks, weights, content key; `src/library.jl` the prebuilt library) works on plain equation matrices and has no dependency on `Fractals`; `Fractals` re-exports its public names, and the IFS-returning `parse_ifs_string`/`parse_ifs_file`/`get_ifs` wrappers are in `Fractals.jl/src/ifs_load.jl`. Non-contractive definitions are skipped with a warning. `.ifs` sources live in `ifs/` (`projectdir("ifs")`); `build_ifs_library()` saves each function system as its own JLD2 record in `data/exp_pro/ifs/<file stem>/ifs_<key>.jld2` via `produce_or_load`, keyed by a hash of the equation matrix and weights only (name stored, not keyed). `list_ifs_files`, `list_ifs` and `get_ifs(name; file)` (`get_ifs_definition` in IFSParse) prefer prebuilt records and fall back to the `.ifs` files. `projectdir`/`datadir` follow the active project, so pass `dir=`/`libdir=` under `--project=Fractals.jl`.
 - All stdin prompting lives in `interactive.jl`. Interactive functions take an `input_fn` (default `readline`) so tests can drive them.
 - Curated `.ifs` files live in `ifs/` at the repo root. Locate them with `ifs_data_dir(...)` (always the repo-root `ifs/`), not `projectdir("ifs")`, which follows the active project (`Fractals.jl/ifs` under `--project=Fractals.jl`).
 

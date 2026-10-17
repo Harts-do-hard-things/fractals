@@ -2,7 +2,7 @@
 
 julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "6721ee3d52d0109ee7abd9ef62618e0ebf090949"
+project_hash = "054c966d028a13cd8e1297cabb26b7df2975405b"
 
 [[deps.ATK_jll]]
 deps = ["Artifacts", "Glib_jll", "JLLWrappers", "Libdl"]
@@ -186,7 +186,7 @@ uuid = "a3f928ae-7b40-5064-980b-68af3947d34b"
 version = "2.17.1+0"
 
 [[deps.Fractals]]
-deps = ["Colors", "Dates", "DelimitedFiles", "DrWatson", "FileIO", "JLD2", "JSON3", "LinearAlgebra", "PNGFiles", "PrecompileTools", "Printf", "Random", "StaticArrays", "Statistics", "StatsBase", "TOML"]
+deps = ["Colors", "Dates", "DelimitedFiles", "DrWatson", "FileIO", "IFSParse", "JLD2", "JSON3", "LinearAlgebra", "PNGFiles", "PrecompileTools", "Printf", "Random", "StaticArrays", "Statistics", "StatsBase", "TOML"]
 path = "../Fractals.jl"
 uuid = "c711514a-ad55-41be-9602-f6ed5533a69e"
 version = "1.0.0"
@@ -198,7 +198,7 @@ version = "1.0.0"
     CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 
 [[deps.FractalsGUI]]
-deps = ["Fractals", "Gtk", "LinearAlgebra", "Printf", "Rsvg"]
+deps = ["Fractals", "Gtk", "IFSParse", "LinearAlgebra", "Printf", "Rsvg"]
 path = "."
 uuid = "bac4833a-be30-43b9-93b9-4e34d6f4c5d7"
 version = "0.1.0"
@@ -261,6 +261,12 @@ version = "8.5.1+0"
 git-tree-sha1 = "2eaa69a7cab70a52b9687c8bf950a5a93ec895ae"
 uuid = "076d061b-32b6-4027-95e0-9a2c6f6d7e74"
 version = "0.2.0"
+
+[[deps.IFSParse]]
+deps = ["DrWatson", "JLD2"]
+path = "../IFSParse.jl"
+uuid = "8d1d3a4e-6f52-4b0e-9a37-2c5e7b1f4a90"
+version = "0.1.0"
 
 [[deps.ImageCore]]
 deps = ["ColorVectorSpace", "Colors", "FixedPointNumbers", "MappedArrays", "MosaicViews", "OffsetArrays", "PaddedViews", "PrecompileTools", "Reexport"]

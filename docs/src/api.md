@@ -77,6 +77,8 @@ parse_ifs_file
 lex_ifs
 IFSDefinition
 IFSToken
+parse_ifs_definitions_string
+parse_ifs_definitions_file
 build_ifs_library
 list_ifs_files
 list_ifs

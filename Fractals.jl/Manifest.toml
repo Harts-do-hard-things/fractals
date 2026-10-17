@@ -2,7 +2,7 @@
 
 julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "383430d4269dd20691cd537ce5c702d2de72a9e6"
+project_hash = "c61eaec0e9e70e7dffec94d2b64e101aa0850509"
 
 [[deps.AliasTables]]
 deps = ["PtrArrays", "Random"]
@@ -138,7 +138,7 @@ uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
 version = "0.8.5"
 
 [[deps.Fractals]]
-deps = ["Colors", "Dates", "DelimitedFiles", "DrWatson", "FileIO", "JLD2", "JSON3", "LinearAlgebra", "PNGFiles", "PrecompileTools", "Printf", "Random", "StaticArrays", "Statistics", "StatsBase", "TOML"]
+deps = ["Colors", "Dates", "DelimitedFiles", "DrWatson", "FileIO", "IFSParse", "JLD2", "JSON3", "LinearAlgebra", "PNGFiles", "PrecompileTools", "Printf", "Random", "StaticArrays", "Statistics", "StatsBase", "TOML"]
 path = "."
 uuid = "c711514a-ad55-41be-9602-f6ed5533a69e"
 version = "1.0.0"
@@ -153,6 +153,12 @@ version = "1.0.0"
 git-tree-sha1 = "2eaa69a7cab70a52b9687c8bf950a5a93ec895ae"
 uuid = "076d061b-32b6-4027-95e0-9a2c6f6d7e74"
 version = "0.2.0"
+
+[[deps.IFSParse]]
+deps = ["DrWatson", "JLD2"]
+path = "../IFSParse.jl"
+uuid = "8d1d3a4e-6f52-4b0e-9a37-2c5e7b1f4a90"
+version = "0.1.0"
 
 [[deps.ImageCore]]
 deps = ["ColorVectorSpace", "Colors", "FixedPointNumbers", "MappedArrays", "MosaicViews", "OffsetArrays", "PaddedViews", "PrecompileTools", "Reexport"]
