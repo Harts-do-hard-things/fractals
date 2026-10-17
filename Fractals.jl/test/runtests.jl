@@ -374,10 +374,10 @@ end
         @test all(size(img) == (24, 24) for img in imgs)
         @test any(any(_is_drawn_pixel, img) for img in imgs)
 
-        # Each frame's render record mirrors it under the data directory (renders/frames/...).
+        # Frames written to a custom `outdir` (here outside plots/) keep their sequence folder.
         @test all(p -> isfile(render_record_path(p)), result.paths)
         @test all(
-            p -> startswith(render_record_path(p), data_output_dir("renders", "frames")),
+            p -> dirname(render_record_path(p)) == data_output_dir("renders", basename(tmp)),
             result.paths,
         )
         mid = load_render(result.paths[2])
@@ -1766,7 +1766,7 @@ end
         @test size(out1.image) == (64, 64)
         @test out1.render isa Render{Chaos}
         @test out1.limits == ifs.limits
-        @test keys(out1) == (:render, :image, :limits, :outpath, :record)
+        @test keys(out1) == (:render, :image, :limits, :outpath, :record, :cached)
 
         # render(::Render) is the same pipeline as render(ifs, method; kwargs...).
         r = Render(ifs, Chaos(npoints = 3000, seed = 7); resolution = (32, 32))
@@ -2691,13 +2691,15 @@ end
     @test dirname(path) == data_output_dir("points")
     @test basename(path) == "chaos_ifs=$(ifs_key(ifs))_npoints=500_seed=4_warmup=3.jld2"
     stamp = mtime(path)
+    # The test output root is shared with other testsets, so compare listings, not name patterns.
+    files_before = readdir(dirname(path))
     big = render(Render(out.render; resolution = (48, 48), color = true, alpha = true))
     @test size(big.image) == (48, 48)
     renamed = IFS(SMALL_EQ; name = "renamed")
     @test ifs_key(renamed) == ifs_key(ifs)
     @test Fractals.cached_points(m, renamed)[1] == points
     @test mtime(path) == stamp
-    @test count(f -> occursin("ifs=$(ifs_key(ifs))_npoints=500_", f), readdir(dirname(path))) == 1
+    @test readdir(dirname(path)) == files_before  # re-render and rename added no cache file
     @test !Fractals.cached_points(m, ifs; force = true)[3]
     @test Fractals.cached_points(Chaos(npoints = 501, warmup = 3, seed = 4), ifs)[2] != path
 end
@@ -2746,7 +2748,7 @@ end
     @test Render(ifs, Chaos(npoints = 10)).format isa PNG
 
     # Transformations: one group per map.
-    rt = Render(ifs, Transformations(); resolution = (64, 64), format = SVG())
+    rt = Render(ifs, Transformations(); resolution = (64, 64), color = true, format = SVG())
     img, _ = Fractals.draw(rt)
     @test length(img.groups) == nmaps
     @test all(g -> length(g) == nsegments, img.groups)

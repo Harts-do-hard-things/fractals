@@ -74,7 +74,7 @@ files left from before generated data moved to `data/sims/`.
 | IFS library record | Reused when the key matches; `build_ifs_library(force = true)` rewrites. |
 | benchmark record | Never overwritten: names include the date and time. |
 | animation (GIF/MP4) | Overwritten by [`export_animation`](@ref). |
-| SVG output, `_save_image` PNGs | Written with DrWatson's `safesave`: an existing file is kept as `name_#1.ext` (older ones `#2`, ...), so redrawing an SVG (`force = true`, or `render_transformations_svg`) leaves the previous file as a backup. PNGs written by `render` are simply overwritten. |
+| `_save_image` PNGs (animation script) | Written with DrWatson's `safesave`: an existing file is kept as `name_#1.ext` (older ones `#2`, ...). Render output (PNG and SVG, including `render_transformations_svg`) and its records are simply overwritten. |
 
 Because generated files are git-ignored, delete `data/sims/points/` to free space (every cloud is
 recomputed on demand) and `data/sims/renders/` to forget which renders exist (the PNGs are just

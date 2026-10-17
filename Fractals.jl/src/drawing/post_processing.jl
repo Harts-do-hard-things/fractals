@@ -1,3 +1,28 @@
+# Clip the segment p1→p2 to the box [lo, hi]² (Liang–Barsky). Returns the clipped endpoints, or
+# `nothing` when the segment misses the box or has non-finite coordinates.
+function _clip_segment(x1, y1, x2, y2, xlo, xhi, ylo, yhi)
+    all(isfinite, (x1, y1, x2, y2)) || return nothing
+    dx, dy = x2 - x1, y2 - y1
+    t0, t1 = 0.0, 1.0
+    for (p, q) in ((-dx, x1 - xlo), (dx, xhi - x1), (-dy, y1 - ylo), (dy, yhi - y1))
+        if p == 0
+            q < 0 && return nothing
+        else
+            t = q / p
+            if p < 0
+                t > t1 && return nothing
+                t0 = max(t0, t)
+            else
+                t < t0 && return nothing
+                t1 = min(t1, t)
+            end
+        end
+    end
+    return (x1 + t0 * dx, y1 + t0 * dy, x1 + t1 * dx, y1 + t1 * dy)
+end
+
+# Draw a line in pixel coordinates. The segment is clipped to the image first, so the step count
+# is bounded by the image size even when degenerate limits project it to huge coordinates.
 function _draw_line!(
     img::AbstractMatrix{T},
     x1::Real,
@@ -7,6 +32,18 @@ function _draw_line!(
     color::T,
 ) where {T}
     height, width = size(img)
+    clipped = _clip_segment(
+        Float64(x1),
+        Float64(y1),
+        Float64(x2),
+        Float64(y2),
+        0.5,
+        width + 0.5,
+        0.5,
+        height + 0.5,
+    )
+    isnothing(clipped) && return nothing
+    x1, y1, x2, y2 = clipped
     dx = x2 - x1
     dy = y2 - y1
     steps = max(abs(dx), abs(dy))

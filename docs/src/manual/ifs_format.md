@@ -27,7 +27,7 @@ Example Fractal {
 
 ## Where `.ifs` files live and the prebuilt library
 
-`.ifs` source files live in `ifs/` at the repo root (`projectdir("ifs")`; [`list_ifs_files`](@ref)
+`.ifs` source files live in `ifs/` at the repo root ([`ifs_data_dir`](@ref), the default `dir` whatever project is active; [`list_ifs_files`](@ref)
 lists them). Parsing them on every use is cheap, but you can prebuild a library once:
 
 ```julia

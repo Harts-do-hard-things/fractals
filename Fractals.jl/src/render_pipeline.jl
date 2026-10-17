@@ -385,9 +385,11 @@ never placed by an `outpath`:
   default PNG), whatever `outpath` the PNG was written to.
 - `render_record_path(image_path)`: the record that mirrors an image under `output_dir()`
   (`plots/<rel>.png` → `renders/<rel>.jld2`). This finds the record of a PNG at its default
-  location and of animation frames, which keep their `frames/<sequence>/` subdirectories. A PNG
-  written to a custom `outpath` has its record at `render_record_path(r)` instead (the `record`
-  field of [`render`](@ref)'s result).
+  location and of animation frames, which keep their `frames/<sequence>/` subdirectories. An
+  image outside `output_dir()` keeps its parent folder (`<dir>/frame_0001.png` →
+  `renders/<dir name>/frame_0001.jld2`), so frames rendered to a custom `outdir` stay grouped
+  by sequence. A PNG written to a custom `outpath` by [`render`](@ref) has its record at
+  `render_record_path(r)` instead (the `record` field of the result).
 """
 render_record_path(r::Render) =
     data_output_dir("renders", first(splitext(_render_name(r))) * ".jld2")
@@ -397,11 +399,13 @@ function render_record_path(image_path::AbstractString)
     base = normpath(abspath(output_dir())) * Base.Filesystem.path_separator
     inside =
         Sys.iswindows() ? startswith(lowercase(image), lowercase(base)) : startswith(image, base)
-    rel = inside ? relpath(image, output_dir()) : basename(image)
+    # Outside output_dir(), keep the parent folder so frame sequences stay grouped and distinct.
+    rel =
+        inside ? relpath(image, output_dir()) : joinpath(basename(dirname(image)), basename(image))
     return data_output_dir("renders", first(splitext(rel)) * ".jld2")
 end
 
-# PNGs are written directly; SVG text goes through `_save_svg` with a provenance comment.
+# Both formats overwrite (like the record); SVG text gets a leading provenance comment.
 _write_output(::PNG, r::Render, path, img) = _save_image_file(path, img)
 function _write_output(::SVG, r::Render, path, svg)
     params = (;
@@ -412,7 +416,7 @@ function _write_output(::SVG, r::Render, path, svg)
         alpha = r.alpha,
         format = "svg",
     )
-    return _save_svg(path, svg; params)
+    return _save_svg(path, svg; params, safe = false)
 end
 
 # The saved output of a render: the image for a PNG, the document text for an SVG.

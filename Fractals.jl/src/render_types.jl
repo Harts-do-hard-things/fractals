@@ -274,7 +274,7 @@ struct Render{M<:RenderMethod,F<:OutputFormat}
         resolution::Tuple{Integer,Integer},
         color::Bool,
         alpha::Bool,
-        overlays::AbstractVector,
+        overlays,  # any collection of Overlays (vector or tuple)
         format::F,
     ) where {M<:RenderMethod,F<:OutputFormat}
         _check(

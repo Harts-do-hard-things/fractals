@@ -10,9 +10,10 @@ files.
 """
 ifs_data_dir(args::AbstractString...) = joinpath(dirname(pkgdir(@__MODULE__)), "ifs", args...)
 
-# Default locations. Both follow the *active* DrWatson project (`projectdir()`), so under
-# `--project=Fractals.jl` they resolve inside `Fractals.jl/`; pass `dir`/`libdir` to override.
-_default_ifs_dir() = projectdir("ifs")
+# Default locations. The `.ifs` sources are always the repo-root `ifs/` (`projectdir("ifs")`
+# would be `Fractals.jl/ifs` under `--project=Fractals.jl`); the generated library follows the
+# active DrWatson project (`datadir("sims", "ifs")`), like all generated data.
+_default_ifs_dir() = ifs_data_dir()
 _default_library_dir() = datadir("sims", "ifs")
 
 _source_files(dir::AbstractString) =
@@ -20,7 +21,7 @@ _source_files(dir::AbstractString) =
     String[]
 
 """
-    list_ifs_files(; dir = projectdir("ifs")) -> Vector{String}
+    list_ifs_files(; dir = ifs_data_dir()) -> Vector{String}
 
 Sorted paths of the `*.ifs` files in `dir` (empty if `dir` does not exist). `projectdir`
 follows the active project; pass `dir` (e.g. [`ifs_data_dir`](@ref)`()`) to override.
@@ -28,7 +29,7 @@ follows the active project; pass `dir` (e.g. [`ifs_data_dir`](@ref)`()`) to over
 list_ifs_files(; dir::AbstractString = _default_ifs_dir()) = _source_files(dir)
 
 """
-    build_ifs_library(; dir = projectdir("ifs"), outdir = datadir("sims", "ifs"),
+    build_ifs_library(; dir = ifs_data_dir(), outdir = datadir("sims", "ifs"),
                       force = false, verbose = false) -> Vector{String}
 
 Parse every `*.ifs` file in `dir` and save each function system as its own JLD2 record
@@ -123,7 +124,7 @@ function _ifs_file_entries(dir::AbstractString)
 end
 
 """
-    list_ifs(; dir = projectdir("ifs"), libdir = datadir("sims", "ifs"),
+    list_ifs(; dir = ifs_data_dir(), libdir = datadir("sims", "ifs"),
              group_by_file = false)
 
 List the available IFS definitions from every source: the prebuilt JLD2 records in `libdir`
@@ -152,7 +153,7 @@ function list_ifs(;
 end
 
 """
-    get_ifs_definition(name; file = nothing, dir = projectdir("ifs"),
+    get_ifs_definition(name; file = nothing, dir = ifs_data_dir(),
                        libdir = datadir("sims", "ifs")) -> IFSDefinition
 
 Find the definition called `name` (optionally only in the source `.ifs` file `file`, e.g.

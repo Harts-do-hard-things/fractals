@@ -237,12 +237,20 @@ function _save_image(
 end
 
 """
-    _save_svg(outpath, svg; params)
+    _save_svg(outpath, svg; params, safe = true)
 
-`safesave` SVG text to the already-resolved `outpath`, prefixed with a provenance comment.
+Write SVG text to the already-resolved `outpath`, prefixed with a provenance comment. With
+`safe = true` an existing file becomes a `_#N` backup (`safesave`); render output passes
+`safe = false` and overwrites, like PNG renders and their records.
 """
-function _save_svg(outpath::AbstractString, svg::AbstractString; params::NamedTuple = (;))
+function _save_svg(
+    outpath::AbstractString,
+    svg::AbstractString;
+    params::NamedTuple = (;),
+    safe::Bool = true,
+)
     provenance = replace(_provenance_payload(params), "--" => "- -")
-    safesave(outpath, _TextOutput("<!-- $(_PNG_PROVENANCE_KEYWORD): $provenance -->\n" * svg))
+    text = "<!-- $(_PNG_PROVENANCE_KEYWORD): $provenance -->\n" * svg
+    safe ? safesave(outpath, _TextOutput(text)) : (mkpath(dirname(outpath)); write(outpath, text))
     return outpath
 end

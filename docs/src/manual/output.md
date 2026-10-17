@@ -114,8 +114,8 @@ filter(r -> r.kind == :points && r.npoints > 1_000_000, fractal_catalog())
 
 ## SVG and provenance
 
-SVG renders (`format = SVG()`, or [`render_transformations_svg`](@ref)) are written with DrWatson's
-`safesave` (an existing file is kept as `name_#1.svg`) and start with an
+SVG renders (`format = SVG()`, or [`render_transformations_svg`](@ref)) overwrite an existing file,
+like PNG renders, and start with an
 `<!-- fractals.provenance: ... -->` comment (git commit, version, timestamp, parameters). Their render
 record holds the `Render` (with its `SVG` format) like a PNG's, and a reused SVG render returns the
 file read back as text.
