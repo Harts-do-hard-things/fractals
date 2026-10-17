@@ -4,7 +4,7 @@ A render is a value. [`Render`](@ref)`(ifs, method; resolution, color, alpha, ov
 an [`IFS`](@ref), a [`RenderMethod`](@ref) (each method is its own type carrying only its own
 parameters), the image size, whether to color by map, whether zero pixels become transparent,
 and any overlays. [`render`](@ref) runs it: draw with the method, color, overlay, apply
-alpha, then save the PNG and a render record next to it. It returns
+alpha, then save the PNG and a render record (in `data/exp_pro/renders/`). It returns
 `(render, image, limits, outpath, record)`.
 
 ```julia
@@ -14,7 +14,7 @@ ifs = IFS(HEIGHWAY_DRAGON; name = "Heighway Dragon")
 
 out = render(ifs, Chaos(npoints = 200_000); resolution = (1024, 1024), outpath = "render.png")
 out.outpath   # <repo>/plots/render.png
-out.record    # <repo>/plots/render.jld2
+out.record    # <repo>/data/exp_pro/renders/Heighway_Dragon_chaos_npoints=200000_1024x1024.jld2
 
 # The same thing with the description built first:
 r = Render(ifs, Chaos(npoints = 200_000); resolution = (1024, 1024))
@@ -109,8 +109,8 @@ the IFS to it `iterations` times with [`iterate_image`](@ref). The source is one
   pixel space. `frame = :geometry` (the default) frames by the polygon's iterated geometry,
   `limits_iterations` deep (default: the `ImageIterate` iteration count); `frame = :ifs` uses
   `ifs.limits`.
-- [`FileSource`](@ref)`(path)`: the grayscale image at `path`. When a render record with the
-  same stem sits next to it (every PNG written by `render` has one), its saved limits frame the
+- [`FileSource`](@ref)`(path)`: the grayscale image at `path`. When it has a render record
+  ([`render_record_path`](@ref)`(path)`: any PNG `render` wrote at its default location), its saved limits frame the
   image; otherwise the IFS's limits are used.
 - any other [`RenderMethod`](@ref): its image (and frame) is the seed, so
   `ImageIterate(Chaos(npoints = 100_000))` iterates a chaos-game heatmap.

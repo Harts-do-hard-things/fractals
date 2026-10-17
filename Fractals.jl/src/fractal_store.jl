@@ -92,12 +92,12 @@ function _default_data_name(ifs::IFS, npoints, method, seed)
 end
 
 """
-    save_fractal(ifs, points; image=nothing, method=:chaos, params=(;), seed=nothing, outpath=nothing) -> path
+    save_fractal(ifs, points; image=nothing, method=:chaos, params=(;), seed=nothing) -> path
 
 Save `ifs` (maps, weights, limits) and its `points` as a JLD2 record, plus an
-optional rasterized `image`, the render `method`, `params` and `seed`. `outpath=nothing`
-names the file with DrWatson's `savename` under [`data_output_dir`](@ref); relative paths
-resolve there and absolute paths are used as given. Saved with `safesave` (existing files
+optional rasterized `image`, the render `method`, `params` and `seed`, under
+[`data_output_dir`](@ref) with a DrWatson `savename` file name (there is no path override).
+Saved with `safesave` (existing files
 become `_#N` backups) and tagged with the Git commit like DrWatson's `tagsave` does. Read back with
 [`load_fractal`](@ref), or with plain `JLD2.load` / `DrWatson.wload`.
 
@@ -113,9 +113,8 @@ function save_fractal(
     method::Union{Symbol,AbstractString} = :chaos,
     params::NamedTuple = (;),
     seed::Union{Nothing,Integer} = nothing,
-    outpath::Union{Nothing,AbstractString} = nothing,
 )
-    path = _resolve_data_path(outpath, _default_data_name(ifs, length(points), method, seed))
+    path = data_output_dir(_default_data_name(ifs, length(points), method, seed))
     record = fractal_record(ifs, points; image, method, params, seed)
     return _save_data_record(path, record)
 end
@@ -212,7 +211,7 @@ function fractal_data(
 end
 
 """
-    extend_fractal(source, n; seed=nothing, outpath=nothing) -> (ifs, points, path)
+    extend_fractal(source, n; seed=nothing) -> (ifs, points, path)
 
 Resume a saved chaos game: load `source` (a path or [`load_fractal`](@ref) result), continue
 the chain from its last point for `n` more steps, and save the accumulated cloud as a new
@@ -220,12 +219,7 @@ record (named for the new point count, so the earlier file is kept). Repeated ca
 refining the same fractal. The saved raster, if any, is dropped as stale. Only records with
 method `:chaos` can be extended. `seed` makes the extra steps reproducible.
 """
-function extend_fractal(
-    source,
-    n::Integer;
-    seed::Union{Nothing,Integer} = nothing,
-    outpath::Union{Nothing,AbstractString} = nothing,
-)
+function extend_fractal(source, n::Integer; seed::Union{Nothing,Integer} = nothing)
     n > 0 || throw(ArgumentError("n must be > 0, got $n"))
     loaded = _loaded_fractal(source)
     loaded.method == :chaos ||
@@ -244,14 +238,7 @@ function extend_fractal(
         (; (Symbol(k) => v for (k, v) in loaded.params)...),
         (; npoints = length(points), extended_by = n),
     )
-    path = save_fractal(
-        old,
-        points;
-        method = :chaos,
-        params = params,
-        seed = loaded.seed,
-        outpath = outpath,
-    )
+    path = save_fractal(old, points; method = :chaos, params = params, seed = loaded.seed)
     return (ifs = old, points = points, path = path)
 end
 

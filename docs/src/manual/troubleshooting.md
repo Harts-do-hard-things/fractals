@@ -77,7 +77,7 @@ Common issues:
 
 Common issues:
 - `FileSource(path)` requires an existing file and a grayscale image (RGB seeds are rejected).
-- A PNG without a render record next to it is framed by the IFS's own limits.
+- A PNG without a render record (see `render_record_path`) is framed by the IFS's own limits.
 - `color = true` colors the final pass only.
 
 ### `Inverse`

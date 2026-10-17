@@ -143,8 +143,8 @@ PolygonSource(; polygon = :default, frame = :geometry, limits_iterations = nothi
 """
     FileSource(path)
 
-Seed with the image at `path`. When a render record (`.jld2` with the same stem) sits next to
-it, its saved limits frame the image; otherwise the IFS's limits are used.
+Seed with the image at `path`. When it has a render record (see [`render_record_path`](@ref)),
+its saved limits frame the image; otherwise the IFS's limits are used.
 """
 struct FileSource <: ImageSource
     path::String
@@ -237,6 +237,24 @@ struct Render{M<:RenderMethod}
         return new{M}(ifs, method, (rows, cols), color, alpha, collect(Overlay, overlays))
     end
 end
+"""
+    Render(r::Render; resolution = r.resolution, color = r.color, alpha = r.alpha,
+           overlays = r.overlays, ifs = r.ifs, method = r.method)
+
+A copy of `r` with the given fields changed, e.g. `render(Render(r; resolution = (4096, 4096)))`
+to re-render a saved render at a higher resolution. Point-based methods reuse their cached
+points (see [`cached_points`](@ref)), so only the rasterization is redone.
+"""
+Render(
+    r::Render;
+    ifs = r.ifs,
+    method = r.method,
+    resolution = r.resolution,
+    color = r.color,
+    alpha = r.alpha,
+    overlays = r.overlays,
+) = Render(ifs, method, resolution, color, alpha, overlays)
+
 Render(
     ifs::IFS,
     method::RenderMethod;

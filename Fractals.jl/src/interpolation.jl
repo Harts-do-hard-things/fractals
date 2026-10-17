@@ -249,9 +249,10 @@ end
 
 Render `frames` evenly spaced interpolation steps from `left` to `right` (see
 [`interpolate_ifs`](@ref)) with `method` (any [`RenderMethod`](@ref)), as numbered PNGs
-`basename_0001.png`, `basename_0002.png`, ... each with its render record, and return
+`basename_0001.png`, `basename_0002.png`, ... and return
 `(outdir, paths, ts)`. Both systems need the same number of maps. `outdir = nothing` writes to
-an auto-named directory under `output_dir("frames")`. Feed the frames to
+an auto-named directory under `output_dir("frames")`. Each frame's render record mirrors it under
+the data directory (`renders/frames/<sequence>/`, see [`render_record_path`](@ref)). Feed the frames to
 [`export_animation`](@ref).
 """
 function render_interpolation_frames(
@@ -297,7 +298,7 @@ function render_interpolation_frames(
         ifs = interpolate_ifs(left, right, t; name, limits_mode, interpolation_mode)
         r = Render(ifs, method; resolution, color, alpha, overlays)
         path = joinpath(outdir, @sprintf("%s_%04d.png", basename, i))
-        push!(paths, render(r; outpath = path).outpath)
+        push!(paths, _render(r, path, render_record_path(path)).outpath)
     end
     return (outdir = String(outdir), paths = paths, ts = ts)
 end

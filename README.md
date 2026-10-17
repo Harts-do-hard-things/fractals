@@ -49,7 +49,7 @@ winget install Gyan.FFmpeg
 julia --startup-file=no --project=. -e "using Fractals; render(IFS(HEIGHWAY_DRAGON; name=\"Heighway Dragon\"), Chaos(npoints=200_000); resolution=(1024, 1024))"
 ```
 
-This writes `plots/Heighway_Dragon_chaos_npoints=200000_1024x1024.png` (and a `.jld2` render record next to it)
+This writes `plots/Heighway_Dragon_chaos_npoints=200000_1024x1024.png` (and a `.jld2` render record under `data/exp_pro/renders/`)
 (see [Output Files](#output-files-drwatson)).
 
 ### 3. Run tests

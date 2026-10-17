@@ -13,19 +13,65 @@ _with_limits(ifs::IFS, limits) = IFS(ifs.name, ifs.maps, ifs.weights, limits)
 _frame(limits) = (; limits)
 
 # --------------------------------
+# Point clouds: computed once, cached independently of resolution and styling
+# --------------------------------
+#
+# The point-based methods split into an expensive step (the point cloud, which depends only on
+# the IFS's maps and weights and the method's fields) and a cheap one (rasterizing at
+# `resolution`). The cloud is cached with DrWatson's `produce_or_load` under
+# `data_output_dir("points", <ifs key>)`, named by every field of the method. The key ignores the
+# IFS name, resolution, color, alpha and overlays, so re-rendering at another size or style
+# reuses the same points.
+
+"""
+    ifs_key(ifs) -> String
+
+Stable content key of `ifs`: a hash of its maps and weights only (not its name), the same hash
+IFSParse uses for prebuilt library records.
+"""
+ifs_key(ifs::IFS) = IFSParse._ifs_key(_equation_matrix(ifs), collect(ifs.weights))
+
+_compute_points(m::Chaos, ifs::IFS) = chaos_game(ifs, m.npoints; warmup = m.warmup, seed = m.seed)
+_compute_points(m::PointDeterministic, ifs::IFS) = deterministic_iterate(
+    ifs,
+    chaos_game(ifs, m.npoints; warmup = m.warmup, seed = m.seed),
+    m.iterations,
+)
+
+"""
+    cached_points(method, ifs; force = false) -> (points, path, cached)
+
+The point cloud of a [`Chaos`](@ref) or [`PointDeterministic`](@ref) `method` for `ifs`, computed
+once and then loaded from `data_output_dir("points", ifs_key(ifs))`. The cache key is the IFS
+content and every field of `method`; resolution and styling are not part of it. An unseeded
+method is cached too, so repeated renders reuse one cloud; `force = true` recomputes.
+"""
+function cached_points(m::Union{Chaos,PointDeterministic}, ifs::IFS; force::Bool = false)
+    computed = Ref(false)
+    record, path = DrWatson.produce_or_load(
+        m,
+        data_output_dir("points", ifs_key(ifs));
+        filename = savename(method_tag(m), m; accesses = fieldnames(typeof(m))),
+        suffix = "jld2",
+        tag = false,
+        force = force,
+        verbose = false,
+    ) do method
+        computed[] = true
+        points = _compute_points(method, ifs)
+        _tag_record!(Dict{String,Any}("points" => _points_matrix(points), "method" => method))
+    end
+    return _points_vector(record["points"]), path, !computed[]
+end
+
+# --------------------------------
 # draw: one method per render method
 # --------------------------------
 
 draw(r::Render) = draw(r.method, r)
 
-function draw(m::Chaos, r::Render)
-    points = chaos_game(r.ifs, m.npoints; warmup = m.warmup, seed = m.seed)
-    return make_image(points, r.ifs.limits; resolution = r.resolution), r.ifs.limits
-end
-
-function draw(m::PointDeterministic, r::Render)
-    start = chaos_game(r.ifs, m.npoints; warmup = m.warmup, seed = m.seed)
-    points = deterministic_iterate(r.ifs, start, m.iterations)
+function draw(m::Union{Chaos,PointDeterministic}, r::Render)
+    points, _, _ = cached_points(m, r.ifs)
     return make_image(points, r.ifs.limits; resolution = r.resolution), r.ifs.limits
 end
 
@@ -92,7 +138,7 @@ end
 function seed_image(s::FileSource, r::Render)
     img = _load_image(s.path)
     _validate_iterate_image_input(img)
-    record = _sidecar_path(s.path)
+    record = render_record_path(s.path)
     limits = isfile(record) ? JLD2.load(record, "limits") : r.ifs.limits
     return _to_grayscale_matrix(img), limits
 end
@@ -168,20 +214,38 @@ function _render_name(r::Render)
     return "$(stem)_$(rows)x$(cols)$(flags).png"
 end
 
-_sidecar_path(image_path::AbstractString) = first(splitext(image_path)) * ".jld2"
-
 """
-    save_render(r::Render, img, limits; outpath = nothing) -> (outpath, record)
+    render_record_path(r::Render) -> String
+    render_record_path(image_path) -> String
 
-Write `img` as a PNG and the render record (`r` and `limits`, tagged with the Git commit by
-DrWatson's `tagsave`) as a `.jld2` with the same stem. `outpath = nothing` names the PNG from the
-IFS name, the method's parameters, the resolution, and the color/alpha flags.
+Where a render record lives. Records always go under `data_output_dir("renders")` and are
+never placed by an `outpath`:
+
+- `render_record_path(r)`: named from the render itself (the same `savename`-based name as its
+  default PNG), whatever `outpath` the PNG was written to.
+- `render_record_path(image_path)`: the record that mirrors an image under `output_dir()`
+  (`plots/<rel>.png` → `renders/<rel>.jld2`). This finds the record of a PNG at its default
+  location and of animation frames, which keep their `frames/<sequence>/` subdirectories. A PNG
+  written to a custom `outpath` has its record at `render_record_path(r)` instead (the `record`
+  field of [`render`](@ref)'s result).
 """
-function save_render(r::Render, img, limits; outpath::Union{Nothing,AbstractString} = nothing)
-    png = _resolve_output_path(outpath, _render_name(r))
+render_record_path(r::Render) =
+    data_output_dir("renders", first(splitext(_render_name(r))) * ".jld2")
+
+function render_record_path(image_path::AbstractString)
+    image = normpath(abspath(image_path))
+    base = normpath(abspath(output_dir())) * Base.Filesystem.path_separator
+    inside =
+        Sys.iswindows() ? startswith(lowercase(image), lowercase(base)) : startswith(image, base)
+    rel = inside ? relpath(image, output_dir()) : basename(image)
+    return data_output_dir("renders", first(splitext(rel)) * ".jld2")
+end
+
+# Write the PNG to `png` and the record (`r` and `limits`, git-tagged by DrWatson's `tagsave`) to
+# `record`.
+function _save_render(r::Render, img, limits, png::AbstractString, record::AbstractString)
     mkpath(dirname(png))
     _save_image_file(png, img)
-    record = _sidecar_path(png)
     data = Dict{String,Any}("render" => r, "limits" => limits)
     if _SKIP_GIT[]  # precompile workload: no git subprocess
         DrWatson.wsave(record, data)
@@ -192,14 +256,40 @@ function save_render(r::Render, img, limits; outpath::Union{Nothing,AbstractStri
 end
 
 """
+    save_render(r::Render, img, limits; outpath = nothing) -> (outpath, record)
+
+Write `img` as a PNG and the render record (`r` and `limits`, tagged with the Git commit by
+DrWatson's `tagsave`) at [`render_record_path`](@ref)`(r)` in the data directory. `outpath`
+places only the PNG; `outpath = nothing` names it from the IFS name, the method's parameters,
+the resolution, and the color/alpha flags.
+"""
+save_render(r::Render, img, limits; outpath::Union{Nothing,AbstractString} = nothing) =
+    _save_render(
+        r,
+        img,
+        limits,
+        _resolve_output_path(outpath, _render_name(r)),
+        render_record_path(r),
+    )
+
+"""
     load_render(path) -> Render
 
-The [`Render`](@ref) saved in a render record: the `.jld2` written by [`render`](@ref), or the
-PNG next to it. Run it again with `render(load_render(path))`.
+The [`Render`](@ref) saved in a render record: a `.jld2` path, or a PNG whose record is at
+[`render_record_path`](@ref)`(png)` (a default-located render or an animation frame). Run it
+again with `render(load_render(path))`.
 """
 function load_render(path::AbstractString)
-    record = endswith(lowercase(path), ".jld2") ? path : _sidecar_path(path)
+    record = endswith(lowercase(path), ".jld2") ? path : render_record_path(path)
     return JLD2.load(record, "render")::Render
+end
+
+# Draw, finish, and save to explicit PNG and record paths.
+function _render(r::Render, png::AbstractString, record::AbstractString)
+    img, limits = draw(r)
+    img = finish(r, img, limits)
+    _save_render(r, img, limits, png, record)
+    return (; render = r, image = img, limits, outpath = png, record)
 end
 
 """
@@ -207,15 +297,12 @@ end
     render(ifs::IFS, method::RenderMethod; outpath = nothing, kwargs...)
 
 Draw `r` with its method, apply color, overlays and alpha, then save the PNG and its render
-record (see [`save_render`](@ref)). The second form builds the [`Render`](@ref) from `kwargs`.
+record (see [`save_render`](@ref)). `outpath` places only the PNG; the record always goes to
+[`render_record_path`](@ref)`(r)`. The second form builds the [`Render`](@ref) from `kwargs`.
 Returns `(render, image, limits, outpath, record)`.
 """
-function render(r::Render; outpath::Union{Nothing,AbstractString} = nothing)
-    img, limits = draw(r)
-    img = finish(r, img, limits)
-    png, record = save_render(r, img, limits; outpath)
-    return (; render = r, image = img, limits, outpath = png, record)
-end
+render(r::Render; outpath::Union{Nothing,AbstractString} = nothing) =
+    _render(r, _resolve_output_path(outpath, _render_name(r)), render_record_path(r))
 
 render(ifs::IFS, method::RenderMethod; outpath = nothing, kwargs...) =
     render(Render(ifs, method; kwargs...); outpath)

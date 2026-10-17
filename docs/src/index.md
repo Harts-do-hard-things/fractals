@@ -27,7 +27,7 @@ out.outpath   # <repo>/plots/Heighway_Dragon_chaos_npoints=200000_1024x1024.png
 ```
 
 [`render`](@ref) saves under DrWatson's `plotsdir()`, names the file from its parameters,
-and saves a render record (`.jld2`) next to the PNG so the render can be reloaded with
+and saves a render record (`.jld2`) under `data/exp_pro/renders/` so the render can be reloaded with
 [`load_render`](@ref). See [Output files](@ref).
 
 ## Render methods at a glance

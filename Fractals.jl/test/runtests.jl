@@ -374,8 +374,12 @@ end
         @test all(size(img) == (24, 24) for img in imgs)
         @test any(any(_is_drawn_pixel, img) for img in imgs)
 
-        # Each frame has a render record next to it, with the interpolated IFS.
-        @test all(p -> isfile(first(splitext(p)) * ".jld2"), result.paths)
+        # Each frame's render record mirrors it under the data directory (renders/frames/...).
+        @test all(p -> isfile(render_record_path(p)), result.paths)
+        @test all(
+            p -> startswith(render_record_path(p), data_output_dir("renders", "frames")),
+            result.paths,
+        )
         mid = load_render(result.paths[2])
         @test mid isa Render{Chaos}
         @test mid.method.npoints == 250
@@ -1274,11 +1278,14 @@ end
                 out =
                     render(ifs, Inverse(iterations = 2); resolution = (16, 16), outpath = "rec.png")
                 @test out.outpath == joinpath(plots, "rec.png")
-                @test out.record == joinpath(plots, "rec.jld2")
+                # The record is named from the render, in the data directory, not from `outpath`.
+                @test out.record == render_record_path(out.render)
+                @test startswith(out.record, data_output_dir("renders"))
+                @test basename(out.record) == "ifs_inverse_iterations=2_16x16.jld2"
                 raw = Fractals.JLD2.load(out.record)
                 @test raw["limits"] == out.limits
                 @test raw["render"] isa Render{Inverse}
-                @test load_render(out.outpath).method.iterations == 2
+                @test load_render(out.record).method.iterations == 2
 
                 # SVG output keeps its savename-based name and embedded provenance comment.
                 named = IFS(SMALL_EQ; name = "My Fractal!")
@@ -1979,12 +1986,10 @@ end
 
     @testset "FileSource reads limits from a render record" begin
         _with_tmpdir() do tmp
-            seed_out = render(
-                ifs,
-                Chaos(npoints = 800, warmup = 5, seed = 1);
-                resolution = (24, 24),
-                outpath = joinpath(tmp, "seed.png"),
-            )
+            seed_out =
+                render(ifs, Chaos(npoints = 800, warmup = 5, seed = 1); resolution = (24, 24))
+            # At its default location the PNG maps to its record (plots/<rel> -> renders/<rel>).
+            @test render_record_path(seed_out.outpath) == seed_out.record
             @test isfile(seed_out.record)
             other = IFS(ifs.maps, ifs.weights; name = "Other", limits = ((-5.0, 5.0), (-5.0, 5.0)))
 
@@ -2086,10 +2091,10 @@ end
                 overlays = [Axes(), BasePolygon(:line)],
                 outpath = joinpath(tmp, "trip.png"),
             )
-            @test out.record == joinpath(tmp, "trip.jld2")
+            @test out.record == render_record_path(out.render)
 
-            # The record loads from its own path or from the PNG next to it.
-            for path in (out.record, out.outpath)
+            # The record loads from its own path (the PNG has a custom outpath, so it has no mirror).
+            for path in (out.record,)
                 loaded = load_render(path)
                 @test loaded isa Render{Chaos}
                 @test loaded.method.npoints == 700
@@ -2117,7 +2122,7 @@ end
                 resolution = (16, 16),
                 outpath = joinpath(tmp, "composed_trip.png"),
             )
-            loaded = load_render(composed.outpath)
+            loaded = load_render(composed.record)
             @test loaded isa Render{<:ImageIterate}
             @test loaded.method.source isa Chaos
             @test loaded.method.iterations == 2
@@ -2682,6 +2687,25 @@ end
             cd(old)
         end
     end
+end
+
+@testset "Point cloud cache ignores name, resolution and style" begin
+    ifs = IFS(SMALL_EQ; name = "cache")
+    m = Chaos(npoints = 500, warmup = 3, seed = 4)
+    out = render(ifs, m; resolution = (16, 16))
+    points, path, cached = Fractals.cached_points(m, ifs)
+    @test cached
+    @test startswith(path, data_output_dir("points", ifs_key(ifs)))
+    stamp = mtime(path)
+    big = render(Render(out.render; resolution = (48, 48), color = true, alpha = true))
+    @test size(big.image) == (48, 48)
+    renamed = IFS(SMALL_EQ; name = "renamed")
+    @test ifs_key(renamed) == ifs_key(ifs)
+    @test Fractals.cached_points(m, renamed)[1] == points
+    @test mtime(path) == stamp
+    @test length(readdir(dirname(path))) == 1
+    @test !Fractals.cached_points(m, ifs; force = true)[3]
+    @test Fractals.cached_points(Chaos(npoints = 501, warmup = 3, seed = 4), ifs)[2] != path
 end
 
 include("test_jld2.jl")

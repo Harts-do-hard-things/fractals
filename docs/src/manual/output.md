@@ -47,17 +47,30 @@ basename(out.outpath)   # "Eisenstein_chaos_npoints=100000_800x800.png"
 
 ## Render records
 
-[`render`](@ref) (through [`save_render`](@ref)) writes two files with the same stem: the PNG and
-a `.jld2` record holding the [`Render`](@ref) description and the world-space `limits` of the
-image. The record is written with DrWatson's `tagsave`, so it also stores the Git commit
+[`render`](@ref) (through [`save_render`](@ref)) writes two files: the PNG under `plots/` and a
+`.jld2` record holding the [`Render`](@ref) description and the world-space `limits` of the
+image. Records always live in the data directory, at
+[`render_record_path`](@ref)`(r)` = `data/exp_pro/renders/<render name>.jld2`. `outpath` only
+places the PNG; there is no path override for records. Animation frames mirror their layout:
+`plots/frames/<sequence>/frame_0001.png` has its record at
+`data/exp_pro/renders/frames/<sequence>/frame_0001.jld2`.
+
+The record is written with DrWatson's `tagsave`, so it also stores the Git commit
 (`gitdescribe`, e.g. `v1.0.1-41-g1922796-dirty`). [`load_render`](@ref) reads it back (pass the
-`.jld2` or the PNG), and an `ImageIterate` with a [`FileSource`](@ref) uses the record's limits to
-frame the PNG as a seed:
+`.jld2`, or a PNG at its default location or an animation frame), and an `ImageIterate` with a
+[`FileSource`](@ref) uses the record's limits to frame such a PNG as a seed:
 
 ```julia
-r = load_render(out.outpath)
-render(r; outpath = "again.png")   # same description, same seed, same image
+r = load_render(out.record)
+render(r; outpath = "again.png")                      # same description, same seed, same image
+render(Render(r; resolution = (4096, 4096)))          # same points, rasterized larger
 ```
+
+The point clouds of [`Chaos`](@ref) and [`PointDeterministic`](@ref) renders are cached
+separately by [`cached_points`](@ref) under `data/exp_pro/points/<ifs_key>/`, keyed only on the
+IFS's maps and weights ([`ifs_key`](@ref), not its name) and the method's fields. Resolution,
+color, alpha and overlays are not part of the key, so re-rendering at another size or style
+only redoes the rasterization.
 
 Existing files at the same path are overwritten. SVGs start with an
 `<!-- fractals.provenance: ... -->` comment, and [`read_provenance`](@ref) reads the
