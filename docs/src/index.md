@@ -49,5 +49,5 @@ and saves a render record (`.jld2`) under `data/sims/renders/` so the render can
 - [Animation](@ref): interpolation, frame sequences, and GIF/MP4 export.
 - [Output files](@ref) and [Data layout](@ref): where everything is written and how it is named.
 - [IFS text format](@ref): writing `.ifs` files and validation rules.
-- [Benchmarks](@ref): the opt-in benchmark script.
+- [Benchmarks](manual/benchmarks.md): the opt-in benchmark script.
 - [API reference](@ref): every exported function and type.

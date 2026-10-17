@@ -44,7 +44,6 @@ include("ifs_load.jl")                # parse_ifs_string/file, get_ifs: IFS-retu
 # render_pipeline.jl follows every file whose kernels draw() calls
 include("render_pipeline.jl")         # render(::Render): draw, finish, save_render, load_render
 include("examples.jl")                # HEIGHWAY_DRAGON, EISENSTEIN, main()
-include("precompile.jl")              # PrecompileTools workload (must stay last)
 
 export AffineMap,
     IFS,

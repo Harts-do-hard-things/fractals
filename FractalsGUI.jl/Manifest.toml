@@ -123,12 +123,6 @@ git-tree-sha1 = "473e9afc9cf30814eb67ffa5f2db7df82c3ad9fd"
 uuid = "ee1fde0b-3d02-5ea6-8484-8dfef6360eab"
 version = "1.16.2+0"
 
-[[deps.DelimitedFiles]]
-deps = ["Mmap"]
-git-tree-sha1 = "9e2f36d3c96a820c678f2f1f1782582fcf685bae"
-uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
-version = "1.9.1"
-
 [[deps.DocStringExtensions]]
 git-tree-sha1 = "7442a5dfe1ebb773c29cc2962a8980f47221d76c"
 uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
@@ -186,7 +180,7 @@ uuid = "a3f928ae-7b40-5064-980b-68af3947d34b"
 version = "2.17.1+0"
 
 [[deps.Fractals]]
-deps = ["Colors", "Dates", "DelimitedFiles", "DrWatson", "FileIO", "IFSParse", "JLD2", "JSON3", "LinearAlgebra", "PNGFiles", "PrecompileTools", "Printf", "Random", "StaticArrays", "Statistics", "StatsBase", "TOML"]
+deps = ["Colors", "Dates", "DrWatson", "FileIO", "IFSParse", "JLD2", "JSON3", "LinearAlgebra", "PNGFiles", "Printf", "Random", "StaticArrays", "Statistics", "StatsBase", "TOML"]
 path = "../Fractals.jl"
 uuid = "c711514a-ad55-41be-9602-f6ed5533a69e"
 version = "1.0.0"

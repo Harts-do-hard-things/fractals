@@ -40,7 +40,7 @@ The file name (and so the `produce_or_load` key) is `<key>`, a stable hash of th
 matrix and weights only. The name is stored but is not part of the key: renaming a fractal in
 its `.ifs` file does not create a new record, and two identical systems in one source file
 share one record (the first name wins). Existing records are reused unless `force = true`.
-Non-contractive definitions are skipped with a warning, as in [`parse_ifs_file`](@ref).
+Non-contractive definitions are skipped with a warning, as in `Fractals.parse_ifs_file`.
 Returns the record paths, one per definition.
 
 `projectdir` and `datadir` follow the active project, so under `--project=Fractals.jl` the

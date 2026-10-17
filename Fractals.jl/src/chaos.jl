@@ -15,18 +15,11 @@ function _chaos_serial(
 
     x = SVector{2,Float64}(0.0, 0.0)
 
-    if isnothing(seed)
-        for _ = 1:warmup
-            x = maps[sample(map_indices, weights)](x)
-        end
-        idxs = sample(map_indices, weights, n)
-    else
-        rng = MersenneTwister(seed)
-        for _ = 1:warmup
-            x = maps[sample(rng, map_indices, weights)](x)
-        end
-        idxs = sample(rng, map_indices, weights, n)
+    rng = isnothing(seed) ? Random.default_rng() : MersenneTwister(seed)
+    for _ = 1:warmup
+        x = maps[sample(rng, map_indices, weights)](x)
     end
+    idxs = sample(rng, map_indices, weights, n)
 
     for i = 1:n
         x = maps[idxs[i]](x)
@@ -53,26 +46,16 @@ function _chaos_parallel(
         hi = fld(tid * n, nthreads())
         lo > hi && continue
 
-        rng = isnothing(seed) ? nothing : MersenneTwister(seed + tid - 1)
+        rng = isnothing(seed) ? Random.default_rng() : MersenneTwister(seed + tid - 1)
 
         # independent chain per thread
         x = SVector{2,Float64}(0.0, 0.0)
-        if isnothing(rng)
-            for _ = 1:warmup
-                x = maps[sample(map_indices, weights)](x)
-            end
-            @inbounds for i = lo:hi
-                x = maps[sample(map_indices, weights)](x)
-                points[i] = x
-            end
-        else
-            for _ = 1:warmup
-                x = maps[sample(rng, map_indices, weights)](x)
-            end
-            @inbounds for i = lo:hi
-                x = maps[sample(rng, map_indices, weights)](x)
-                points[i] = x
-            end
+        for _ = 1:warmup
+            x = maps[sample(rng, map_indices, weights)](x)
+        end
+        @inbounds for i = lo:hi
+            x = maps[sample(rng, map_indices, weights)](x)
+            points[i] = x
         end
     end
 

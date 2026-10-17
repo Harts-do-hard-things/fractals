@@ -32,7 +32,7 @@ julia --startup-file=no --project=Fractals.jl Fractals.jl/test/generate_snapshot
 
 ## Benchmarks
 
-The opt-in benchmark script is not part of the tests or CI; see [Benchmarks](@ref).
+The opt-in benchmark script is not part of the tests or CI; see [Benchmarks](benchmarks.md).
 
 ## Formatting
 

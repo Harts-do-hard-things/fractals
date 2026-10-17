@@ -142,8 +142,6 @@ end
 
 # `gitdescribe` scans the working tree for the dirty flag (~60 ms), so results are reused briefly
 # across back-to-back saves (batch renders, GUI preview refreshes).
-# The precompile workload sets this: shelling out to `git` there is slow and records nothing useful.
-const _SKIP_GIT = ScopedValue(false)
 const _GITCOMMIT_TTL_SECONDS = 2.0
 const _GITCOMMIT_CACHE = Ref{Tuple{String,Float64,Union{Nothing,String}}}(("", -Inf, nothing))
 
@@ -154,7 +152,6 @@ const _GITCOMMIT_CACHE = Ref{Tuple{String,Float64,Union{Nothing,String}}}(("", -
 project is not inside a Git repository.
 """
 function _gitcommit()
-    _SKIP_GIT[] && return nothing
     root = projectdir()
     cached_root, stamp, cached = _GITCOMMIT_CACHE[]
     cached_root == root && time() - stamp < _GITCOMMIT_TTL_SECONDS && return cached

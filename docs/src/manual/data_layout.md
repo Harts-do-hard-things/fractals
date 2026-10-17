@@ -33,7 +33,7 @@ files left from before generated data moved to `data/sims/`.
 | `data/sims/renders/` | a `.jld2` per render: the [`Render`](@ref) description and its `limits`; frames in `renders/frames/<sequence>/` | [`save_render`](@ref) (via `render`) |
 | `data/sims/points/` | a `.jld2` per point cloud: `points` (2×N), the `method`, the IFS key | [`cached_points`](@ref), [`extend_fractal`](@ref) |
 | `data/sims/ifs/<file stem>/` | `ifs_<key>.jld2` per function system: equation matrix, weights, name, docs, source file | [`build_ifs_library`](@ref) |
-| `data/sims/benchmarks/` | one `.jld2` per benchmark run | `scripts/benchmark.jl` (see [Benchmarks](@ref)) |
+| `data/sims/benchmarks/` | one `.jld2` per benchmark run | `scripts/benchmark.jl` (see [Benchmarks](benchmarks.md)) |
 
 ## File names
 

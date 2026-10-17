@@ -1,7 +1,7 @@
 """
     IFSDefinition
 
-One parsed `.ifs` block before it becomes an [`IFS`](@ref): its `name`, `docs` (the `;`
+One parsed `.ifs` block before it becomes a `Fractals.IFS`: its `name`, `docs` (the `;`
 comment lines), and equation matrix `eq` (6 or 7 columns).
 """
 struct IFSDefinition

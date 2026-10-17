@@ -429,11 +429,7 @@ function _save_render(r::Render, img, limits, png::AbstractString, record::Abstr
     mkpath(dirname(png))
     _write_output(r.format, r, png, img)
     data = Dict{String,Any}("render" => r, "limits" => limits)
-    if _SKIP_GIT[]  # precompile workload: no git subprocess
-        DrWatson.wsave(record, data)
-    else
-        DrWatson.tagsave(record, data; gitpath = dirname(pkgdir(@__MODULE__)), warn = false)
-    end
+    DrWatson.tagsave(record, data; gitpath = dirname(pkgdir(@__MODULE__)), warn = false)
     return png, record
 end
 

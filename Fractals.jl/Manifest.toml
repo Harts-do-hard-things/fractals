@@ -2,7 +2,7 @@
 
 julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "c61eaec0e9e70e7dffec94d2b64e101aa0850509"
+project_hash = "85fdc0815d088d57692cb4beb342fca8415bd540"
 
 [[deps.AliasTables]]
 deps = ["PtrArrays", "Random"]
@@ -93,12 +93,6 @@ deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 version = "1.11.0"
 
-[[deps.DelimitedFiles]]
-deps = ["Mmap"]
-git-tree-sha1 = "9e2f36d3c96a820c678f2f1f1782582fcf685bae"
-uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
-version = "1.9.1"
-
 [[deps.DocStringExtensions]]
 git-tree-sha1 = "7442a5dfe1ebb773c29cc2962a8980f47221d76c"
 uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
@@ -138,7 +132,7 @@ uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
 version = "0.8.5"
 
 [[deps.Fractals]]
-deps = ["Colors", "Dates", "DelimitedFiles", "DrWatson", "FileIO", "IFSParse", "JLD2", "JSON3", "LinearAlgebra", "PNGFiles", "PrecompileTools", "Printf", "Random", "StaticArrays", "Statistics", "StatsBase", "TOML"]
+deps = ["Colors", "Dates", "DrWatson", "FileIO", "IFSParse", "JLD2", "JSON3", "LinearAlgebra", "PNGFiles", "Printf", "Random", "StaticArrays", "Statistics", "StatsBase", "TOML"]
 path = "."
 uuid = "c711514a-ad55-41be-9602-f6ed5533a69e"
 version = "1.0.0"
