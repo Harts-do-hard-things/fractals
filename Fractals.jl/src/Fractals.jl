@@ -19,6 +19,16 @@ using DrWatson: plotsdir, datadir, projectdir, savename, safesave, gitdescribe
 include("config.jl")                 # constants, RenderMethod enum, polygon presets
 include("utils.jl")                  # shared utilities: PNG metadata, color maps, GPU stub
 include("output.jl")                 # DrWatson-managed output paths, naming, safesave, provenance
+# ifs_parse.jl is a self-contained submodule (no dependency on the files below); types.jl and
+# ifs_load.jl import from it
+include("ifs_parse.jl")              # IFSParse submodule: .ifs lexer/parser, prebuilt JLD2 library
+using .IFSParse
+using .IFSParse:
+    _validated_ifs_definitions,
+    _split_valid_ifs_definitions,
+    _contractive_row,
+    _noncontractive_rows,
+    _format_contractivity_failure
 include("types.jl")                  # AffineMap, IFS structs and constructors
 include("render_transformations.jl") # SVG/PNG visualization of affine maps
 include("chaos.jl")                  # iterate!, iterate_parallel!
@@ -29,8 +39,8 @@ include("inverse.jl")                # rasterize_image_inversely
 # render_transformations — _resolve_image_source calls all of them
 include("image_iterate.jl")          # iterate_image, _resolve_image_source
 include("interpolation.jl")          # interpolate_eq_matrix, interpolate_ifs, render_interpolation_frames
-include("ifsparser.jl")              # IFS file/string parser (pure; no I/O)
-# interactive.jl must follow ifsparser.jl (calls parse_ifs_file) and all render-method files,
+include("ifs_load.jl")               # parse_ifs_string/file, get_ifs: IFS-returning wrappers over IFSParse
+# interactive.jl must follow ifs_load.jl (calls parse_ifs_file) and all render-method files,
 # but must come BEFORE render.jl — render.jl's _resolve_render_input calls _select_ifs_definition
 include("interactive.jl")            # all stdin logic: prompt helpers, _select_ifs_definition, prompt_ifs_and_render
 include("render.jl")                 # render (top-level API, must come after all methods)
@@ -55,6 +65,11 @@ export AffineMap,
     lex_ifs,
     parse_ifs_string,
     parse_ifs_file,
+    build_ifs_library,
+    list_ifs_files,
+    list_ifs,
+    get_ifs,
+    get_ifs_definition,
     random_eq,
     random_ifs,
     prompt_ifs_and_render,

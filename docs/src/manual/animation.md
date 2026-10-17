@@ -84,7 +84,7 @@ winget install Gyan.FFmpeg    # Windows
 seed image, adding one map at a time with interpolated frames, and exports a GIF:
 
 ```bash
-julia --startup-file=no --project=. scripts/animate_image_iterate.jl --input data/exp_raw/Default.ifs --image-path seed.png --frames-per-map 8 --fps 12
+julia --startup-file=no --project=. scripts/animate_image_iterate.jl --input ifs/Default.ifs --image-path seed.png --frames-per-map 8 --fps 12
 ```
 
 Frames default to `plots/frames/<basename>/` and the GIF to

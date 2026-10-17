@@ -1432,8 +1432,8 @@ end
         end
 
         @testset "DrWatson data layout" begin
-            # Curated inputs live in <project root>/data/exp_raw, independent of the active project.
-            @test ifs_data_dir() == joinpath(dirname(pkgdir(Fractals)), "data", "exp_raw")
+            # Curated inputs live in <project root>/ifs, independent of the active project.
+            @test ifs_data_dir() == joinpath(dirname(pkgdir(Fractals)), "ifs")
             @test isfile(ifs_data_dir("Default.ifs"))
             @test !isempty(parse_ifs_file(ifs_data_dir("Default.ifs"); npoints = 1))
 

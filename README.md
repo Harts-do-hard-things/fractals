@@ -17,8 +17,8 @@ The package includes:
 - `Fractals.jl/`: Julia package (`src/`, `test/`, `bench/`, and `bin/fractals.jl`, the package CLI)
 - `FractalsGUI.jl/`: separate Julia package for the desktop GUI (depends on `Fractals`)
 - `scripts/`: DrWatson project scripts (`@quickactivate "fractals"`): example renders, ImageIterate animation builder, GIF/MP4 export, rotation examples
-- `data/exp_raw/`: curated `.ifs` input library (tracked; `ifs_data_dir()` returns this path)
-- `data/exp_pro/`, `data/sims/`: generated data such as benchmark JSON (git-ignored; `data_output_dir()`)
+- `ifs/`: curated `.ifs` input files (tracked; `ifs_data_dir()` returns this path)
+- `data/exp_pro/`, `data/sims/`: generated data such as benchmark JSON and the prebuilt IFS library `data/exp_pro/ifs/` (`build_ifs_library()`) (git-ignored; `data_output_dir()`)
 - `plots/`: rendered images and animations (git-ignored, created on demand; `output_dir()`)
 - `docs/`: Documenter.jl documentation site (`docs/make.jl`, pages in `docs/src/`)
 
@@ -152,6 +152,7 @@ defs = parse_ifs_string(text; npoints=100_000)
 ifs = defs[1]
 iterate!(ifs)
 ```
+`.ifs` files live in `ifs/`; `build_ifs_library()` prebuilds one JLD2 record per function system under `data/exp_pro/ifs/<file>/`, and `list_ifs()` / `get_ifs(name)` prefer those records over parsing the files (see the IFS text format page).
 
 ## Documentation
 

@@ -85,7 +85,7 @@ jobs:
         shell: bash
         env:
           FRACTALS_OUTPUT_ROOT: ${{ runner.temp }}/fractals-output
-        run: julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input data/exp_raw/Default.ifs --ifs-index 1 --npoints 2000 --resolution 64x64
+        run: julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input ifs/Default.ifs --ifs-index 1 --npoints 2000 --resolution 64x64
 
   gui-test:
     name: GUI Tests / ubuntu-latest / Julia 1.12

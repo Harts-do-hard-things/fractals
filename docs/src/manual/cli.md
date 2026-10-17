@@ -57,7 +57,7 @@ Arguments used by this method:
 Example:
 
 ```powershell
-julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input data/exp_raw/Default.ifs --ifs-index 1 --method Chaos --npoints 200000 --backend cpu --resolution 1024x1024 --out cli_chaos.png
+julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input ifs/Default.ifs --ifs-index 1 --method Chaos --npoints 200000 --backend cpu --resolution 1024x1024 --out cli_chaos.png
 ```
 
 ### `PointDeterministic`
@@ -73,7 +73,7 @@ Arguments used by this method:
 Example:
 
 ```powershell
-julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input data/exp_raw/Default.ifs --ifs-index 1 --method PointDeterministic --iterations 3 --npoints 500 --backend cpu --resolution 1024x1024 --out cli_point_deterministic.png
+julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input ifs/Default.ifs --ifs-index 1 --method PointDeterministic --iterations 3 --npoints 500 --backend cpu --resolution 1024x1024 --out cli_point_deterministic.png
 ```
 
 ### `ImageIterate`
@@ -92,7 +92,7 @@ Arguments used by this method:
 Example:
 
 ```powershell
-julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input data/exp_raw/Default.ifs --ifs-index 1 --method ImageIterate --image-source polygon --image-iterations 3 --polygon-limits-mode ifs --initial-polygon equilateral_triangle --backend cpu --resolution 1024x1024 --out cli_image_iterate.png
+julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input ifs/Default.ifs --ifs-index 1 --method ImageIterate --image-source polygon --image-iterations 3 --polygon-limits-mode ifs --initial-polygon equilateral_triangle --backend cpu --resolution 1024x1024 --out cli_image_iterate.png
 ```
 
 ### `Inverse`
@@ -108,7 +108,7 @@ Arguments used by this method:
 Example:
 
 ```powershell
-julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input data/exp_raw/Default.ifs --ifs-index 1 --method Inverse --iterations 8 --show-divergence-scale false --backend cpu --resolution 1024x1024 --out cli_inverse.png
+julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input ifs/Default.ifs --ifs-index 1 --method Inverse --iterations 8 --show-divergence-scale false --backend cpu --resolution 1024x1024 --out cli_inverse.png
 ```
 
 ### `RenderTransformations`
@@ -125,7 +125,7 @@ Arguments used by this method:
 Example:
 
 ```powershell
-julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input data/exp_raw/Default.ifs --ifs-index 1 --method RenderTransformations --color true --initial-polygon line_arrow --axis true --resolution 1024x1024 --out cli_transformations.png
+julia --startup-file=no --project=. Fractals.jl/bin/fractals.jl render --input ifs/Default.ifs --ifs-index 1 --method RenderTransformations --color true --initial-polygon line_arrow --axis true --resolution 1024x1024 --out cli_transformations.png
 ```
 
 ## Notes

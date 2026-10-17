@@ -7,11 +7,12 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
 ## [Unreleased]
 
 ### Added
+- `IFSParse` submodule (`Fractals.jl/src/ifs_parse.jl`) with a DrWatson-managed JLD2 library of prebuilt IFS definitions: `build_ifs_library`, `list_ifs_files`, `list_ifs`, `get_ifs`. `.ifs` files moved from `data/exp_raw/` to `ifs/`.
 - `interpolate_eq_matrix(...)` and `interpolate_ifs(...)` helpers for animation-oriented transform interpolation.
 - `render_interpolation_frames(...)` for deterministic transformation-frame rendering into numbered PNG sequences; it also supports `render_method=Chaos`.
 - `interpolation_mode=:rotation_scale` (default) for `interpolate_eq_matrix`, `interpolate_ifs`, and `render_interpolation_frames`: interpolates each map's 2x2 part as rotation plus uniform scale, falling back to linear; `:linear` keeps the previous behavior.
 - `scripts/animate_image_iterate.jl`: builds a per-map ImageIterate animation (frames + GIF) from a GrayA seed image.
-- `data/exp_raw/imported_from_python.ifs`: IFS definitions imported from the original Python fractal classes.
+- `ifs/imported_from_python.ifs`: IFS definitions imported from the original Python fractal classes.
 - PNG outputs now embed source-limits metadata so `image_source=:file` can reuse the original pixel-to-world framing when that metadata is present.
 - DrWatson-managed output: the repo root is now a DrWatson project (`fractals`, with `scripts/`), and `Fractals` depends on DrWatson for saving.
   - `output_dir(...)`, `with_output_root(f, root)`, and the `FRACTALS_OUTPUT_ROOT` environment variable control where files go.

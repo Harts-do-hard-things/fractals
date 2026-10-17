@@ -61,17 +61,6 @@ function data_output_dir(args::AbstractString...)
 end
 
 """
-    ifs_data_dir(args...)
-
-Directory of the curated `.ifs` input library, `data/exp_raw` at the DrWatson project root (the
-parent of the `Fractals.jl` package directory), joined with `args`. Unlike `datadir()`, this
-does not depend on which project is active, so tests and tools run with
-`--project=Fractals.jl` find the same files.
-"""
-ifs_data_dir(args::AbstractString...) =
-    joinpath(dirname(pkgdir(@__MODULE__)), "data", "exp_raw", args...)
-
-"""
     _resolve_output_path(outpath, default_name; base=output_dir, prefix="plots")
 
 `nothing` → `base(default_name)`; absolute paths are returned unchanged; relative paths resolve

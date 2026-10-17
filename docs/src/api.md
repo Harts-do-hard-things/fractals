@@ -77,6 +77,11 @@ parse_ifs_file
 lex_ifs
 IFSDefinition
 IFSToken
+build_ifs_library
+list_ifs_files
+list_ifs
+get_ifs
+get_ifs_definition
 prompt_ifs_and_render
 ```
 

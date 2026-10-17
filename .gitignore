@@ -3,7 +3,7 @@
 ################################################################################
 
 # Folders to ignore - files may be too large, too many, etc. NOTE: EDIT IF NEEDED.
-# data/exp_raw holds the curated .ifs inputs and is tracked; generated data is not.
+# ifs/ holds the curated .ifs inputs and is tracked; generated data (incl. data/exp_pro/ifs) is not.
 /data/sims
 /data/exp_pro
 /videos

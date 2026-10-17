@@ -31,7 +31,7 @@ The project follows DrWatson's default layout for data as well as plots:
   benchmark JSON (`fractals.jl benchmark --json <path>`). Generated data under `data/sims/` and
   `data/exp_pro/` is git-ignored.
 - [`ifs_data_dir`](@ref)`(args...)` points at the curated, tracked `.ifs` input library in
-  `data/exp_raw/` at the DrWatson project root, independent of the active project. For
+  `ifs/` at the DrWatson project root, independent of the active project. For
   example, `parse_ifs_file(ifs_data_dir("Default.ifs"))`.
 
 ## File names

@@ -1,4 +1,4 @@
-# NOTE: This file must be included after ifsparser.jl (calls parse_ifs_file). It must be
+# NOTE: This file must be included after ifs_load.jl (calls parse_ifs_file). It must be
 # included BEFORE render.jl — render.jl's _resolve_render_input(AbstractString) calls
 # _select_ifs_definition defined here.
 #

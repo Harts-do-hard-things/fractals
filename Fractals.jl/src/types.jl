@@ -105,30 +105,6 @@ struct IFS
     limits::Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}}
 end
 
-@inline function _contractive_row(a::Real, b::Real, d::Real, e::Real)
-    aa = Float64(a)
-    bb = Float64(b)
-    dd = Float64(d)
-    ee = Float64(e)
-    return aa^2 + dd^2 < 1 &&
-           bb^2 + ee^2 < 1 &&
-           aa^2 + bb^2 + dd^2 + ee^2 < 1 + (aa * ee - dd * bb)^2
-end
-
-function _noncontractive_rows(eq::AbstractMatrix{<:Real})
-    failures = NamedTuple[]
-    for i = 1:size(eq, 1)
-        a, b, d, e = eq[i, 1], eq[i, 2], eq[i, 3], eq[i, 4]
-        _contractive_row(a, b, d, e) && continue
-        push!(failures, (row = i, a = Float64(a), b = Float64(b), d = Float64(d), e = Float64(e)))
-    end
-    return failures
-end
-
-function _format_contractivity_failure(failure)
-    return "row $(failure.row) is not contractive for coefficients (a=$(failure.a), b=$(failure.b), d=$(failure.d), e=$(failure.e))"
-end
-
 function _validate_contractivity(
     eq::AbstractMatrix{<:Real};
     context::AbstractString = "IFS equation matrix",
