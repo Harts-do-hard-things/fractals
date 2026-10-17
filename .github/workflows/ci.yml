@@ -37,10 +37,10 @@ jobs:
             Pkg.activate(temp=true)
             Pkg.add(name="JuliaFormatter", version="1.0.62")
             using JuliaFormatter
-            format(["Fractals.jl/src", "Fractals.jl/test", "IFSParse.jl/src"]; overwrite=true)
+            format(["Fractals.jl/src", "Fractals.jl/test", "IFSParse.jl/src", "IFSParse.jl/test"]; overwrite=true)
           '
-          if ! git diff --exit-code -- Fractals.jl/src Fractals.jl/test IFSParse.jl/src; then
-            echo "::error title=Formatting::Fractals.jl/src, Fractals.jl/test or IFSParse.jl/src is not JuliaFormatter-formatted. Run the formatter (see README) and commit the result."
+          if ! git diff --exit-code -- Fractals.jl/src Fractals.jl/test IFSParse.jl/src IFSParse.jl/test; then
+            echo "::error title=Formatting::Fractals.jl/src, Fractals.jl/test, IFSParse.jl/src or IFSParse.jl/test is not JuliaFormatter-formatted. Run the formatter (see README) and commit the result."
             exit 1
           fi
 
@@ -65,6 +65,12 @@ jobs:
 
       - name: Cache Julia packages
         uses: julia-actions/cache@v2
+
+      - name: Run IFSParse tests
+        shell: bash
+        run: |
+          julia --startup-file=no --project=IFSParse.jl -e 'using Pkg; Pkg.instantiate()'
+          julia --startup-file=no --project=IFSParse.jl IFSParse.jl/test/runtests.jl
 
       - name: Instantiate dependencies
         shell: bash

@@ -8,7 +8,7 @@ Three Julia packages for generating and rasterizing 2D IFS (iterated function sy
 
 - Repo root (`Project.toml`, name `fractals`) — the DrWatson project. It depends on DrWatson, the local `Fractals` package (via `[sources]` path), and the packages the scripts and `bin/fractals.jl` load. It follows the DrWatson template: `scripts/` (project scripts, `@quickactivate "fractals"`), `ifs/` (curated `.ifs` inputs, tracked), `data/exp_pro/` and `data/sims/` (generated, git-ignored), `plots/` (images/animations, git-ignored). Run renders, CLI commands, and scripts with `--project=.`. `.gitignore` is DrWatson's template; generated data (including the prebuilt IFS library in `data/exp_pro/ifs/`) is ignored.
 - `Fractals.jl/` — the core package (with an optional CUDA extension). Tests and package development use `--project=Fractals.jl`.
-- `IFSParse.jl/` — the standalone `.ifs` parser and prebuilt-library package (depends only on DrWatson and JLD2, not on `Fractals`). `Fractals.jl` and `docs/` depend on it through `[sources]` path entries (and the root and `FractalsGUI.jl` projects list it too, since `[sources]` of dependencies are not inherited); tests for it currently live in `Fractals.jl/test/runtests.jl`.
+- `IFSParse.jl/` — the standalone `.ifs` parser and prebuilt-library package (depends only on DrWatson and JLD2, not on `Fractals`). `Fractals.jl` and `docs/` depend on it through `[sources]` path entries (and the root and `FractalsGUI.jl` projects list it too, since `[sources]` of dependencies are not inherited); it has its own tests in `IFSParse.jl/test/runtests.jl`.
 - `FractalsGUI.jl/` — a Gtk desktop GUI for editing IFS matrices and previewing transformation SVGs. Its `Manifest.toml` depends on `Fractals` by relative path (`../Fractals.jl`), so it always uses the working-tree version.
 
 Adding a dependency to `Fractals.jl/Project.toml` or `IFSParse.jl/Project.toml` also requires re-resolving the root, `Fractals.jl` (for IFSParse changes) and `FractalsGUI.jl` manifests (`Pkg.resolve()` with each project active).
@@ -23,6 +23,7 @@ Always pass `--startup-file=no` (CI does; a user `startup.jl` can break precompi
 julia --startup-file=no --project=. -e "using Pkg; Pkg.instantiate()"
 julia --startup-file=no --project=Fractals.jl -e "using Pkg; Pkg.instantiate()"
 julia --startup-file=no --project=Fractals.jl Fractals.jl/test/runtests.jl
+julia --startup-file=no --project=IFSParse.jl IFSParse.jl/test/runtests.jl
 julia --startup-file=no --project=FractalsGUI.jl FractalsGUI.jl/test/runtests.jl
 julia --startup-file=no --project=FractalsGUI.jl FractalsGUI.jl/bin/gui.jl
 ```
@@ -37,10 +38,10 @@ Snapshot tests compare against PNGs in `Fractals.jl/test/snapshots/`; on mismatc
 julia --startup-file=no --project=Fractals.jl Fractals.jl/test/generate_snapshots.jl
 ```
 
-Formatting (JuliaFormatter pinned to 1.0.62, `.JuliaFormatter.toml`: default style, margin 100) covers `Fractals.jl/src`, `Fractals.jl/test` and `IFSParse.jl/src`. CI fails on any unformatted code and prints the diff, so format before committing changes there (note this style uses spaces around keyword `=`, e.g. `f(x; kw = 1)`). Apply locally with:
+Formatting (JuliaFormatter pinned to 1.0.62, `.JuliaFormatter.toml`: default style, margin 100) covers `Fractals.jl/src`, `Fractals.jl/test`, `IFSParse.jl/src` and `IFSParse.jl/test`. CI fails on any unformatted code and prints the diff, so format before committing changes there (note this style uses spaces around keyword `=`, e.g. `f(x; kw = 1)`). Apply locally with:
 
 ```bash
-julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1.0.62\"); using JuliaFormatter; format([\"Fractals.jl/src\", \"Fractals.jl/test\", \"IFSParse.jl/src\"]; overwrite=true, verbose=true)"
+julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1.0.62\"); using JuliaFormatter; format([\"Fractals.jl/src\", \"Fractals.jl/test\", \"IFSParse.jl/src\", \"IFSParse.jl/test\"]; overwrite=true, verbose=true)"
 ```
 
 Docs (Documenter.jl; `docs/Project.toml` gets `Fractals` via a `[sources]` path, and `docs/Manifest.toml`/`docs/build/` are gitignored):

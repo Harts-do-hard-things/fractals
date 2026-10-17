@@ -10,3 +10,9 @@ JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 DrWatson = "2.19.1"
 JLD2 = "0.5, 0.6"
 julia = "1.11, 1.12"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

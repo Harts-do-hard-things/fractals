@@ -1228,7 +1228,9 @@ end
     end
 end
 
-@testset "parse_ifs_string extracts name, documentation, and maps from IFS text blocks" begin
+# Lexing, parsing, contractivity checks and the IFS library live in IFSParse.jl (see its own
+# tests); these cover only what Fractals adds on top: building `IFS` values.
+@testset "IFS wrappers over IFSParse build IFS values" begin
     sample = """
     Test IFS {; Doc line 1
     ; Doc line 2
@@ -1238,122 +1240,27 @@ end
     """
     defs = parse_ifs_string(sample; npoints = 10)
     @test length(defs) == 1
+    @test defs[1] isa IFS
     @test defs[1].name == "Test IFS"
     @test occursin("Doc line 1", defs[1].docs)
     @test length(defs[1].points) == 10
-end
 
-@testset "lex_ifs tokenizes IFS text into a structured token stream" begin
-    input = """
-    MyFractal {; Some documentation
-    ; More docs
-      0.5 0.0 0.0 0.5 0.0 0.0 0.6
-     -0.5 0.0 0.0 -0.5 1.0 0.0 0.4
+    mixed = """
+    ValidOne {
+      0.5 0.0 0.0 0.5 0.0 0.0 1.0
+    }
+    InvalidOne {
+      1.0 0.0 0.0 1.0 0.0 0.0 1.0
     }
     """
-    tokens = lex_ifs(input)
-    kinds = [t.kind for t in tokens]
-    @test :NAME in kinds
-    @test :LBRACE in kinds
-    @test :DOCS in kinds
-    @test :ARRAY in kinds
-    @test :RBRACE in kinds
+    kept =
+        @test_logs (:warn, r"Skipping non-contractive IFS definition 'InvalidOne'") parse_ifs_string(
+            mixed;
+            npoints = 10,
+        )
+    @test [x.name for x in kept] == ["ValidOne"]
 
-    name_tok = first(t for t in tokens if t.kind == :NAME)
-    @test name_tok.value == "MyFractal"
-
-    array_toks = filter(t -> t.kind == :ARRAY, tokens)
-    @test length(array_toks) == 2
-    @test length(array_toks[1].value) == 7
-    @test array_toks[1].value[1] ≈ 0.5
-end
-
-@testset "IFS Parser File" begin
-    sample = """
-    File IFS {
-      0.5 0.0 0.0 0.5 0.0 0.0 0.5
-      0.5 0.0 0.0 0.5 0.5 0.0 0.5
-    }
-    """
-
-    mktemp() do path, io
-        write(io, sample)
-        close(io)
-        defs = parse_ifs_file(path; npoints = 12)
-        @test length(defs) == 1
-        @test defs[1].name == "File IFS"
-        @test length(defs[1].points) == 12
-    end
-end
-
-@testset "IFS Parser Negative Cases" begin
-    # Missing closing brace.
-    missing_close = """
-    BrokenIFS {
-      0.5 0.0 0.0 0.5 0.0 0.0
-    """
-    @test_throws EOFError parse_ifs_string(missing_close; npoints = 1)
-
-    # Unexpected closing brace.
-    stray_close = """
-    }
-    ValidName {
-      0.5 0.0 0.0 0.5 0.0 0.0
-    }
-    """
-    err = try
-        parse_ifs_string(stray_close; npoints = 1)
-        nothing
-    catch e
-        e
-    end
-    @test err isa ArgumentError
-    @test occursin("Unexpected '}' outside IFS block", sprint(showerror, err))
-
-    # Mixed row widths in same block.
-    mixed_width = """
-    MixedWidth {
-      0.5 0.0 0.0 0.5 0.0 0.0
-      0.5 0.0 0.0 0.5 0.5 0.0 0.5
-    }
-    """
-    err = try
-        parse_ifs_string(mixed_width; npoints = 1)
-        nothing
-    catch e
-        e
-    end
-    @test err isa ArgumentError
-    @test occursin("has length", sprint(showerror, err))
-
-    # Bad float token.
-    bad_float = """
-    BadFloat {
-      0.5 0.0 abc 0.5 0.0 0.0
-    }
-    """
-    err = try
-        parse_ifs_string(bad_float; npoints = 1)
-        nothing
-    catch e
-        e
-    end
-    @test err isa ArgumentError
-    @test occursin("Invalid numeric token 'abc'", sprint(showerror, err))
-
-    # File parse should surface the same failures.
-    mktemp() do path, io
-        write(io, mixed_width)
-        close(io)
-        @test_throws ArgumentError parse_ifs_file(path; npoints = 1)
-    end
-end
-
-@testset "IFS Contractivity Validation And Skipping" begin
     bad_eq = [1.0 0.0 0.0 1.0 0.0 0.0 1.0]
-    failures = Fractals._noncontractive_rows(bad_eq)
-    @test length(failures) == 1
-    @test failures[1].row == 1
     err = try
         Fractals._validate_contractivity(bad_eq)
         nothing
@@ -1364,46 +1271,24 @@ end
     @test occursin("non-contractive affine maps", sprint(showerror, err))
     @test occursin("row 1", sprint(showerror, err))
 
-    mixed = """
-    ValidOne {
-      0.5 0.0 0.0 0.5 0.0 0.0 1.0
-    }
-    InvalidOne {
-      1.0 0.0 0.0 1.0 0.0 0.0 1.0
-    }
-    ValidTwo {
-      0.3 0.1 -0.1 0.3 0.2 0.1 1.0
-    }
-    """
-    valid_defs =
-        @test_logs (:warn, r"Skipping non-contractive IFS definition 'InvalidOne'") parse_ifs_string(
-            mixed;
-            npoints = 10,
-        )
-    @test length(valid_defs) == 2
-    @test [x.name for x in valid_defs] == ["ValidOne", "ValidTwo"]
+    _with_tmpdir() do tmp
+        path = joinpath(tmp, "file.ifs")
+        write(path, sample)
+        from_file = parse_ifs_file(path; npoints = 12)
+        @test length(from_file) == 1
+        @test from_file[1] isa IFS
+        @test length(from_file[1].points) == 12
 
-    only_bad = """
-    InvalidOnly {
-      1.0 0.0 0.0 1.0 0.0 0.0 1.0
-    }
-    """
-    parsed_bad =
-        @test_logs (:warn, r"Skipping non-contractive IFS definition 'InvalidOnly'") parse_ifs_string(
-            only_bad;
-            npoints = 10,
-        )
-    @test isempty(parsed_bad)
-
-    mktemp() do path, io
-        write(io, mixed)
-        close(io)
-        parsed_file =
-            @test_logs (:warn, r"Skipping non-contractive IFS definition 'InvalidOne'") parse_ifs_file(
-                path;
-                npoints = 12,
-            )
-        @test length(parsed_file) == 2
+        # get_ifs resolves by name, preferring prebuilt records and falling back to files.
+        lib = joinpath(tmp, "lib")
+        got = get_ifs("Test IFS"; dir = tmp, libdir = lib, npoints = 7)
+        @test got isa IFS
+        @test got.name == "Test IFS"
+        @test length(got.points) == 7
+        build_ifs_library(; dir = tmp, outdir = lib)
+        got_prebuilt = get_ifs("Test IFS"; file = "file.ifs", dir = tmp, libdir = lib, npoints = 7)
+        @test got_prebuilt.maps == got.maps
+        @test_throws ArgumentError get_ifs("Missing"; dir = tmp, libdir = lib)
     end
 end
 
@@ -1432,9 +1317,6 @@ end
         end
 
         @testset "DrWatson data layout" begin
-            # Curated inputs live in <project root>/ifs, independent of the active project.
-            @test ifs_data_dir() == joinpath(dirname(pkgdir(Fractals)), "ifs")
-            @test isfile(ifs_data_dir("Default.ifs"))
             @test !isempty(parse_ifs_file(ifs_data_dir("Default.ifs"); npoints = 1))
 
             with_output_root(d) do
