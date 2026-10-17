@@ -76,7 +76,9 @@ function benchmark_cases(p, tmp::AbstractString)
     for (name, m) in methods
         r = Render(ifs, m; resolution = p.resolution)
         add!("draw/$name", () -> Fractals.draw(r))
-        add!("render/$name", () -> render(r))
+        # force = true: otherwise render reuses the saved PNG and record, timing a file load.
+        # draw(r) for Chaos/PointDeterministic reads the cached cloud (see chaos_game for compute).
+        add!("render/$name", () -> render(r; force = true))
     end
 
     libdir = joinpath(tmp, "ifs_library")
