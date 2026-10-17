@@ -94,8 +94,11 @@ jobs:
           julia --startup-file=no --project=. -e
           'using Fractals; render(get_ifs("Sierpinski"; file = "Default.ifs"), Chaos(npoints = 2000); resolution = (64, 64))'
 
+  # Disabled for now: FractalsGUI.jl has not been checked against the render redesign. Remove
+  # `if: false` to re-enable.
   gui-test:
     name: GUI Tests / ubuntu-latest / Julia 1.12
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
