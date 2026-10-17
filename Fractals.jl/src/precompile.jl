@@ -129,10 +129,7 @@ using PrecompileTools: @setup_workload, @compile_workload
     # JLD2 records.
     @compile_workload begin
         inroot() do
-            data = fractal_data(eq; npoints = 50, seed = 1, name = "w")
-            save_fractal(ifs, pts; image = make_image(pts, ifs.limits; resolution = res), seed = 1)
-            load_fractal(data.path)
-            extend_fractal(data, 10; seed = 2)
+            extend_fractal(Chaos(; npoints = 50, seed = 1), ifs, 10; seed = 2)
             fractal_catalog()
         end
     end
