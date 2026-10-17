@@ -351,7 +351,7 @@ Convert a deterministic numbered PNG frame sequence such as `basename_0001.png`
 into a GIF or MP4 animation using `ffmpeg`.
 
 Relative `frames_dir`/`outpath` resolve under `output_dir()`; `outpath=nothing` writes
-`animations/<basename>.<format>`. An existing animation is kept as a `_#N` backup.
+`animations/<basename>.<format>`. An existing animation is overwritten.
 """
 function export_animation(
     format::Symbol;
@@ -373,8 +373,8 @@ function export_animation(
         _resolve_output_path(outpath, joinpath("animations", "$(strip(String(basename))).$format"))
     input_pattern = joinpath(resolved_frames_dir, "$(strip(String(basename)))_%04d.png")
 
-    # ffmpeg writes into a scratch directory; the finished file is then safesaved into place so an
-    # existing animation is kept as a `_#N` backup rather than overwritten.
+    # ffmpeg writes into a scratch directory; the finished file is then moved into place,
+    # replacing any existing animation.
     mktempdir() do scratch
         scratch_outpath = joinpath(scratch, "animation.$format")
         if format == :gif
@@ -390,7 +390,8 @@ function export_animation(
                 `$ffmpeg -y -framerate $fps -i $input_pattern -c:v libx264 -pix_fmt yuv420p $scratch_outpath`,
             )
         end
-        _safesave_moved_file(final_outpath, scratch_outpath)
+        mkpath(dirname(final_outpath))
+        mv(scratch_outpath, final_outpath; force = true)
     end
 
     return (

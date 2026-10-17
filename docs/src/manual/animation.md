@@ -62,12 +62,12 @@ mp4 = export_animation(:mp4; frames_dir = "frames", basename = "dragon_morph", o
 ```
 
 The sequence must start at `basename_0001.png`. Omitting `outpath` writes
-`plots/animations/<basename>.<format>`, and an existing animation is kept as a `_#N` backup.
+`plots/animations/<basename>.<format>`, and an existing animation is overwritten.
 The same export is available from the shell:
 
 ```bash
-julia --startup-file=no --project=. scripts/export_gif.jl --frames-dir frames --basename dragon_morph --out dragon_morph.gif --fps 12
-julia --startup-file=no --project=. scripts/export_mp4.jl --frames-dir frames --basename dragon_morph --out dragon_morph.mp4 --fps 12
+julia --startup-file=no --project=. scripts/export_animation.jl --format gif --frames-dir frames --basename dragon_morph --out dragon_morph.gif --fps 12
+julia --startup-file=no --project=. scripts/export_animation.jl --format mp4 --frames-dir frames --basename dragon_morph --out dragon_morph.mp4 --fps 12
 ```
 
 `ffmpeg` must be installed separately and on `PATH`:

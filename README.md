@@ -120,7 +120,7 @@ A render is a value: `Render(ifs, method; resolution, color, alpha, overlays)`, 
 `make_image`, `iterate_image`, and `rasterize_image_inversely` still take `backend=:cpu|:gpu|:auto`, but the GPU code is not wired into `render`.
 `interpolate_eq_matrix(...)` and `interpolate_ifs(...)` provide transform interpolation primitives for animation-oriented workflows.
 `render_interpolation_frames(left, right, method; frames, ...)` renders deterministic numbered PNG frame sequences into a chosen directory for animation workflows, with any render method.
-`export_animation(:gif|:mp4; ...)` converts those numbered PNG frames into GIF or MP4 artifacts via `ffmpeg`.
+`export_animation(:gif|:mp4; ...)` (or `scripts/export_animation.jl --format gif|mp4`) converts those numbered PNG frames into GIF or MP4 artifacts via `ffmpeg`, overwriting any existing file.
 Interpolation defaults to per-map rotation+uniform-scale blending for the 2x2 linear part, with automatic fallback to coefficient-wise linear blending when a map pair is not well represented by that model. Use `interpolation_mode=:linear` to force the previous behavior.
 For `.ifs` files with several definitions, pick one with `get_ifs(name; file=...)` (or index `parse_ifs_file(path)`).
 

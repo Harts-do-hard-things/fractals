@@ -175,16 +175,18 @@ mp4 = export_animation(:mp4;
                        fps=12)
 ```
 
-Equivalent helper scripts are available for shell workflows:
+An equivalent helper script is available for shell workflows (`--format gif|mp4`, default `gif`):
 
 ```bash
-julia --startup-file=no --project=. scripts/export_gif.jl \
+julia --startup-file=no --project=. scripts/export_animation.jl \
+  --format gif \
   --frames-dir frames \
   --basename recipe_anim \
   --out recipe_anim.gif \
   --fps 12
 
-julia --startup-file=no --project=. scripts/export_mp4.jl \
+julia --startup-file=no --project=. scripts/export_animation.jl \
+  --format mp4 \
   --frames-dir frames \
   --basename recipe_anim \
   --out recipe_anim.mp4 \

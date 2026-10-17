@@ -264,10 +264,6 @@ struct _TextOutput
     text::String
 end
 
-struct _MovedFileOutput
-    source::String
-end
-
 function DrWatson._wsave(path, out::_PNGOutput)
     _save_image_file(path, out.image)
     _has_png_extension(path) && _embed_png_text_chunks(path, out.text_chunks)
@@ -275,7 +271,6 @@ function DrWatson._wsave(path, out::_PNGOutput)
 end
 
 DrWatson._wsave(path, out::_TextOutput) = write(path, out.text)
-DrWatson._wsave(path, out::_MovedFileOutput) = mv(out.source, path)
 
 """
     _save_image(outpath, img, limits; params, provenance)
@@ -306,15 +301,5 @@ end
 function _save_svg(outpath::AbstractString, svg::AbstractString; params::NamedTuple = (;))
     provenance = replace(_provenance_payload(params), "--" => "- -")
     safesave(outpath, _TextOutput("<!-- $(_PNG_PROVENANCE_KEYWORD): $provenance -->\n" * svg))
-    return outpath
-end
-
-"""
-    _safesave_moved_file(outpath, source)
-
-Move a finished file (e.g. ffmpeg output) into `outpath`, backing up any existing file.
-"""
-function _safesave_moved_file(outpath::AbstractString, source::AbstractString)
-    safesave(outpath, _MovedFileOutput(String(source)))
     return outpath
 end
