@@ -12,6 +12,7 @@ Render
 save_render
 load_render
 render_record_path
+render_record_path
 cached_points
 ifs_key
 RenderMethod
@@ -100,9 +101,11 @@ with_output_root
 read_provenance
 ```
 
-## Saved data (JLD2)
+## Point clouds and the catalog
 
 ```@docs
+cached_points
+ifs_key
 extend_fractal
 fractal_catalog
 ```

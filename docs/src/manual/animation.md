@@ -50,7 +50,8 @@ frames = render_interpolation_frames(start, finish, Chaos(npoints = 100_000, war
 
 The result is `(outdir, paths, ts)`. Omit `outdir` to write to an auto-named directory under
 `plots/frames/`. Each frame also gets a render record (see [`load_render`](@ref)) holding its
-interpolated system.
+interpolated system, mirrored under `data/sims/renders/frames/<sequence>/`; frames are reused
+like any other [`render`](@ref) when nothing changed.
 
 ## Exporting GIF and MP4
 

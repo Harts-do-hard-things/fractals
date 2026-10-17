@@ -16,9 +16,10 @@ The package includes:
 - `Project.toml` (repo root): [DrWatson](https://juliadynamics.github.io/DrWatson.jl/stable/) scientific project `fractals` that uses the local `Fractals` package (via `[sources]`); run scripts and renders from here
 - `Fractals.jl/`: Julia package (`src/` and `test/`)
 - `FractalsGUI.jl/`: separate Julia package for the desktop GUI (depends on `Fractals`)
-- `scripts/`: DrWatson project scripts (`@quickactivate "fractals"`): example renders, ImageIterate animation builder, GIF/MP4 export, rotation examples
+- `IFSParse.jl/`: standalone package for the `.ifs` format and the prebuilt IFS library
+- `scripts/`: DrWatson project scripts (`@quickactivate "fractals"`): example renders, ImageIterate animation builder, `export_animation.jl` (GIF/MP4), rotation examples, and the opt-in `benchmark.jl`
 - `ifs/`: curated `.ifs` input files (tracked; `ifs_data_dir()` returns this path)
-- `data/sims/`: all generated data (render records, cached point clouds, fractal records, and the prebuilt IFS library `data/sims/ifs/` from `build_ifs_library()`; git-ignored; `data_output_dir()`)
+- `data/sims/`: all generated data: `renders/` (render records), `points/` (cached point clouds), `ifs/` (the prebuilt IFS library from `build_ifs_library()`), `benchmarks/` (git-ignored; `data_output_dir()`)
 - `plots/`: rendered images and animations (git-ignored, created on demand; `output_dir()`)
 - `docs/`: Documenter.jl documentation site (`docs/make.jl`, pages in `docs/src/`)
 
@@ -156,7 +157,7 @@ points = chaos_game(ifs, 100_000)
 The documentation is a [Documenter.jl](https://documenter.juliadocs.org/stable/) site in `docs/`:
 
 - `docs/src/index.md`: home page.
-- `docs/src/manual/`: render methods, quick recipes, animation, output files, IFS text format, troubleshooting, and development notes.
+- `docs/src/manual/`: render methods, quick recipes, animation, output files, data layout, IFS text format, benchmarks, troubleshooting, and development notes.
 - `docs/src/api.md`: API reference generated from the package docstrings.
 
 Build it locally and open `docs/build/index.html`:
@@ -176,11 +177,12 @@ All files the package writes (`render`, `render_transformations_svg`, `render_in
   `with_output_root(dir) do ... end` or `FRACTALS_OUTPUT_ROOT=<dir>` (output then goes to `<dir>/plots/`);
   `output_dir()` shows the current target.
 - **Naming:** omit `outpath` and the file is named with `savename` from the render parameters, e.g.
-  `Heighway_Dragon_chaos_npoints=250000_1200x1200_color.png`, plus a same-stem `.jld2` render record
-  (`load_render(path)` reads it back, so `render(load_render(path))` repeats the render). Interpolation frames go to
+  `Heighway_Dragon_chaos_npoints=250000_1200x1200_color.png`. Interpolation frames go to
   `plots/frames/<savename>/` and animations to `plots/animations/`.
-- **Render records:** `render` saves the PNG and a `.jld2` with the `Render` description and its limits, tagged
-  with the git commit by DrWatson's `tagsave`. SVGs carry a provenance comment (`read_provenance` reads PNG
+- **Render records:** `render` saves the PNG and a `.jld2` with the `Render` description and its limits under
+  `data/sims/renders/`, tagged with the git commit by DrWatson's `tagsave`; `load_render(path)` reads it back, and
+  `render` reuses the saved image when nothing changed (`force = true` redraws). Point clouds are cached in
+  `data/sims/points/` independent of resolution and styling (`cached_points`, `extend_fractal`, `fractal_catalog`). SVGs carry a provenance comment (`read_provenance` reads PNG
   provenance written by the animation script).
 
 New analysis scripts belong in `scripts/` and start with `using DrWatson; @quickactivate "fractals"`

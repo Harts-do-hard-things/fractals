@@ -7,6 +7,7 @@ and a user `startup.jl` can break precompilation and tests (see [Troubleshooting
 
 ```bash
 julia --startup-file=no --project=Fractals.jl Fractals.jl/test/runtests.jl
+julia --startup-file=no --project=IFSParse.jl IFSParse.jl/test/runtests.jl
 julia --startup-file=no --project=FractalsGUI.jl FractalsGUI.jl/test/runtests.jl
 ```
 
@@ -29,13 +30,17 @@ changes intentionally, regenerate the fixtures:
 julia --startup-file=no --project=Fractals.jl Fractals.jl/test/generate_snapshots.jl
 ```
 
+## Benchmarks
+
+The opt-in benchmark script is not part of the tests or CI; see [Benchmarks](@ref).
+
 ## Formatting
 
-`Fractals.jl/src` and `Fractals.jl/test` are formatted with JuliaFormatter 1.0.62
+`Fractals.jl/src`, `Fractals.jl/test`, `IFSParse.jl/src` and `IFSParse.jl/test` are formatted with JuliaFormatter 1.0.62
 (`.JuliaFormatter.toml`: default style, margin 100), and CI fails on unformatted code:
 
 ```bash
-julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1.0.62\"); using JuliaFormatter; format([\"Fractals.jl/src\", \"Fractals.jl/test\"]; overwrite=true, verbose=true)"
+julia --startup-file=no -e "using Pkg; Pkg.activate(temp=true); Pkg.add(name=\"JuliaFormatter\", version=\"1.0.62\"); using JuliaFormatter; format([\"Fractals.jl/src\", \"Fractals.jl/test\", \"IFSParse.jl/src\", \"IFSParse.jl/test\"]; overwrite=true, verbose=true)"
 ```
 
 ## Documentation

@@ -87,7 +87,7 @@ result = render(IFS(EISENSTEIN), Inverse(iterations = 6);
                 outpath = "recipe_inverse.png")
 ```
 
-`Inverse(iterations = 6, divergence_scale = false)` gives a binary mask.
+`Inverse(iterations = 6, divergence_scale = false)` gives a binary mask, and `Inverse(preview = true)` a faster approximate image.
 
 ## Recipe: Transformations with overlays
 
@@ -109,6 +109,24 @@ using Fractals
 result = render(IFS(EISENSTEIN), Chaos(npoints = 100_000, seed = 7); outpath = "recipe_repeat.png")
 again = render(load_render("recipe_repeat.png"); outpath = "recipe_repeat_2.png")
 again.image == result.image   # true: same description, same seed
+```
+
+## Recipe: Reuse, force, and re-render larger
+
+```julia
+using Fractals
+
+ifs = IFS(EISENSTEIN; name = "Eisenstein")
+first_run = render(ifs, Chaos(npoints = 1_000_000, seed = 1))                  # draws
+second_run = render(ifs, Chaos(npoints = 1_000_000, seed = 1))                 # second_run.cached == true
+render(ifs, Chaos(npoints = 1_000_000, seed = 1); force = true)                # redraw and overwrite
+
+# Another resolution or style reuses the cached points; only rasterizing is redone.
+render(Render(first_run.render; resolution = (4096, 4096), color = true))
+
+# Grow the cached chaos game instead of starting over, then render the larger count.
+extend_fractal(Chaos(npoints = 1_000_000, seed = 1), ifs, 500_000; seed = 2)
+render(ifs, Chaos(npoints = 1_500_000, seed = 1))
 ```
 
 ## Recipe: Interpolate Between Two IFS States

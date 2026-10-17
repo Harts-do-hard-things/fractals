@@ -28,7 +28,9 @@ out.outpath   # <repo>/plots/Heighway_Dragon_chaos_npoints=200000_1024x1024.png
 
 [`render`](@ref) saves under DrWatson's `plotsdir()`, names the file from its parameters,
 and saves a render record (`.jld2`) under `data/sims/renders/` so the render can be reloaded with
-[`load_render`](@ref). See [Output files](@ref).
+[`load_render`](@ref). Rendering the same description again reuses the saved image
+(`out.cached`), and point clouds are cached across resolutions. See [Output files](@ref) and
+[Data layout](@ref).
 
 ## Render methods at a glance
 
@@ -37,7 +39,7 @@ and saves a render record (`.jld2`) under `data/sims/renders/` so the render can
 | [`Chaos`](@ref) | baseline stochastic rendering from sampled points | `npoints`, `warmup`, `seed` |
 | [`PointDeterministic`](@ref) | exact expansion previews at a fixed depth | `npoints`, `iterations`, `warmup`, `seed` |
 | [`ImageIterate`](@ref) | iterating a seed image, polygon or other render through the maps | source, `iterations` |
-| [`Inverse`](@ref) | inverse-branch coverage and divergence maps | `iterations`, `divergence_scale` |
+| [`Inverse`](@ref) | inverse-branch coverage and divergence maps | `iterations`, `divergence_scale`, `preview` |
 | [`Transformations`](@ref) | previewing each affine map on a seed polygon | `polygon`, `limits_iterations` |
 
 ## Where to go next
@@ -45,5 +47,7 @@ and saves a render record (`.jld2`) under `data/sims/renders/` so the render can
 - [Render methods](@ref): the `render` API and each method's options.
 - [Quick recipes](@ref): copy-paste examples for each workflow.
 - [Animation](@ref): interpolation, frame sequences, and GIF/MP4 export.
+- [Output files](@ref) and [Data layout](@ref): where everything is written and how it is named.
 - [IFS text format](@ref): writing `.ifs` files and validation rules.
+- [Benchmarks](@ref): the opt-in benchmark script.
 - [API reference](@ref): every exported function and type.

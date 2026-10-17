@@ -5,7 +5,7 @@ an [`IFS`](@ref), a [`RenderMethod`](@ref) (each method is its own type carrying
 parameters), the image size, whether to color by map, whether zero pixels become transparent,
 and any overlays. [`render`](@ref) runs it: draw with the method, color, overlay, apply
 alpha, then save the PNG and a render record (in `data/sims/renders/`). It returns
-`(render, image, limits, outpath, record)`.
+`(render, image, limits, outpath, record, cached)`.
 
 ```julia
 using Fractals
@@ -76,9 +76,10 @@ out = render(IFS(EISENSTEIN), PointDeterministic(npoints = 500, iterations = 2);
 
 ## [`Inverse`](@ref)
 
-`Inverse(; iterations, divergence_scale)`: scores each pixel by pushing it back through the
+`Inverse(; iterations, divergence_scale, preview)`: scores each pixel by pushing it back through the
 inverse maps ([`rasterize_image_inversely`](@ref)). `divergence_scale = false` gives a binary
-mask where non-diverged and origin-containing regions are white.
+mask where non-diverged and origin-containing regions are white. `preview = true` caps the tracked
+branch frontier for a faster, approximate image.
 
 ```julia
 out = render(IFS(EISENSTEIN), Inverse(iterations = 6); resolution = (800, 800))
@@ -110,8 +111,8 @@ the IFS to it `iterations` times with [`iterate_image`](@ref). The source is one
   `limits_iterations` deep (default: the `ImageIterate` iteration count); `frame = :ifs` uses
   `ifs.limits`.
 - [`FileSource`](@ref)`(path)`: the grayscale image at `path`. When it has a render record
-  ([`render_record_path`](@ref)`(path)`: any PNG `render` wrote at its default location), its saved limits frame the
-  image; otherwise the IFS's limits are used.
+  ([`render_record_path`](@ref)`(path)`: any PNG `render` wrote at its default location, or an
+  animation frame), its saved limits frame the image; otherwise the IFS's limits are used.
 - any other [`RenderMethod`](@ref): its image (and frame) is the seed, so
   `ImageIterate(Chaos(npoints = 100_000))` iterates a chaos-game heatmap.
 
@@ -126,17 +127,26 @@ out = render(IFS(EISENSTEIN),
 out = render(IFS(EISENSTEIN), ImageIterate(Chaos(npoints = 50_000); iterations = 2))
 ```
 
-## Saving, loading and file names
+## Saving, loading, reuse and file names
 
-[`save_render`](@ref) (called by `render`) writes the PNG and a `.jld2` record with the same
-stem holding the [`Render`](@ref) and its `limits`, tagged with the Git commit by DrWatson's
-`tagsave`. [`load_render`](@ref) reads a record back (pass the `.jld2` or the PNG), so a render
-can be repeated exactly:
+[`save_render`](@ref) (called by `render`) writes the PNG (placed by `outpath`) and a `.jld2` record
+holding the [`Render`](@ref) and its `limits` at [`render_record_path`](@ref)`(r)` under
+`data/sims/renders/`, tagged with the Git commit by DrWatson's `tagsave`.
+[`load_render`](@ref) reads a record back (pass the `.jld2`, or a PNG at its default location), so
+a render can be repeated exactly or changed:
 
 ```julia
-r = load_render(out.outpath)
+r = load_render(out.record)
 render(r; outpath = "again.png")
+render(Render(r; resolution = (4096, 4096)))   # copy with a field changed
 ```
+
+`render` reuses work like DrWatson's `produce_or_load`: when the PNG and a record for the same
+render already exist they are loaded (`cached = true` in the result) instead of redrawn;
+`render(r; force = true)` redraws and overwrites. The point clouds of `Chaos` and
+`PointDeterministic` are cached on their own ([`cached_points`](@ref)), independent of resolution,
+color and overlays, so a larger or recolored re-render only rasterizes again. See
+[Output files](@ref) and [Data layout](@ref).
 
 With `outpath = nothing` the PNG is named with DrWatson's `savename`: the IFS name, the method
 tag and parameters, the resolution, and `_color`/`_alpha` flags, for example
@@ -161,3 +171,5 @@ img2 = make_image(expanded, eis.limits; resolution = (800, 800))
 
 Saving through `safesave` directly skips the render record that [`render`](@ref) writes. See
 [Output files](@ref).
+
+The SVG diagram of the maps is produced separately by [`render_transformations_svg`](@ref).
