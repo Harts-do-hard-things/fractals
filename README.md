@@ -168,7 +168,7 @@ julia --startup-file=no --project=docs docs/make.jl
 
 ## Output Files (DrWatson)
 
-All files the package writes (`render`, `render_transformations_svg/png`, `render_interpolation_frames`,
+All files the package writes (`render`, `render_transformations_svg`, `render_interpolation_frames`,
 `export_animation`) are managed with [DrWatson](https://juliadynamics.github.io/DrWatson.jl/stable/):
 
 - **Location:** relative paths resolve under `plotsdir()` of the active project, so with `--project=.` output

@@ -27,7 +27,6 @@ Overlay
 BasePolygon
 Axes
 render_transformations_svg
-render_transformations_png
 ```
 
 ## Core types

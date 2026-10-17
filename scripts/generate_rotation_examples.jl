@@ -29,12 +29,10 @@ for (deg, clockwise, stem) in cases
                                           width=640,
                                           height=640,
                                           initial_polygon=:line)
-    png_path = render_transformations_png(ifs;
-                                          outpath=joinpath("rotation_examples", "$stem.png"),
-                                          width=640,
-                                          height=640,
-                                          initial_polygon=:line,
-                                          color=false)
+    png_path = render(ifs, Transformations(polygon=:line);
+                      outpath=joinpath("rotation_examples", "$stem.png"),
+                      resolution=(640, 640),
+                      color=false).outpath
     println(svg_path)
     println(png_path)
 end
