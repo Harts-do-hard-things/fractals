@@ -168,3 +168,48 @@ function _render_initial_polygon_seed_image(
     end
     return img
 end
+
+# --------------------------------
+# Vector geometry for SVG renders
+# --------------------------------
+
+const _Segment = Tuple{SVector{2,Float64},SVector{2,Float64}}
+
+# The "image" an SVG render draws: line segments grouped by the map that produced them (one
+# stroke color per group when the render is colored).
+struct SegmentImage
+    groups::Vector{Vector{_Segment}}
+end
+
+# Upper bound on the segments of one SVG render, checked before iterating.
+const _MAX_SVG_SEGMENTS = 1_000_000
+
+"""
+    _iterate_segments(ifs, segments, n) -> Vector{Vector{Segment}}
+
+Apply every map of `ifs` to every segment, `n` times over. The result is grouped by the last map
+applied (`length(ifs.maps)` groups holding `length(segments) * nmaps^n` segments in all); with
+`n = 0` it is the single group `segments`. Throws `ArgumentError`, before iterating, when the
+total would exceed 1_000_000 segments.
+"""
+function _iterate_segments(ifs, segments, n::Integer)
+    n >= 0 || throw(ArgumentError("iterations must be >= 0, got $n"))
+    nmaps = length(ifs.maps)
+    total = float(length(segments)) * float(nmaps)^n
+    if total > _MAX_SVG_SEGMENTS
+        shown = total < 1e18 ? string(round(Int, total)) : "more than 10^18"
+        throw(
+            ArgumentError(
+                "SVG render would draw $shown segments ($(length(segments)) x $nmaps^$n), " *
+                "more than the limit of $_MAX_SVG_SEGMENTS; lower the iterations or render a PNG",
+            ),
+        )
+    end
+    current = Vector{_Segment}(segments)
+    groups = Vector{Vector{_Segment}}([current])
+    for _ = 1:n
+        groups = Vector{_Segment}[[(m(p1), m(p2)) for (p1, p2) in current] for m in ifs.maps]
+        current = reduce(vcat, groups)
+    end
+    return groups
+end

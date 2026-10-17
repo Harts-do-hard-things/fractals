@@ -97,6 +97,14 @@ using PrecompileTools: @setup_workload, @compile_workload
         inroot() do
             render(ifs, Transformations(); resolution = res, color = true)
             render_transformations_svg(ifs; outpath = "t.svg", width = 16, height = 16)
+            render(ifs, Transformations(); resolution = res, color = true, format = SVG())
+            render(
+                ifs,
+                ImageIterate(PolygonSource(); iterations = 1);
+                resolution = res,
+                overlays = [BasePolygon(), Axes()],
+                format = SVG(),
+            )
         end
     end
 

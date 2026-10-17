@@ -27,6 +27,9 @@ FileSource
 Overlay
 BasePolygon
 Axes
+OutputFormat
+PNG
+SVG
 render_transformations_svg
 ```
 

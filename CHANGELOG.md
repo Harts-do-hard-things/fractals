@@ -32,6 +32,7 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
 - Load and precompile times: `Fractals` no longer depends on `Images` (PNG I/O goes through `PNGFiles`), and the test suite runs its bodies with `optimize = 0, compile = min, infer = false`.
 - Documentation moved from MkDocs to a Documenter.jl site in `docs/` (manual pages plus an API reference generated from docstrings); the build fails on undocumented exports, broken cross-references and failing doctests. New pages: Data layout and Benchmarks.
 - The repository follows DrWatson's default project layout (`scripts/` replaces `Fractals.jl/bin/` for project scripts).
+- `Render` takes `format = PNG()` or `SVG()` (new exported types `OutputFormat`, `PNG`, `SVG`); `Transformations` and polygon-seeded `ImageIterate` can be drawn as SVG, written to `plots/<name>_svg.svg` with a render record. `render_transformations_svg` is now a wrapper over `render`.
 
 ### Removed
 - The CLI (`Fractals.jl/bin/fractals.jl`), the old `benchmark` command and suite with its CI job, and the CLI and benchmark manual pages.
