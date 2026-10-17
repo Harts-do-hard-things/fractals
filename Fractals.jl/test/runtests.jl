@@ -1249,11 +1249,11 @@ end
             withenv("FRACTALS_OUTPUT_ROOT" => d) do
                 with_output_root(other) do
                     @test output_dir() == joinpath(abspath(other), "plots")
-                    @test data_output_dir() == joinpath(abspath(other), "data", "exp_pro")
+                    @test data_output_dir() == joinpath(abspath(other), "data", "sims")
                 end
             end
             withenv("FRACTALS_OUTPUT_ROOT" => nothing) do
-                @test data_output_dir("b.json") == Fractals.datadir("exp_pro", "b.json")
+                @test data_output_dir("b.json") == Fractals.datadir("sims", "b.json")
             end
         end
 
@@ -1262,7 +1262,7 @@ end
 
             with_output_root(d) do
                 json1 = Fractals._save_data_text(joinpath("benchmarks", "x.json"), "{\"a\":1}")
-                @test json1 == joinpath(abspath(d), "data", "exp_pro", "benchmarks", "x.json")
+                @test json1 == joinpath(abspath(d), "data", "sims", "benchmarks", "x.json")
                 @test read(json1, String) == "{\"a\":1}"
                 @test Fractals._save_data_text(joinpath("data", "benchmarks", "x.json"), "{}") ==
                       json1
@@ -2695,7 +2695,8 @@ end
     out = render(ifs, m; resolution = (16, 16))
     points, path, cached = Fractals.cached_points(m, ifs)
     @test cached
-    @test startswith(path, data_output_dir("points", ifs_key(ifs)))
+    @test dirname(path) == data_output_dir("points")
+    @test basename(path) == "chaos_ifs=$(ifs_key(ifs))_npoints=500_seed=4_warmup=3.jld2"
     stamp = mtime(path)
     big = render(Render(out.render; resolution = (48, 48), color = true, alpha = true))
     @test size(big.image) == (48, 48)
@@ -2703,7 +2704,7 @@ end
     @test ifs_key(renamed) == ifs_key(ifs)
     @test Fractals.cached_points(m, renamed)[1] == points
     @test mtime(path) == stamp
-    @test length(readdir(dirname(path))) == 1
+    @test count(f -> occursin("ifs=$(ifs_key(ifs))_npoints=500_", f), readdir(dirname(path))) == 1
     @test !Fractals.cached_points(m, ifs; force = true)[3]
     @test Fractals.cached_points(Chaos(npoints = 501, warmup = 3, seed = 4), ifs)[2] != path
 end

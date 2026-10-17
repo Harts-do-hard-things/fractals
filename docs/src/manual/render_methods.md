@@ -4,7 +4,7 @@ A render is a value. [`Render`](@ref)`(ifs, method; resolution, color, alpha, ov
 an [`IFS`](@ref), a [`RenderMethod`](@ref) (each method is its own type carrying only its own
 parameters), the image size, whether to color by map, whether zero pixels become transparent,
 and any overlays. [`render`](@ref) runs it: draw with the method, color, overlay, apply
-alpha, then save the PNG and a render record (in `data/exp_pro/renders/`). It returns
+alpha, then save the PNG and a render record (in `data/sims/renders/`). It returns
 `(render, image, limits, outpath, record)`.
 
 ```julia
@@ -14,7 +14,7 @@ ifs = IFS(HEIGHWAY_DRAGON; name = "Heighway Dragon")
 
 out = render(ifs, Chaos(npoints = 200_000); resolution = (1024, 1024), outpath = "render.png")
 out.outpath   # <repo>/plots/render.png
-out.record    # <repo>/data/exp_pro/renders/Heighway_Dragon_chaos_npoints=200000_1024x1024.jld2
+out.record    # <repo>/data/sims/renders/Heighway_Dragon_chaos_npoints=200000_1024x1024.jld2
 
 # The same thing with the description built first:
 r = Render(ifs, Chaos(npoints = 200_000); resolution = (1024, 1024))

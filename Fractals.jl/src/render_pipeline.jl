@@ -18,9 +18,10 @@ _frame(limits) = (; limits)
 #
 # The point-based methods split into an expensive step (the point cloud, which depends only on
 # the IFS's maps and weights and the method's fields) and a cheap one (rasterizing at
-# `resolution`). The cloud is cached with DrWatson's `produce_or_load` under
-# `data_output_dir("points", <ifs key>)`, named by every field of the method. The key ignores the
-# IFS name, resolution, color, alpha and overlays, so re-rendering at another size or style
+# `resolution`). The cloud is cached with DrWatson's `produce_or_load` as one flat file per cloud
+# in `data_output_dir("points")`, named by a config dictionary holding the IFS content key and
+# every method field (e.g. `chaos_ifs=<key>_npoints=1000_seed=1_warmup=50.jld2`). The key ignores
+# the IFS name, resolution, color, alpha and overlays, so re-rendering at another size or style
 # reuses the same points.
 
 """
@@ -38,28 +39,38 @@ _compute_points(m::PointDeterministic, ifs::IFS) = deterministic_iterate(
     m.iterations,
 )
 
+# DrWatson config for a cached cloud: the IFS key plus every method field (`nothing` fields, such
+# as an unset seed, are left out of the name by `savename`).
+_points_config(m::RenderMethod, ifs::IFS) = Dict{String,Any}(
+    "ifs" => ifs_key(ifs),
+    (String(f) => getfield(m, f) for f in fieldnames(typeof(m)))...,
+)
+
 """
     cached_points(method, ifs; force = false) -> (points, path, cached)
 
 The point cloud of a [`Chaos`](@ref) or [`PointDeterministic`](@ref) `method` for `ifs`, computed
-once and then loaded from `data_output_dir("points", ifs_key(ifs))`. The cache key is the IFS
-content and every field of `method`; resolution and styling are not part of it. An unseeded
-method is cached too, so repeated renders reuse one cloud; `force = true` recomputes.
+once and then loaded from `data_output_dir("points")`. Each cloud is its own file, named by
+DrWatson's `savename` over the IFS content key ([`ifs_key`](@ref)) and every field of `method`,
+e.g. `chaos_ifs=<key>_npoints=1000_seed=1_warmup=50.jld2`. Resolution and styling are not part
+of the key. An unseeded method is cached too, so repeated renders reuse one cloud;
+`force = true` recomputes.
 """
 function cached_points(m::Union{Chaos,PointDeterministic}, ifs::IFS; force::Bool = false)
+    config = _points_config(m, ifs)
     computed = Ref(false)
     record, path = DrWatson.produce_or_load(
-        m,
-        data_output_dir("points", ifs_key(ifs));
-        filename = savename(method_tag(m), m; accesses = fieldnames(typeof(m))),
+        config,
+        data_output_dir("points");
+        filename = savename(method_tag(m), config),
         suffix = "jld2",
         tag = false,
         force = force,
         verbose = false,
-    ) do method
+    ) do _
         computed[] = true
-        points = _compute_points(method, ifs)
-        _tag_record!(Dict{String,Any}("points" => _points_matrix(points), "method" => method))
+        points = _compute_points(m, ifs)
+        _tag_record!(Dict{String,Any}("points" => _points_matrix(points), "method" => m))
     end
     return _points_vector(record["points"]), path, !computed[]
 end

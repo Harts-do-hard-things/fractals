@@ -26,10 +26,10 @@ end
 
 The project follows DrWatson's default layout for data as well as plots:
 
-- [`data_output_dir`](@ref)`(args...)` is DrWatson's `datadir("exp_pro", args...)`, or
-  `<root>/data/exp_pro/` under the same overrides. It receives generated data such as
-  the prebuilt IFS library (`data/exp_pro/ifs/`). Generated data under `data/sims/` and
-  `data/exp_pro/` is git-ignored.
+- [`data_output_dir`](@ref)`(args...)` is DrWatson's `datadir("sims", args...)`, or
+  `<root>/data/sims/` under the same overrides. It receives generated data such as
+  the prebuilt IFS library (`data/sims/ifs/`). Nothing here is collected or processed data, so
+  everything generated lives under `data/sims/`, which is git-ignored.
 - [`ifs_data_dir`](@ref)`(args...)` points at the curated, tracked `.ifs` input library in
   `ifs/` at the DrWatson project root, independent of the active project. For
   example, `parse_ifs_file(ifs_data_dir("Default.ifs"))`.
@@ -50,10 +50,10 @@ basename(out.outpath)   # "Eisenstein_chaos_npoints=100000_800x800.png"
 [`render`](@ref) (through [`save_render`](@ref)) writes two files: the PNG under `plots/` and a
 `.jld2` record holding the [`Render`](@ref) description and the world-space `limits` of the
 image. Records always live in the data directory, at
-[`render_record_path`](@ref)`(r)` = `data/exp_pro/renders/<render name>.jld2`. `outpath` only
+[`render_record_path`](@ref)`(r)` = `data/sims/renders/<render name>.jld2`. `outpath` only
 places the PNG; there is no path override for records. Animation frames mirror their layout:
 `plots/frames/<sequence>/frame_0001.png` has its record at
-`data/exp_pro/renders/frames/<sequence>/frame_0001.jld2`.
+`data/sims/renders/frames/<sequence>/frame_0001.jld2`.
 
 The record is written with DrWatson's `tagsave`, so it also stores the Git commit
 (`gitdescribe`, e.g. `v1.0.1-41-g1922796-dirty`). [`load_render`](@ref) reads it back (pass the
@@ -67,7 +67,8 @@ render(Render(r; resolution = (4096, 4096)))          # same points, rasterized 
 ```
 
 The point clouds of [`Chaos`](@ref) and [`PointDeterministic`](@ref) renders are cached
-separately by [`cached_points`](@ref) under `data/exp_pro/points/<ifs_key>/`, keyed only on the
+separately by [`cached_points`](@ref), one flat file per cloud in `data/sims/points/` named
+like `chaos_ifs=<key>_npoints=1000_seed=1_warmup=50.jld2`, keyed only on the
 IFS's maps and weights ([`ifs_key`](@ref), not its name) and the method's fields. Resolution,
 color, alpha and overlays are not part of the key, so re-rendering at another size or style
 only redoes the rasterization.

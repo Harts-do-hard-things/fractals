@@ -36,7 +36,7 @@ build_ifs_library()    # one JLD2 record per function system
 
 [`build_ifs_library`](@ref) parses every `ifs/*.ifs` file and, through DrWatson's
 `produce_or_load`, saves each definition (not each file) as its own record in
-`data/exp_pro/ifs/<file stem>/ifs_<key>.jld2`. A record stores the equation matrix, weights,
+`data/sims/ifs/<file stem>/ifs_<key>.jld2`. A record stores the equation matrix, weights,
 name, docs and source file name. The `<key>` is a hash of the equation matrix and weights only:
 the name is stored but is not part of the key, so renaming a fractal does not create a new
 record and rebuilding skips records that already exist (`force = true` rewrites them).

@@ -49,7 +49,7 @@ end
 
 
 """
-    get_ifs(name; file = nothing, dir = projectdir("ifs"), libdir = datadir("exp_pro", "ifs")) -> IFS
+    get_ifs(name; file = nothing, dir = projectdir("ifs"), libdir = datadir("sims", "ifs")) -> IFS
 
 Find the definition called `name` (optionally only in the source `.ifs` file `file`, e.g.
 `"Default.ifs"`) and build an [`IFS`](@ref). The prebuilt JLD2 record

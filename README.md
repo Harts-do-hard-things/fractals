@@ -18,7 +18,7 @@ The package includes:
 - `FractalsGUI.jl/`: separate Julia package for the desktop GUI (depends on `Fractals`)
 - `scripts/`: DrWatson project scripts (`@quickactivate "fractals"`): example renders, ImageIterate animation builder, GIF/MP4 export, rotation examples
 - `ifs/`: curated `.ifs` input files (tracked; `ifs_data_dir()` returns this path)
-- `data/exp_pro/`, `data/sims/`: generated data such as the prebuilt IFS library `data/exp_pro/ifs/` (`build_ifs_library()`) (git-ignored; `data_output_dir()`)
+- `data/sims/`: all generated data (render records, cached point clouds, fractal records, and the prebuilt IFS library `data/sims/ifs/` from `build_ifs_library()`; git-ignored; `data_output_dir()`)
 - `plots/`: rendered images and animations (git-ignored, created on demand; `output_dir()`)
 - `docs/`: Documenter.jl documentation site (`docs/make.jl`, pages in `docs/src/`)
 
@@ -49,7 +49,7 @@ winget install Gyan.FFmpeg
 julia --startup-file=no --project=. -e "using Fractals; render(IFS(HEIGHWAY_DRAGON; name=\"Heighway Dragon\"), Chaos(npoints=200_000); resolution=(1024, 1024))"
 ```
 
-This writes `plots/Heighway_Dragon_chaos_npoints=200000_1024x1024.png` (and a `.jld2` render record under `data/exp_pro/renders/`)
+This writes `plots/Heighway_Dragon_chaos_npoints=200000_1024x1024.png` (and a `.jld2` render record under `data/sims/renders/`)
 (see [Output Files](#output-files-drwatson)).
 
 ### 3. Run tests
@@ -149,7 +149,7 @@ defs = parse_ifs_string(text)
 ifs = defs[1]
 points = chaos_game(ifs, 100_000)
 ```
-`.ifs` files live in `ifs/`; `build_ifs_library()` prebuilds one JLD2 record per function system under `data/exp_pro/ifs/<file>/`, and `list_ifs()` / `get_ifs(name)` prefer those records over parsing the files (see the IFS text format page).
+`.ifs` files live in `ifs/`; `build_ifs_library()` prebuilds one JLD2 record per function system under `data/sims/ifs/<file>/`, and `list_ifs()` / `get_ifs(name)` prefer those records over parsing the files (see the IFS text format page).
 
 ## Documentation
 

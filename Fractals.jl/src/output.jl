@@ -21,7 +21,7 @@ const _NAME_EXCLUDED_KEYS = (:backend,)
 """
     with_output_root(f, root)
 
-Run `f()` with package output resolved under `root` (`root/plots`, `root/data/exp_pro`) instead
+Run `f()` with package output resolved under `root` (`root/plots`, `root/data/sims`) instead
 of the active DrWatson project's directories. Scoped to `f` (and tasks it spawns).
 """
 with_output_root(f, root::AbstractString) = with(f, _OUTPUT_ROOT => abspath(root))
@@ -51,13 +51,12 @@ end
     data_output_dir(args...)
 
 Directory for generated (processed) data such as benchmark JSON, joined with `args`: DrWatson's
-`datadir("exp_pro")` for the active project, or `<root>/data/exp_pro` when overridden like
+`datadir("sims")` for the active project, or `<root>/data/sims` when overridden like
 [`output_dir`](@ref).
 """
 function data_output_dir(args::AbstractString...)
     root = _output_root_override()
-    return isnothing(root) ? datadir("exp_pro", args...) :
-           joinpath(root, "data", "exp_pro", args...)
+    return isnothing(root) ? datadir("sims", args...) : joinpath(root, "data", "sims", args...)
 end
 
 """
