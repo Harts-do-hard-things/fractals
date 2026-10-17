@@ -1,5 +1,5 @@
 # NOTE: This file must be included after chaos.jl, point_deterministic.jl, rasterize.jl,
-# inverse.jl, and render_transformations.jl — _resolve_image_source calls all of them.
+# inverse.jl, and drawing/transformations.jl — _resolve_image_source calls all of them.
 
 # -------------------------------------------------
 # Compose iterate map with pixel map

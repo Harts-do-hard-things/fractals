@@ -12,6 +12,7 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
 - Select a definition from a `.ifs` file with `get_ifs(name; file)` or `parse_ifs_file(path)[i]` instead of `ifs_index`/`ifs_name`.
 
 ### Removed
+- `render_transformations_png`; use `render(ifs, Transformations(polygon = ...); overlays = [BasePolygon(), Axes()])`.
 - `render(input; method = ...)`, the `render_*` wrappers, the `RenderMethod` enum (with `Parallel` and `RenderTransformations`), `render_fractal`, and interactive prompting (`prompt_ifs_and_render`).
 - The CLI (`Fractals.jl/bin/fractals.jl`) and the benchmark suite with its CI job and manual pages.
 - PNG provenance and source-limits chunks from `render` output (the render record carries them; `_save_image` and the animation script still write them).

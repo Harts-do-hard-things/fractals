@@ -9,7 +9,7 @@
 
 _with_limits(ifs::IFS, limits) = IFS(ifs.name, ifs.maps, ifs.weights, limits)
 
-# The raster helpers in render_transformations.jl only read `.limits` from their `ifs` argument.
+# The raster helpers in drawing/ only read `.limits` from their `ifs` argument.
 _frame(limits) = (; limits)
 
 # --------------------------------
