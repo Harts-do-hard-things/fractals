@@ -12,7 +12,7 @@ Two Julia packages for generating and rasterizing 2D IFS (iterated function syst
 
 Adding a dependency to `Fractals.jl/Project.toml` also requires re-resolving the root and `FractalsGUI.jl` manifests (`Pkg.resolve()` with each project active).
 
-User-facing docs: `README.md` and a Documenter.jl site in `docs/` (`docs/make.jl`; manual pages in `docs/src/manual/`, API reference in `docs/src/api.md` built from docstrings). `CHANGELOG.md` follows Keep a Changelog — add user-visible changes under `[Unreleased]`.
+User-facing docs: `README.md` and a Documenter.jl site in `docs/` (`docs/make.jl`; manual pages in `docs/src/manual/`, API reference in `docs/src/api.md` built from docstrings).
 
 ## Commands
 

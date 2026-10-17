@@ -2,7 +2,7 @@
 
 julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "c368a8abf303d2e5eed788ef0279901922e21a5b"
+project_hash = "a7616c835c398d2a24586e04bf658a3c2584542e"
 
 [[deps.AbstractFFTs]]
 deps = ["LinearAlgebra"]
@@ -277,12 +277,6 @@ deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 version = "1.11.0"
 
-[[deps.DelimitedFiles]]
-deps = ["Mmap"]
-git-tree-sha1 = "9e2f36d3c96a820c678f2f1f1782582fcf685bae"
-uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
-version = "1.9.1"
-
 [[deps.Distances]]
 deps = ["LinearAlgebra", "Statistics", "StatsAPI"]
 git-tree-sha1 = "c7e3a542b999843086e2f29dac96a618c105be1d"
@@ -356,7 +350,7 @@ uuid = "53c48c17-4a7d-5ca2-90c5-79b7896eea93"
 version = "0.8.5"
 
 [[deps.Fractals]]
-deps = ["Colors", "Dates", "DelimitedFiles", "FileIO", "Images", "JSON3", "LinearAlgebra", "Printf", "Random", "StaticArrays", "Statistics", "StatsBase", "TOML"]
+deps = ["Colors", "Dates", "DrWatson", "FileIO", "Images", "JSON3", "LinearAlgebra", "Printf", "Random", "StaticArrays", "Statistics", "StatsBase", "TOML"]
 path = "."
 uuid = "c711514a-ad55-41be-9602-f6ed5533a69e"
 version = "1.0.0"

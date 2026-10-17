@@ -19,6 +19,27 @@ function _save_render_output(
     return _save_image(final_outpath, img, limits; params = all_params)
 end
 
+# Shared argument validation for the `render_*` entry points. Checks only the keywords given.
+function _check_render_args(;
+    npoints::Union{Nothing,Integer} = nothing,
+    warmup::Union{Nothing,Integer} = nothing,
+    iterations::Union{Nothing,Integer} = nothing,
+    resolution::Tuple{Int,Int},
+    backend::Union{Nothing,Symbol} = nothing,
+)
+    isnothing(npoints) || npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
+    isnothing(warmup) || warmup >= 0 || throw(ArgumentError("warmup must be >= 0, got $warmup"))
+    isnothing(iterations) ||
+        iterations >= 0 ||
+        throw(ArgumentError("iterations must be >= 0, got $iterations"))
+    resolution[1] > 0 && resolution[2] > 0 ||
+        throw(ArgumentError("resolution must be positive, got $resolution"))
+    isnothing(backend) ||
+        backend in (:cpu, :gpu, :auto) ||
+        throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
+    return nothing
+end
+
 # --------------------------------
 # Method-specific render functions
 # --------------------------------
@@ -46,12 +67,7 @@ function render_chaos(
     ifs_name::Union{Nothing,AbstractString} = nothing,
     input_fn = readline,
 )
-    isnothing(npoints) || npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
-    warmup >= 0 || throw(ArgumentError("warmup must be >= 0, got $warmup"))
-    resolution[1] > 0 && resolution[2] > 0 ||
-        throw(ArgumentError("resolution must be positive, got $resolution"))
-    backend in (:cpu, :gpu, :auto) ||
-        throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
+    _check_render_args(; npoints, warmup, resolution, backend)
 
     ifs = _resolve_render_input(
         input;
@@ -104,13 +120,7 @@ function render_point_deterministic(
     ifs_name::Union{Nothing,AbstractString} = nothing,
     input_fn = readline,
 )
-    isnothing(npoints) || npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
-    warmup >= 0 || throw(ArgumentError("warmup must be >= 0, got $warmup"))
-    iterations >= 0 || throw(ArgumentError("iterations must be >= 0, got $iterations"))
-    resolution[1] > 0 && resolution[2] > 0 ||
-        throw(ArgumentError("resolution must be positive, got $resolution"))
-    backend in (:cpu, :gpu, :auto) ||
-        throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
+    _check_render_args(; npoints, warmup, iterations, resolution, backend)
 
     ifs = _resolve_render_input(
         input;
@@ -171,13 +181,7 @@ function render_inverse(
     ifs_name::Union{Nothing,AbstractString} = nothing,
     input_fn = readline,
 )
-    isnothing(npoints) || npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
-    warmup >= 0 || throw(ArgumentError("warmup must be >= 0, got $warmup"))
-    iterations >= 0 || throw(ArgumentError("iterations must be >= 0, got $iterations"))
-    resolution[1] > 0 && resolution[2] > 0 ||
-        throw(ArgumentError("resolution must be positive, got $resolution"))
-    backend in (:cpu, :gpu, :auto) ||
-        throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
+    _check_render_args(; npoints, warmup, iterations, resolution, backend)
 
     ifs = _resolve_render_input(
         input;
@@ -214,7 +218,28 @@ function render_inverse(
     return (ifs = ifs, image = img, outpath = final_outpath, method = :inverse)
 end
 
-function _render_image_iterate_impl(
+"""
+    render_image_iterate(input; image_source=:polygon, image_iterations=1, image_path=nothing,
+                         polygon_limits_mode=:geometry, polygon_limits_iterations=nothing,
+                         initial_polygon=:default, show_base=false, axis=false, kwargs...)
+
+Build a seed image, then apply the IFS to it `image_iterations` times with
+[`iterate_image`](@ref). `color=true` colors the final pass.
+
+`image_source` picks the seed:
+
+- `:polygon`: the [`initial_polygon`](@ref) preset rendered in pixel space. Only this source
+  accepts `polygon_limits_mode` (`:geometry` frames by the polygon's iterated geometry, or
+  `:ifs` by `ifs.limits`; `:default` is treated as `:geometry` with a warning),
+  `polygon_limits_iterations` (defaults to `image_iterations`), and the `show_base`/`axis`
+  overlays.
+- `:chaos`, `:point_deterministic` (depth `iterations`), or `:inverse` (depth `iterations`,
+  with `show_divergence_scale`): renders from the other methods.
+- `:file`: the image at `image_path`. Its embedded source limits are used when present.
+
+Other keywords and the return value are as in [`render_chaos`](@ref).
+"""
+function render_image_iterate(
     input;
     npoints::Union{Nothing,Integer} = nothing,
     warmup::Integer = DEFAULT_WARMUP,
@@ -226,7 +251,7 @@ function _render_image_iterate_impl(
     image_iterations::Integer = 1,
     polygon_limits_mode::Symbol = :geometry,
     polygon_limits_iterations::Union{Nothing,Integer} = nothing,
-    initial_polygon_spec::Symbol = :default,
+    initial_polygon::Symbol = :default,
     show_divergence_scale::Bool = true,
     show_base::Bool = false,
     axis::Bool = false,
@@ -237,15 +262,9 @@ function _render_image_iterate_impl(
     ifs_name::Union{Nothing,AbstractString} = nothing,
     input_fn = readline,
 )
-    isnothing(npoints) || npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
-    warmup >= 0 || throw(ArgumentError("warmup must be >= 0, got $warmup"))
-    iterations >= 0 || throw(ArgumentError("iterations must be >= 0, got $iterations"))
+    _check_render_args(; npoints, warmup, iterations, resolution, backend)
     image_iterations > 0 ||
         throw(ArgumentError("image_iterations must be > 0, got $image_iterations"))
-    resolution[1] > 0 && resolution[2] > 0 ||
-        throw(ArgumentError("resolution must be positive, got $resolution"))
-    backend in (:cpu, :gpu, :auto) ||
-        throw(ArgumentError("Invalid backend '$backend'. Supported: :cpu, :gpu, :auto"))
     _validate_image_source(image_source)
     polygon_limits_mode in (:geometry, :ifs, :default) || throw(
         ArgumentError(
@@ -257,7 +276,7 @@ function _render_image_iterate_impl(
         throw(
             ArgumentError("polygon_limits_iterations must be >= 0, got $polygon_limits_iterations"),
         )
-    preset = _resolve_initial_polygon(initial_polygon_spec)
+    preset = _resolve_initial_polygon(initial_polygon)
     image_source == :file &&
         isnothing(image_path) &&
         throw(ArgumentError("image_path is required when image_source=:file"))
@@ -366,82 +385,24 @@ function _render_image_iterate_impl(
 end
 
 """
-    render_image_iterate(input; image_source=:polygon, image_iterations=1, image_path=nothing,
-                         polygon_limits_mode=:geometry, polygon_limits_iterations=nothing,
-                         initial_polygon=:default, show_base=false, axis=false, kwargs...)
+    render_transformations(input; initial_polygon=:default, polygon_limits_iterations=1, show_base=false,
+                           axis=false, color=true, alpha=false, resolution=RESOLUTION, outpath=nothing, ...)
 
-Build a seed image, then apply the IFS to it `image_iterations` times with
-[`iterate_image`](@ref). `color=true` colors the final pass.
-
-`image_source` picks the seed:
-
-- `:polygon`: the [`initial_polygon`](@ref) preset rendered in pixel space. Only this source
-  accepts `polygon_limits_mode` (`:geometry` frames by the polygon's iterated geometry, or
-  `:ifs` by `ifs.limits`; `:default` is treated as `:geometry` with a warning),
-  `polygon_limits_iterations` (defaults to `image_iterations`), and the `show_base`/`axis`
-  overlays.
-- `:chaos`, `:point_deterministic` (depth `iterations`), or `:inverse` (depth `iterations`,
-  with `show_divergence_scale`): renders from the other methods.
-- `:file`: the image at `image_path`. Its embedded source limits are used when present.
-
-Other keywords and the return value are as in [`render_chaos`](@ref).
+Draw each affine map applied to the [`initial_polygon`](@ref) seed as a PNG, without
+iterating the IFS. The frame comes from the polygon after `polygon_limits_iterations`
+iterations. `show_base` overlays the untransformed polygon, and `axis` draws the coordinate
+axes. Angles follow the math convention: positive is counterclockwise and `+y` is up.
+Inputs and the return value are as in [`render`](@ref). For SVG output, see
+[`render_transformations_svg`](@ref).
 """
-function render_image_iterate(
-    input;
-    npoints::Union{Nothing,Integer} = nothing,
-    warmup::Integer = DEFAULT_WARMUP,
-    iterations::Integer = 1,
-    color::Bool = false,
-    alpha::Bool = false,
-    image_source::Symbol = :polygon,
-    image_path::Union{Nothing,AbstractString} = nothing,
-    image_iterations::Integer = 1,
-    polygon_limits_mode::Symbol = :geometry,
-    polygon_limits_iterations::Union{Nothing,Integer} = nothing,
-    initial_polygon::Symbol = :default,
-    show_divergence_scale::Bool = true,
-    show_base::Bool = false,
-    axis::Bool = false,
-    resolution::Tuple{Int,Int} = RESOLUTION,
-    outpath::Union{Nothing,AbstractString} = nothing,
-    backend::Symbol = :cpu,
-    ifs_index::Union{Nothing,Integer} = nothing,
-    ifs_name::Union{Nothing,AbstractString} = nothing,
-    input_fn = readline,
-)
-    return _render_image_iterate_impl(
-        input;
-        npoints = npoints,
-        warmup = warmup,
-        iterations = iterations,
-        color = color,
-        alpha = alpha,
-        image_source = image_source,
-        image_path = image_path,
-        image_iterations = image_iterations,
-        polygon_limits_mode = polygon_limits_mode,
-        polygon_limits_iterations = polygon_limits_iterations,
-        initial_polygon_spec = initial_polygon,
-        show_divergence_scale = show_divergence_scale,
-        show_base = show_base,
-        axis = axis,
-        resolution = resolution,
-        outpath = outpath,
-        backend = backend,
-        ifs_index = ifs_index,
-        ifs_name = ifs_name,
-        input_fn = input_fn,
-    )
-end
-
-function _render_transformations_impl(
+function render_transformations(
     input;
     npoints::Union{Nothing,Integer} = nothing,
     show_base::Bool = false,
     axis::Bool = false,
     color::Bool = true,
     alpha::Bool = false,
-    initial_polygon_spec::Symbol = :default,
+    initial_polygon::Symbol = :default,
     polygon_limits_iterations::Integer = 1,
     resolution::Tuple{Int,Int} = RESOLUTION,
     outpath::Union{Nothing,AbstractString} = nothing,
@@ -449,13 +410,11 @@ function _render_transformations_impl(
     ifs_name::Union{Nothing,AbstractString} = nothing,
     input_fn = readline,
 )
-    isnothing(npoints) || npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
-    resolution[1] > 0 && resolution[2] > 0 ||
-        throw(ArgumentError("resolution must be positive, got $resolution"))
+    _check_render_args(; npoints, resolution)
     polygon_limits_iterations >= 0 || throw(
         ArgumentError("polygon_limits_iterations must be >= 0, got $polygon_limits_iterations"),
     )
-    preset = _resolve_initial_polygon(initial_polygon_spec)
+    preset = _resolve_initial_polygon(initial_polygon)
 
     ifs = _resolve_render_input(
         input;
@@ -498,49 +457,6 @@ function _render_transformations_impl(
         name_keys = (:initial_polygon, :resolution, :color, :alpha),
     )
     return (ifs = ifs, image = img, outpath = final_outpath, method = :render_transformations)
-end
-
-"""
-    render_transformations(input; initial_polygon=:default, polygon_limits_iterations=1, show_base=false,
-                           axis=false, color=true, alpha=false, resolution=RESOLUTION, outpath=nothing, ...)
-
-Draw each affine map applied to the [`initial_polygon`](@ref) seed as a PNG, without
-iterating the IFS. The frame comes from the polygon after `polygon_limits_iterations`
-iterations. `show_base` overlays the untransformed polygon, and `axis` draws the coordinate
-axes. Angles follow the math convention: positive is counterclockwise and `+y` is up.
-Inputs and the return value are as in [`render`](@ref). For SVG output, see
-[`render_transformations_svg`](@ref).
-"""
-function render_transformations(
-    input;
-    npoints::Union{Nothing,Integer} = nothing,
-    show_base::Bool = false,
-    axis::Bool = false,
-    color::Bool = true,
-    alpha::Bool = false,
-    initial_polygon::Symbol = :default,
-    polygon_limits_iterations::Integer = 1,
-    resolution::Tuple{Int,Int} = RESOLUTION,
-    outpath::Union{Nothing,AbstractString} = nothing,
-    ifs_index::Union{Nothing,Integer} = nothing,
-    ifs_name::Union{Nothing,AbstractString} = nothing,
-    input_fn = readline,
-)
-    return _render_transformations_impl(
-        input;
-        npoints = npoints,
-        show_base = show_base,
-        axis = axis,
-        color = color,
-        alpha = alpha,
-        initial_polygon_spec = initial_polygon,
-        polygon_limits_iterations = polygon_limits_iterations,
-        resolution = resolution,
-        outpath = outpath,
-        ifs_index = ifs_index,
-        ifs_name = ifs_name,
-        input_fn = input_fn,
-    )
 end
 
 # --------------------------------

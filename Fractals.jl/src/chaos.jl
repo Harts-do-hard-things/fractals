@@ -10,18 +10,11 @@ function _iterate_serial!(ifs::IFS; warmup = DEFAULT_WARMUP, seed::Union{Nothing
 
     x = SVector{2,Float64}(0.0, 0.0)
 
-    if isnothing(seed)
-        for _ = 1:warmup
-            x = maps[sample(map_indices, weights)](x)
-        end
-        idxs = sample(map_indices, weights, length(ifs.points))
-    else
-        rng = MersenneTwister(seed)
-        for _ = 1:warmup
-            x = maps[sample(rng, map_indices, weights)](x)
-        end
-        idxs = sample(rng, map_indices, weights, length(ifs.points))
+    rng = isnothing(seed) ? Random.default_rng() : MersenneTwister(seed)
+    for _ = 1:warmup
+        x = maps[sample(rng, map_indices, weights)](x)
     end
+    idxs = sample(rng, map_indices, weights, length(ifs.points))
 
     for i in eachindex(ifs.points)
         x = maps[idxs[i]](x)
@@ -47,26 +40,16 @@ function _iterate_parallel!(
         hi = fld(tid * npts, nthreads())
         lo > hi && continue
 
-        rng = isnothing(seed) ? nothing : MersenneTwister(seed + tid - 1)
+        rng = isnothing(seed) ? Random.default_rng() : MersenneTwister(seed + tid - 1)
 
         # independent chain per thread
         x = SVector{2,Float64}(0.0, 0.0)
-        if isnothing(rng)
-            for _ = 1:warmup
-                x = maps[sample(map_indices, weights)](x)
-            end
-            @inbounds for i = lo:hi
-                x = maps[sample(map_indices, weights)](x)
-                ifs.points[i] = x
-            end
-        else
-            for _ = 1:warmup
-                x = maps[sample(rng, map_indices, weights)](x)
-            end
-            @inbounds for i = lo:hi
-                x = maps[sample(rng, map_indices, weights)](x)
-                ifs.points[i] = x
-            end
+        for _ = 1:warmup
+            x = maps[sample(rng, map_indices, weights)](x)
+        end
+        @inbounds for i = lo:hi
+            x = maps[sample(rng, map_indices, weights)](x)
+            ifs.points[i] = x
         end
     end
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env julia
 
 using Fractals
-using DelimitedFiles
 
 include("../bench/benchmark_suite.jl")
 using .BenchmarkSuite
