@@ -48,7 +48,7 @@ Treat ±50% as normal. "Lines" means tracked source, tests, docs and config, exc
 | 5 | Drop PNG provenance, tEXt chunk I/O, `gitdescribe` cache, JSON3, Dates | ~330 / ~200 / ~60 docs | −0.1 s | −2 to −3 s | −0.5 s | `read_provenance` gone |
 | 6 | Drop StatsBase: a small weighted sampler in `chaos.jl` | ~10 net / 0 / 0 | **−0.4 s (≈17%)** | −0.5 s | – | `IFS.weights` becomes `Vector{Float64}`; seeded output changes, so regenerate the 3 snapshots |
 | 7 | Plain overwrite instead of `safesave` backups and `_wsave` wrapper types | ~80 / ~40 / ~20 | – | −0.5 to −1 s | −0.3 s | `_#N` backups stop |
-| 8 | Output root via DrWatson: `with_output_root` switches the active project; drop the ScopedValue and `FRACTALS_OUTPUT_ROOT` | ~45 / ~25 / ~25 | – | – | – | `FRACTALS_OUTPUT_ROOT` gone; `with_output_root` kept but no longer task-scoped |
+| 8 | Delete `with_output_root`, `output_dir`, `data_output_dir` and `FRACTALS_OUTPUT_ROOT`; call DrWatson's `plotsdir()` / `datadir()` directly | ~60 / ~40 / ~30 | – | – | – | 3 exports and the env var gone |
 | 9 | Remove interactive prompting (`interactive.jl`, `input_fn` everywhere) | ~250 / ~120 / ~30 | – | −0.3 s | −1.1 s | `prompt_ifs_and_render` and `input_fn` gone |
 | 10 | `image_source`: keep `:polygon` and `:file`, drop the dispatch table | ~150 / ~300 / ~30 | – | −0.5 s | −1 s | 3 `image_source` values gone |
 | 11 | Inverse: keep `:exact`, drop `:preview` | ~100 / ~120 / ~20 | – | −0.1 s | −0.1 s | `mode=` gone |
@@ -126,39 +126,32 @@ tests ≈ 22 s, and no loss of GPU, the GUI, the CLI or the docs.
    exist only to route writes through DrWatson's `_wsave` so `safesave` can make `_#N` backups.
    Overwrite instead, or keep `safesave` only for JLD2 data files where it comes free. Keep
    `savename`.
-8. **Output root via DrWatson.** Today two custom mechanisms do one job: the `_OUTPUT_ROOT`
-   ScopedValue behind `with_output_root`, and the `FRACTALS_OUTPUT_ROOT` env var, both read by
-   `_output_root_override()` in `output.jl`. DrWatson already answers "where does output go":
-   `plotsdir()` and `datadir()` resolve against `projectdir() == dirname(Base.active_project())`.
-   So let DrWatson own it:
-   - **`output.jl`:** `output_dir(args...) = plotsdir(args...)` and
-     `data_output_dir(args...) = datadir("exp_pro", args...)`, with no override logic. Delete
-     `_OUTPUT_ROOT`, `_output_root_override` and the env-var parsing.
-   - **`with_output_root(f, root)`:** becomes a ~6-line helper. It makes `root` the active
-     project for the duration of `f`, which is the same thing `@quickactivate` does in scripts.
-     DrWatson then resolves `plots/` and `data/exp_pro/` under `root`, and the previous project is
-     restored in a `finally`. It can call `Pkg.activate(root; io = devnull)`, since Pkg is
-     already loaded through DrWatson, or set `Base.ACTIVE_PROJECT[]` directly. A `root` with no
-     `Project.toml` works, because DrWatson only takes the directory name.
-   - **Tests and docs:** the `runtests.jl` header, `generate_snapshots.jl` and the `docs/make.jl`
-     doctest setup activate a `mktempdir()` project once, after `using Fractals`, instead of
-     setting `ENV["FRACTALS_OUTPUT_ROOT"]`. The "output root precedence" testset shrinks to one
-     check that `output_dir() == plotsdir()` under a temp project.
-   - **CI:** the smoke-test render drops the env var. It either writes into the repo's
-     git-ignored `plots/`, or passes an absolute `--output` path.
-   - **Side effect to fix with it:** provenance and JLD2 records take the git commit from
-     `projectdir()` (`_gitcommit` in `output.jl`). Under a temp project that finds no repo and
-     records `nothing`. Point it at the package's repo (`dirname(pkgdir(Fractals))`), which is
-     the right commit anyway: it describes the code that produced the file.
-   - **Caveats:**
-     - The active project is process-global, not task-scoped like the ScopedValue, so two tasks
-       can't render to different roots at once. Nothing here does that.
-     - Don't `using` new packages inside `f`, because code loading follows the active project.
-     - The precompile workload on `claude/long-running-test-jfd` uses `with_output_root(scratch)`.
-       Switching the active project inside a precompile process works, but it should set
-       `Base.ACTIVE_PROJECT[]` directly rather than go through `Pkg.activate`.
-   - **Docs:** update the mentions in `README.md`, `docs/src/manual/output.md`,
-     `docs/src/manual/development.md`, `docs/src/api.md` and CLAUDE.md.
+8. **Output root: delete it and call DrWatson directly.** `with_output_root` (the `_OUTPUT_ROOT`
+   ScopedValue), the `FRACTALS_OUTPUT_ROOT` env var, `_output_root_override()`, and the
+   `output_dir` / `data_output_dir` wrappers exist only to redirect output somewhere other than
+   the active project. Remove all of them, with no replacement helper.
+   - **`src/`:** every `output_dir(...)` becomes `plotsdir(...)`, and every
+     `data_output_dir(...)` becomes `datadir("exp_pro", ...)`. That covers `_resolve_output_path`,
+     `_save_data_text`, `interpolation.jl`, `render.jl`, `interactive.jl` and (on
+     `claude/long-running-test-jfd`) `fractal_store.jl`. Drop the three names from the `export`
+     list and `docs/src/api.md`. `ifs_data_dir` stays, since it is about inputs, not output.
+   - **Tests and docs:** delete the `ENV["FRACTALS_OUTPUT_ROOT"] = mktempdir()` lines in the
+     `runtests.jl` header, `generate_snapshots.jl` and `docs/make.jl`.
+     - Under `--project=Fractals.jl`, output lands in `Fractals.jl/plots` and
+       `Fractals.jl/data/exp_pro`, which `.gitignore` already ignores.
+     - Assertions use `plotsdir(...)` instead of `output_dir(...)`.
+     - The "output root precedence" testset is deleted, and the `with_output_root(d) do` wrappers
+       around other testsets are dropped.
+     - **Trade-off:** test runs leave files in those ignored folders, and the `safesave` tests
+       must not assume an empty directory. Use unique names, or `rm` the file first. If #7 lands
+       first, the backup tests go away.
+   - **CI:** the smoke-test render drops `FRACTALS_OUTPUT_ROOT` and writes into the runner
+     checkout's ignored `plots/`.
+   - **Precompile workload** (on `claude/long-running-test-jfd`): pass absolute `outpath`s inside
+     its `mktempdir()` scratch dir instead of `with_output_root(scratch)`. Absolute paths already
+     bypass `plotsdir()`.
+   - **Docs:** remove the mentions in `README.md`, `docs/src/manual/output.md`,
+     `docs/src/manual/render_methods.md` and CLAUDE.md.
 9. **Interactive prompting.** `interactive.jl` (206 lines), the `input_fn = readline` keyword
    threaded through the `render_*` signatures (24 uses in `render.jl`), and the stdin branch of
    `_resolve_render_input`. `ifs_index` and `ifs_name` already cover the use case; an `.ifs` path
