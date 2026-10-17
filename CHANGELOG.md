@@ -7,6 +7,7 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
 ## [Unreleased]
 
 ### Added
+- `chaos_game(ifs, n)` returns the points, and `IFS` no longer stores `points` or `docs` (breaking). `iterate!`, `iterate_parallel!`, the `npoints`/`docs` constructor keywords and `make_image(ifs)` are gone; `make_image(points, limits)`, `deterministic_iterate(ifs, points, n)` and `save_fractal(ifs, points)` take the points explicitly.
 - `IFSParse` submodule (`Fractals.jl/src/ifs_parse.jl`) with a DrWatson-managed JLD2 library of prebuilt IFS definitions: `build_ifs_library`, `list_ifs_files`, `list_ifs`, `get_ifs`. `.ifs` files moved from `data/exp_raw/` to `ifs/`.
 - `interpolate_eq_matrix(...)` and `interpolate_ifs(...)` helpers for animation-oriented transform interpolation.
 - `render_interpolation_frames(...)` for deterministic transformation-frame rendering into numbered PNG sequences; it also supports `render_method=Chaos`.

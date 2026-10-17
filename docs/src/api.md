@@ -37,8 +37,7 @@ random_ifs
 ## Iteration
 
 ```@docs
-iterate!
-iterate_parallel!
+chaos_game
 deterministic_iterate
 ```
 

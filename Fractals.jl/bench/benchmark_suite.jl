@@ -86,29 +86,27 @@ function _bench_one(
     include_gpu_bench::Bool=false
 )
     warmup = DEFAULT_WARMUP
-    ifs = IFS(HEIGHWAY_DRAGON; npoints=npoints)
+    ifs = IFS(HEIGHWAY_DRAGON)
     # Warmup for JIT and method compilation.
-    warm_ifs = IFS(HEIGHWAY_DRAGON; npoints=5_000)
-    iterate!(warm_ifs; warmup=10, seed=1234)
-    iterate_parallel!(IFS(HEIGHWAY_DRAGON; npoints=5_000); warmup=10, seed=1234)
-    make_image(warm_ifs; resolution=(64, 64))
+    warm_ifs = IFS(HEIGHWAY_DRAGON)
+    warm_points = chaos_game(warm_ifs, 5_000; warmup=10, seed=1234)
+    chaos_game(warm_ifs, 5_000; warmup=10, seed=1234)
+    make_image(warm_points, warm_ifs.limits; resolution=(64, 64))
     rasterize_image_inversely(warm_ifs, 1, warm_ifs.limits; resolution=(32, 32))
 
     iter_stats = _time_repeats(repeats) do
-        local tifs = IFS(HEIGHWAY_DRAGON; npoints=npoints)
-        iterate!(tifs; warmup=warmup, seed=1234)
+        chaos_game(ifs, npoints; warmup=warmup, seed=1234)
     end
 
     iter_parallel_stats = _time_repeats(repeats) do
-        local tifs = IFS(HEIGHWAY_DRAGON; npoints=npoints)
-        iterate_parallel!(tifs; warmup=warmup, seed=1234)
+        chaos_game(ifs, npoints; warmup=warmup, seed=1234)
     end
 
     # Build once for make_image benchmark.
-    iterate!(ifs; warmup=warmup, seed=1234)
-    iterate_img_src = make_image(ifs; resolution=resolution, backend=:cpu)
+    points = chaos_game(ifs, npoints; warmup=warmup, seed=1234)
+    iterate_img_src = make_image(points, ifs.limits; resolution=resolution, backend=:cpu)
     image_stats = _time_repeats(repeats) do
-        make_image(ifs; resolution=resolution, backend=backend)
+        make_image(points, ifs.limits; resolution=resolution, backend=backend)
     end
 
     # Warm once to avoid first-call compilation skew in timed repeats.
@@ -148,7 +146,7 @@ function _bench_one(
             out["rasterize_image_inversely_gpu_preview"] = Dict("status" => "skipped", "reason" => "GPU backend unavailable on this machine")
         else
             gpu_stats = _time_repeats(repeats) do
-                make_image(ifs; resolution=resolution, backend=:gpu)
+                make_image(points, ifs.limits; resolution=resolution, backend=:gpu)
             end
             out["make_image_gpu"] = _metric_dict(gpu_stats)
 

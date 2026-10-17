@@ -28,7 +28,7 @@ end
                  resolution=RESOLUTION, outpath=nothing, backend=:cpu, ifs_index=nothing,
                  ifs_name=nothing, input_fn=readline)
 
-Run the chaos game ([`iterate!`](@ref)) and rasterize the point cloud with
+Run the chaos game ([`chaos_game`](@ref)) and rasterize the point cloud with
 [`make_image`](@ref). `color=true` colors the result with one [`iterate_image`](@ref)
 pass. Inputs, shared keywords, and the returned `(ifs, image, outpath, method)` tuple are
 as in [`render`](@ref).
@@ -55,13 +55,13 @@ function render_chaos(
 
     ifs = _resolve_render_input(
         input;
-        npoints = npoints,
         ifs_index = ifs_index,
         ifs_name = ifs_name,
         input_fn = input_fn,
     )
-    iterate!(ifs; warmup = warmup)
-    img = make_image(ifs; resolution = resolution, backend = backend)
+    resolved_npoints = isnothing(npoints) ? DEFAULT_SAMPLES : npoints
+    points = chaos_game(ifs, resolved_npoints; warmup = warmup)
+    img = make_image(points, ifs.limits; resolution = resolution, backend = backend)
 
     if color
         img = iterate_image(ifs, img; colors = true, backend = backend)
@@ -76,10 +76,10 @@ function render_chaos(
         ifs,
         ifs.limits;
         method = :chaos,
-        params = (; npoints = length(ifs.points), warmup, resolution, color, alpha, backend),
+        params = (; npoints = resolved_npoints, warmup, resolution, color, alpha, backend),
         name_keys = (:npoints, :resolution, :color, :alpha),
     )
-    return (ifs = ifs, image = img, outpath = final_outpath, method = :chaos)
+    return (ifs = ifs, points = points, image = img, outpath = final_outpath, method = :chaos)
 end
 
 """
@@ -114,13 +114,14 @@ function render_point_deterministic(
 
     ifs = _resolve_render_input(
         input;
-        npoints = npoints,
         ifs_index = ifs_index,
         ifs_name = ifs_name,
         input_fn = input_fn,
     )
-    rendered_ifs = deterministic_iterate(ifs, iterations; warmup = warmup)
-    img = make_image(rendered_ifs; resolution = resolution, backend = backend)
+    resolved_npoints = isnothing(npoints) ? DEFAULT_SAMPLES : npoints
+    seeds = chaos_game(ifs, resolved_npoints; warmup = warmup)
+    points = deterministic_iterate(ifs, seeds, iterations)
+    img = make_image(points, ifs.limits; resolution = resolution, backend = backend)
 
     if color
         img = iterate_image(ifs, img; colors = true, backend = backend)
@@ -133,10 +134,10 @@ function render_point_deterministic(
         outpath,
         img,
         ifs,
-        rendered_ifs.limits;
+        ifs.limits;
         method = :point_deterministic,
         params = (;
-            npoints = length(ifs.points),
+            npoints = resolved_npoints,
             warmup,
             iterations,
             resolution,
@@ -146,7 +147,13 @@ function render_point_deterministic(
         ),
         name_keys = (:npoints, :iterations, :resolution, :color, :alpha),
     )
-    return (ifs = rendered_ifs, image = img, outpath = final_outpath, method = :point_deterministic)
+    return (
+        ifs = ifs,
+        points = points,
+        image = img,
+        outpath = final_outpath,
+        method = :point_deterministic,
+    )
 end
 
 """
@@ -181,7 +188,6 @@ function render_inverse(
 
     ifs = _resolve_render_input(
         input;
-        npoints = npoints,
         ifs_index = ifs_index,
         ifs_name = ifs_name,
         input_fn = input_fn,
@@ -285,7 +291,6 @@ function _render_image_iterate_impl(
 
     ifs = _resolve_render_input(
         input;
-        npoints = npoints,
         ifs_index = ifs_index,
         ifs_name = ifs_name,
         input_fn = input_fn,
@@ -295,6 +300,7 @@ function _render_image_iterate_impl(
         polygon_limits_mode
     resolved_polygon_limits_iterations =
         isnothing(polygon_limits_iterations) ? image_iterations : Int(polygon_limits_iterations)
+    resolved_npoints = isnothing(npoints) ? DEFAULT_SAMPLES : npoints
     source = _resolve_image_source_context(
         ifs,
         image_source,
@@ -308,6 +314,7 @@ function _render_image_iterate_impl(
         show_divergence_scale,
         preset,
         backend,
+        resolved_npoints,
     )
     raster_ifs = source.ifs
     img = source.image
@@ -343,7 +350,7 @@ function _render_image_iterate_impl(
         raster_ifs.limits;
         method = :image_iterate,
         params = (;
-            npoints = length(ifs.points),
+            npoints = resolved_npoints,
             warmup,
             iterations,
             image_source,
@@ -459,7 +466,6 @@ function _render_transformations_impl(
 
     ifs = _resolve_render_input(
         input;
-        npoints = npoints,
         ifs_index = ifs_index,
         ifs_name = ifs_name,
         input_fn = input_fn,
@@ -549,7 +555,6 @@ end
 
 function _resolve_render_input(
     input::IFS;
-    npoints::Union{Nothing,Integer},
     ifs_index::Union{Nothing,Integer},
     ifs_name::Union{Nothing,AbstractString},
     input_fn = readline,
@@ -557,24 +562,11 @@ function _resolve_render_input(
     if !isnothing(ifs_index) || !isnothing(ifs_name)
         throw(ArgumentError("ifs_index/ifs_name are only valid for parsed string/file inputs"))
     end
-
-    if isnothing(npoints) || length(input.points) == npoints
-        return input
-    end
-
-    return IFS(
-        input.maps,
-        input.weights;
-        npoints = npoints,
-        name = input.name,
-        docs = input.docs,
-        limits = input.limits,
-    )
+    return input
 end
 
 function _resolve_render_input(
     input::AbstractMatrix{<:Real};
-    npoints::Union{Nothing,Integer},
     ifs_index::Union{Nothing,Integer},
     ifs_name::Union{Nothing,AbstractString},
     input_fn = readline,
@@ -582,18 +574,15 @@ function _resolve_render_input(
     if !isnothing(ifs_index) || !isnothing(ifs_name)
         throw(ArgumentError("ifs_index/ifs_name are only valid for parsed string/file inputs"))
     end
-    resolved_npoints = isnothing(npoints) ? DEFAULT_SAMPLES : npoints
-    return IFS(input; npoints = resolved_npoints)
+    return IFS(input)
 end
 
 function _resolve_render_input(
     input::AbstractString;
-    npoints::Union{Nothing,Integer},
     ifs_index::Union{Nothing,Integer},
     ifs_name::Union{Nothing,AbstractString},
     input_fn = readline,  # _select_ifs_definition is defined in interactive.jl
 )
-    resolved_npoints = isnothing(npoints) ? DEFAULT_SAMPLES : npoints
     defs =
         isfile(input) ?
         _validated_ifs_definitions(parse_ifs_definitions_file(input); source = input) :
@@ -606,7 +595,7 @@ function _resolve_render_input(
         ifs_name = ifs_name,
         input_fn = input_fn,
     )
-    return IFS(selected.eq; npoints = resolved_npoints, name = selected.name, docs = selected.docs)
+    return IFS(selected.eq; name = selected.name)
 end
 
 # --------------------------------
@@ -634,7 +623,7 @@ Method-specific keywords go in `kwargs` and are forwarded to the matching functi
 
 Shared keywords:
 
-- `npoints`: point count; `nothing` keeps an `IFS`'s count or uses `DEFAULT_SAMPLES`.
+- `npoints`: point count for the point-based methods; `nothing` uses `DEFAULT_SAMPLES`.
 - `color`: tint by map; defaults to `false`, except `true` for `RenderTransformations`.
 - `alpha`: save with transparency where the image is zero.
 - `resolution`: `(rows, cols)`.
@@ -712,11 +701,12 @@ function render(
     # Also emit a JLD2 record named like the image (same stem, under data_output_dir()).
     stem = splitext(basename(out.outpath))[1]
     data_path = save_fractal(
-        out.ifs;
+        out.ifs,
+        get(out, :points, SVector{2,Float64}[]);
         image = out.image,
         method = out.method,
         params = (;
-            npoints = length(out.ifs.points),
+            npoints = isnothing(npoints) ? DEFAULT_SAMPLES : npoints,
             warmup,
             resolution,
             color = shared_color,

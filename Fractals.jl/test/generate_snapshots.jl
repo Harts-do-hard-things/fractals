@@ -23,7 +23,7 @@ function _write_snapshot(name::AbstractString, image)
     println(path)
 end
 
-transform_ifs = IFS(SMALL_EQ; npoints = 50)
+transform_ifs = IFS(SMALL_EQ)
 transform_img =
     render(
         transform_ifs;

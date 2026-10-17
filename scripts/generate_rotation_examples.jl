@@ -23,7 +23,7 @@ cases = [
 
 for (deg, clockwise, stem) in cases
     eq = rotation_eq(deg; clockwise=clockwise)
-    ifs = IFS(eq; npoints=10, name=stem)
+    ifs = IFS(eq; name=stem)
     svg_path = render_transformations_svg(ifs;
                                           outpath=joinpath("rotation_examples", "$stem.svg"),
                                           width=640,

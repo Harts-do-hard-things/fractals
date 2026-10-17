@@ -40,7 +40,8 @@ using PrecompileTools: @setup_workload, @compile_workload
     ifs_path = joinpath(scratch, "workload.ifs")
     write(ifs_path, ifs_text)
     res = (16, 16)
-    ifs = IFS(eq; npoints = 50)
+    ifs = IFS(eq)
+    pts = chaos_game(ifs, 50; warmup = 2)
     # Run `f` with output redirected into `scratch`.
     inroot(f) =
         with(_SKIP_GIT => true) do
@@ -49,12 +50,12 @@ using PrecompileTools: @setup_workload, @compile_workload
 
     # Parsing and the chaos game.
     @compile_workload begin
-        parse_ifs_string(ifs_text; npoints = 50)
-        parse_ifs_file(ifs_path; npoints = 50)
-        iterate!(ifs; warmup = 2)
-        iterate!(ifs; warmup = 2, seed = 1)
-        make_image(ifs; resolution = res)
-        iterate_image(ifs, make_image(ifs; resolution = res); colors = true, seed = 1)
+        parse_ifs_string(ifs_text)
+        parse_ifs_file(ifs_path)
+        chaos_game(ifs, 50; warmup = 2)
+        chaos_game(ifs, 50; warmup = 2, seed = 1)
+        make_image(pts, ifs.limits; resolution = res)
+        iterate_image(ifs, make_image(pts, ifs.limits; resolution = res); colors = true, seed = 1)
         random_eq(; rng = MersenneTwister(1))
         AffineMap([0.5 0.0; 0.0 0.5], [0.0, 0.0])
     end
@@ -83,7 +84,7 @@ using PrecompileTools: @setup_workload, @compile_workload
             )
             render(eq; resolution = res, outpath = "gray.png", npoints = 50, alpha = true)
             render(eq; resolution = res, outpath = "rgb.png", npoints = 50, color = true)
-            render(IFS(eq; npoints = 20); method = Chaos, resolution = res, outpath = "ifs.png")
+            render(IFS(eq); method = Chaos, resolution = res, outpath = "ifs.png")
             render(ifs_path; ifs_index = 1, npoints = 50, resolution = res, outpath = "file.png")
             render(
                 ifs_path;
@@ -144,18 +145,8 @@ using PrecompileTools: @setup_workload, @compile_workload
                 outpath = "rt.png",
                 npoints = 8,
             )
-            render_transformations_svg(
-                IFS(eq; npoints = 8);
-                outpath = "t.svg",
-                width = 16,
-                height = 16,
-            )
-            render_transformations_png(
-                IFS(eq; npoints = 8);
-                outpath = "t.png",
-                width = 16,
-                height = 16,
-            )
+            render_transformations_svg(IFS(eq); outpath = "t.svg", width = 16, height = 16)
+            render_transformations_png(IFS(eq); outpath = "t.png", width = 16, height = 16)
         end
     end
 
@@ -163,8 +154,8 @@ using PrecompileTools: @setup_workload, @compile_workload
     # reported after the export code has been compiled).
     @compile_workload begin
         inroot() do
-            left = IFS(eq; npoints = 20, name = "left")
-            right = IFS(eq .* 0.9; npoints = 20, name = "right")
+            left = IFS(eq; name = "left")
+            right = IFS(eq .* 0.9; name = "right")
             render_interpolation_frames(
                 left,
                 right;
@@ -188,7 +179,7 @@ using PrecompileTools: @setup_workload, @compile_workload
     @compile_workload begin
         inroot() do
             data = fractal_data(eq; npoints = 50, seed = 1, name = "w")
-            save_fractal(ifs; image = make_image(ifs; resolution = res), seed = 1)
+            save_fractal(ifs, pts; image = make_image(pts, ifs.limits; resolution = res), seed = 1)
             load_fractal(data.path)
             render_fractal(data; resolution = res)
             extend_fractal(data, 10; seed = 2)

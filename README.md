@@ -6,7 +6,7 @@
 Supported Julia versions: `1.11` and `1.12`.
 
 The package includes:
-- Chaos-game iteration (`iterate!`, `iterate_parallel!`)
+- Chaos-game iteration (`chaos_game`)
 - Deterministic expansion (`deterministic_iterate`)
 - Forward and inverse rasterization helpers
 - An IFS parser for text-based fractal definitions
@@ -132,8 +132,8 @@ Reproducible chaos iteration example:
 ```julia
 using Fractals
 
-ifs = IFS(HEIGHWAY_DRAGON; npoints=100_000)
-iterate!(ifs; warmup=20, seed=1234)
+ifs = IFS(HEIGHWAY_DRAGON)
+points = chaos_game(ifs, 100_000; warmup=20, seed=1234)
 ```
 
 ## IFS Parser Example
@@ -148,9 +148,9 @@ Heighway Dragon {
 }
 """
 
-defs = parse_ifs_string(text; npoints=100_000)
+defs = parse_ifs_string(text)
 ifs = defs[1]
-iterate!(ifs)
+points = chaos_game(ifs, 100_000)
 ```
 `.ifs` files live in `ifs/`; `build_ifs_library()` prebuilds one JLD2 record per function system under `data/exp_pro/ifs/<file>/`, and `list_ifs()` / `get_ifs(name)` prefer those records over parsing the files (see the IFS text format page).
 

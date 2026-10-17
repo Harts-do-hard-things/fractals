@@ -139,7 +139,7 @@ end
 
 function make_default_state(; data_dir::AbstractString=ifs_data_dir())::GUIState
     eq = copy(_DEFAULT_ROW)
-    ifs = IFS(eq; npoints=20_000, name="Template", docs="FractalsGUI template")
+    ifs = IFS(eq; name="Template")
     state = GUIState(
         nothing,
         1,
@@ -171,7 +171,7 @@ function apply_eq_matrix!(state::GUIState, eq::AbstractMatrix{<:Real})::Bool
 
     try
         state.eq_matrix = normalized
-        state.ifs = IFS(normalized; npoints=20_000, name=state.definition_name, docs=state.docs)
+        state.ifs = IFS(normalized; name=state.definition_name)
         state.last_error = nothing
         state.is_valid = true
         _refresh_svg!(state)

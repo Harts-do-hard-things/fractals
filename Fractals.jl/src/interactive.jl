@@ -135,29 +135,29 @@ function prompt_ifs_and_render(
     outpath::Union{Nothing,AbstractString} = nothing,
     input_fn = readline,
 )
-    ifs_list = parse_ifs_file(path; npoints = npoints)
-    if isempty(ifs_list)
+    defs = _validated_ifs_definitions(parse_ifs_definitions_file(path); source = path)
+    if isempty(defs)
         println("No IFS definitions found in: $path")
         return nothing
     end
 
     println("IFS definitions in file:")
-    for (i, ifs) in enumerate(ifs_list)
-        doc_preview = isempty(ifs.docs) ? "" : " - " * first(split(ifs.docs, '\n'))
-        println("  [$i] $(ifs.name)$(doc_preview)")
+    for (i, d) in enumerate(defs)
+        doc_preview = isempty(d.docs) ? "" : " - " * first(split(d.docs, '\n'))
+        println("  [$i] $(d.name)$(doc_preview)")
     end
 
     idx = _prompt_choice(
-        "Select a fractal [1-$(length(ifs_list))] (default 1): ",
-        length(ifs_list),
+        "Select a fractal [1-$(length(defs))] (default 1): ",
+        length(defs),
         1;
         input_fn = input_fn,
     )
-    ifs = ifs_list[idx]
+    ifs = IFS(defs[idx].eq; name = defs[idx].name)
 
     println("Iteration methods:")
-    println("  [1] chaos auto-threaded (iterate!)")
-    println("  [2] chaos auto-threaded (iterate_parallel! alias)")
+    println("  [1] chaos game (chaos_game)")
+    println("  [2] chaos game (alias of 1)")
     println("  [3] point deterministic (deterministic_iterate, n=1)")
     method = _prompt_choice("Select method [1-3] (default 1): ", 3, 1; input_fn = input_fn)
 

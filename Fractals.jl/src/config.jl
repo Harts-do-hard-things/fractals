@@ -80,7 +80,7 @@ or strings (`:chaos`, `"point_deterministic"`, ...).
 end
 
 @doc "Chaos-game point cloud rasterized to a heatmap ([`render_chaos`](@ref))." Chaos
-@doc "Compatibility alias for [`Chaos`](@ref); `iterate!` is already threaded. May be deprecated." Parallel
+@doc "Compatibility alias for [`Chaos`](@ref); `chaos_game` is already threaded. May be deprecated." Parallel
 @doc "Deterministic expansion of every map applied to every point ([`render_point_deterministic`](@ref))." PointDeterministic
 @doc "IFS applied to a seed image rather than points ([`render_image_iterate`](@ref))." ImageIterate
 @doc "Per-pixel inverse-map coverage ([`render_inverse`](@ref))." Inverse

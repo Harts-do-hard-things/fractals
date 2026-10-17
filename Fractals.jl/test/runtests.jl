@@ -72,9 +72,9 @@ const SMALL_EQ = [
 const SNAPSHOT_DIR = joinpath(@__DIR__, "snapshots")
 
 function _probe_gpu_available()::Bool
-    ifs = IFS(SMALL_EQ; npoints = 4)
+    ifs = IFS(SMALL_EQ)
     try
-        make_image(ifs; resolution = (4, 4), backend = :gpu)
+        make_image([SVector{2,Float64}(0.0, 0.0)], ifs.limits; resolution = (4, 4), backend = :gpu)
         return true
     catch e
         e isa ArgumentError && return false
@@ -186,8 +186,7 @@ end
 end
 
 @testset "IFS constructor initializes maps, weights, and bounds from equation matrices" begin
-    ifs = IFS(SMALL_EQ; npoints = 1000)
-    @test length(ifs.points) == 1000
+    ifs = IFS(SMALL_EQ)
     @test length(ifs.maps) == size(SMALL_EQ, 1)
     @test length(ifs.weights) == size(SMALL_EQ, 1)
     @test collect(ifs.weights) ≈ [0.6, 0.4]
@@ -198,10 +197,9 @@ end
         1.0 0.0 0.0 1.0 0.0 0.0
         0.5 0.0 0.0 0.5 1.0 0.0
     ]
-    ifs6 = IFS(eq6; npoints = 25, name = "Derived", docs = "from 6-column matrix")
-    @test length(ifs6.points) == 25
+    ifs6 = IFS(eq6; name = "Derived")
     @test ifs6.name == "Derived"
-    @test ifs6.docs == "from 6-column matrix"
+    @test fieldnames(IFS) == (:name, :maps, :weights, :limits)
     @test collect(ifs6.weights) ≈ [1.0, 0.25]
     @test ifs6.maps[1](SVector{2,Float64}(2.0, 3.0)) ≈ SVector{2,Float64}(2.0, 3.0)
     @test ifs6.maps[2](SVector{2,Float64}(2.0, 3.0)) ≈ SVector{2,Float64}(2.0, 1.5)
@@ -221,10 +219,9 @@ end
     @test size(eq6) == (3, 6)
     @test isempty(Fractals._noncontractive_rows(eq6))
 
-    ifs1 = random_ifs(; rng = MersenneTwister(99), npoints = 128, name = "Random")
-    ifs2 = random_ifs(; rng = MersenneTwister(99), npoints = 128, name = "Random")
+    ifs1 = random_ifs(; rng = MersenneTwister(99), name = "Random")
+    ifs2 = random_ifs(; rng = MersenneTwister(99), name = "Random")
     @test ifs1.name == "Random"
-    @test length(ifs1.points) == 128
     @test length(ifs1.maps) in 2:4
     @test collect(ifs1.weights) ≈ collect(ifs2.weights)
     @test all(
@@ -264,13 +261,11 @@ end
     ]
     @test interpolate_eq_matrix(left6, right7, 1.0) ≈ right7
 
-    left_ifs = IFS(left6; npoints = 12, name = "Left", docs = "left docs")
-    right_ifs = IFS(right7; npoints = 20, name = "Right", docs = "right docs")
+    left_ifs = IFS(left6; name = "Left")
+    right_ifs = IFS(right7; name = "Right")
     blended = interpolate_ifs(left_ifs, right_ifs, 0.25)
 
-    @test length(blended.points) == 12
     @test blended.name == "Interpolated(Left -> Right)"
-    @test occursin("Interpolated IFS at t=0.25", blended.docs)
     @test blended.maps[1](SVector{2,Float64}(1.0, 0.0)) ≈
           SVector{2,Float64}(cospi(0.125), -sinpi(0.125) + 0.25)
     @test blended.maps[1](SVector{2,Float64}(0.0, 1.0)) ≈
@@ -285,18 +280,8 @@ end
     @test blended_linear.maps[1](SVector{2,Float64}(1.0, 0.0)) ≈ SVector{2,Float64}(0.75, 0.0)
     @test blended_linear.maps[1](SVector{2,Float64}(0.0, 1.0)) ≈ SVector{2,Float64}(0.25, 1.0)
 
-    right_locked = interpolate_ifs(
-        left_ifs,
-        right_ifs,
-        0.5;
-        limits_mode = :right,
-        npoints = 3,
-        name = "Blend",
-        docs = "manual docs",
-    )
-    @test length(right_locked.points) == 3
+    right_locked = interpolate_ifs(left_ifs, right_ifs, 0.5; limits_mode = :right, name = "Blend")
     @test right_locked.name == "Blend"
-    @test right_locked.docs == "manual docs"
     @test right_locked.limits == right_ifs.limits
 
     @test_throws ArgumentError interpolate_eq_matrix(left6, right7[:, 1:6], -0.1)
@@ -304,10 +289,9 @@ end
     @test_throws ArgumentError interpolate_eq_matrix(left6, right7, 0.5; interpolation_mode = :bad)
     @test_throws ArgumentError interpolate_ifs(left_ifs, right_ifs, 0.5; limits_mode = :bad)
     @test_throws ArgumentError interpolate_ifs(left_ifs, right_ifs, 0.5; interpolation_mode = :bad)
-    @test_throws ArgumentError interpolate_ifs(left_ifs, right_ifs, 0.5; npoints = -1)
 
     recomputed = interpolate_ifs(left_ifs, right_ifs, 0.5; limits_mode = :recompute)
-    @test recomputed.limits == refresh_limits(recomputed; source = :maps).limits
+    @test recomputed.limits == refresh_limits(recomputed).limits
 
     shear_left = [1.0 0.2 0.0 1.0 0.0 0.0]
     shear_right = [0.9 0.4 0.1 0.8 1.0 2.0]
@@ -316,44 +300,27 @@ end
 end
 
 @testset "Limits Refresh And Staleness" begin
-    ifs = IFS(SMALL_EQ; npoints = 128, name = "Limits", docs = "stale limits")
+    ifs = IFS(SMALL_EQ; name = "Limits")
     original_limits = ifs.limits
-    iterate!(ifs; warmup = 5, seed = 4242)
+    pts = chaos_game(ifs, 128; warmup = 5, seed = 4242)
+    @test length(pts) == 128
     @test ifs.limits == original_limits
 
-    shifted_points = [p + SVector{2,Float64}(25.0, -17.0) for p in ifs.points]
-    stale = IFS(ifs.name, ifs.docs, shifted_points, ifs.maps, ifs.weights, ifs.limits)
-    point_refreshed = refresh_limits(stale; source = :points)
-    @test point_refreshed.name == stale.name
-    @test point_refreshed.docs == stale.docs
-    @test point_refreshed.maps == stale.maps
-    @test collect(point_refreshed.weights) == collect(stale.weights)
-    @test point_refreshed.points == stale.points
-    @test point_refreshed.limits != stale.limits
+    # Limits are computed once at construction, and refresh_limits keeps everything else.
+    refreshed = refresh_limits(ifs)
+    @test refreshed.name == ifs.name
+    @test refreshed.maps == ifs.maps
+    @test collect(refreshed.weights) == collect(ifs.weights)
+    @test refreshed.limits == original_limits
 
-    maps_refreshed = refresh_limits(ifs; source = :maps)
-    @test maps_refreshed.limits == original_limits
-    @test maps_refreshed.points == ifs.points
-
-    bad_source = _capture_exception(() -> refresh_limits(ifs; source = :bad))
-    @test bad_source isa ArgumentError
-    @test occursin("Supported: :maps, :points", sprint(showerror, bad_source))
-
-    stale_wide = IFS(
-        stale.name,
-        stale.docs,
-        stale.points,
-        stale.maps,
-        stale.weights,
-        ((-100.0, 100.0), (-100.0, 100.0)),
-    )
-    stale_img = make_image(stale_wide; resolution = (32, 32), backend = :cpu)
-    refreshed_img = make_image(
-        refresh_limits(stale_wide; source = :points);
-        resolution = (32, 32),
-        backend = :cpu,
-    )
-    @test stale_img != refreshed_img
+    # Limits that do not match the points change the raster; the maps' own limits fit.
+    shifted_points = [p + SVector{2,Float64}(25.0, -17.0) for p in pts]
+    stale_wide =
+        IFS(ifs.maps, ifs.weights; name = ifs.name, limits = ((-100.0, 100.0), (-100.0, 100.0)))
+    stale_img = make_image(shifted_points, stale_wide.limits; resolution = (32, 32), backend = :cpu)
+    fitted_img =
+        make_image(pts, refresh_limits(stale_wide).limits; resolution = (32, 32), backend = :cpu)
+    @test stale_img != fitted_img
 end
 
 @testset "Interpolation Frame Renderer" begin
@@ -362,7 +329,6 @@ end
             0.5 -0.5 0.5 0.5 0.0 0.0
             -0.5 -0.5 0.5 -0.5 1.0 0.0
         ];
-        npoints = 40,
         name = "left",
     )
     right = IFS(
@@ -370,7 +336,6 @@ end
             0.5 0.0 0.0 0.5 0.0 0.0 0.3
             0.0 0.5 -0.5 0.0 1.0 0.0 0.7
         ];
-        npoints = 60,
         name = "right",
     )
 
@@ -458,7 +423,6 @@ end
             0.5 0.0 0.0 0.5 0.5 0.0
             0.0 0.5 -0.5 0.0 1.0 0.0
         ];
-        npoints = 10,
         name = "mismatch",
     )
 
@@ -594,7 +558,6 @@ end
                     0.5 -0.5 0.5 0.5 0.0 0.0
                     -0.5 -0.5 0.5 -0.5 1.0 0.0
                 ];
-                npoints = 250,
                 name = "left",
             )
             right = IFS(
@@ -602,7 +565,6 @@ end
                     0.5 0.0 0.0 0.5 0.0 0.0 0.3
                     0.0 0.5 -0.5 0.0 1.0 0.0 0.7
                 ];
-                npoints = 250,
                 name = "right",
             )
             generated_frames = render_interpolation_frames(
@@ -613,6 +575,7 @@ end
                 basename = "chaos_anim",
                 render_method = Chaos,
                 resolution = (24, 24),
+                npoints = 250,
                 warmup = 5,
             )
             generated_gif = export_animation(
@@ -654,7 +617,7 @@ end
         seed_path = joinpath(tmp, "seed_graya.png")
         save(seed_path, seed)
 
-        ifs = IFS(SMALL_EQ; npoints = 1)
+        ifs = IFS(SMALL_EQ)
         frames = script.render_image_iterate_build_frames(
             ifs,
             seed_path;
@@ -730,33 +693,33 @@ end
 end
 
 @testset "iterate! and iterate_parallel! populate the IFS point cloud" begin
-    ifs = IFS(SMALL_EQ; npoints = 5000)
-    iterate!(ifs; warmup = 5)
-    @test length(ifs.points) == 5000
+    ifs = IFS(SMALL_EQ)
+    ifs_pts = chaos_game(ifs, 5000; warmup = 5)
+    @test length(ifs_pts) == 5000
 
-    ifs2 = IFS(SMALL_EQ; npoints = 5000)
-    iterate_parallel!(ifs2; warmup = 5)
-    @test length(ifs2.points) == 5000
+    ifs2 = IFS(SMALL_EQ)
+    ifs2_pts = chaos_game(ifs2, 5000; warmup = 5)
+    @test length(ifs2_pts) == 5000
 end
 
 @testset "Seeded Iterate Reproducibility" begin
-    ifs1 = IFS(SMALL_EQ; npoints = 1500)
-    ifs2 = IFS(SMALL_EQ; npoints = 1500)
-    ifs3 = IFS(SMALL_EQ; npoints = 1500)
+    ifs1 = IFS(SMALL_EQ)
+    ifs2 = IFS(SMALL_EQ)
+    ifs3 = IFS(SMALL_EQ)
 
-    iterate_parallel!(ifs1; warmup = 10, seed = 12345)
-    iterate_parallel!(ifs2; warmup = 10, seed = 12345)
-    iterate_parallel!(ifs3; warmup = 10, seed = 54321)
+    ifs1_pts = chaos_game(ifs1, 1500; warmup = 10, seed = 12345)
+    ifs2_pts = chaos_game(ifs2, 1500; warmup = 10, seed = 12345)
+    ifs3_pts = chaos_game(ifs3, 1500; warmup = 10, seed = 54321)
 
-    @test ifs1.points == ifs2.points
-    @test ifs1.points != ifs3.points
+    @test ifs1_pts == ifs2_pts
+    @test ifs1_pts != ifs3_pts
 
     # Alias should preserve seeded behavior.
-    ifs4 = IFS(SMALL_EQ; npoints = 1200)
-    ifs5 = IFS(SMALL_EQ; npoints = 1200)
-    iterate!(ifs4; warmup = 8, seed = 99)
-    iterate_parallel!(ifs5; warmup = 8, seed = 99)
-    @test ifs4.points == ifs5.points
+    ifs4 = IFS(SMALL_EQ)
+    ifs5 = IFS(SMALL_EQ)
+    ifs4_pts = chaos_game(ifs4, 1200; warmup = 8, seed = 99)
+    ifs5_pts = chaos_game(ifs5, 1200; warmup = 8, seed = 99)
+    @test ifs4_pts == ifs5_pts
 end
 
 @testset "Deterministic Iterate" begin
@@ -775,29 +738,23 @@ end
         return cur
     end
 
-    ifs = IFS(SMALL_EQ; npoints = 20)
+    ifs = IFS(SMALL_EQ)
     n = 2
-    ifs_orig_points = copy(ifs.points)
+    seeds = chaos_game(ifs, 20; warmup = 5, seed = 123)
+    seeds_orig = copy(seeds)
 
-    out = deterministic_iterate(ifs, n; warmup = 5, seed = 123)
-    @test length(out.points) == length(ifs.points) * length(ifs.maps)^n
-    @test ifs.points == ifs_orig_points
-
-    # Deterministic iterate should chaos-initialize internally before expansion.
-    ifs2 = IFS(SMALL_EQ; npoints = 20)
-    base = IFS(ifs2.name, ifs2.docs, copy(ifs2.points), ifs2.maps, ifs2.weights, ifs2.limits)
-    iterate!(base; warmup = 5, seed = 123)
-    expected_points = _safe_expand(base.points, ifs2.maps, n)
-    out2 = deterministic_iterate(ifs2, n; warmup = 5, seed = 123)
-    @test out2.points == expected_points
+    out = deterministic_iterate(ifs, seeds, n)
+    @test length(out) == length(seeds) * length(ifs.maps)^n
+    @test seeds == seeds_orig
+    @test out == _safe_expand(seeds, ifs.maps, n)
 
     # For one round, each map block must be exactly map(points).
-    one_round = deterministic_iterate(ifs2, 1; warmup = 5, seed = 123).points
-    base_len = length(base.points)
-    for i = 1:length(ifs2.maps)
+    one_round = deterministic_iterate(ifs, seeds, 1)
+    base_len = length(seeds)
+    for i = 1:length(ifs.maps)
         start = (i - 1) * base_len + 1
         stop = i * base_len
-        @test one_round[start:stop] == ifs2.maps[i].(base.points)
+        @test one_round[start:stop] == ifs.maps[i].(seeds)
     end
 end
 
@@ -816,12 +773,12 @@ end
 end
 
 @testset "Make Image Resolution Behavior" begin
-    ifs = IFS(SMALL_EQ; npoints = 4_000)
-    iterate!(ifs; warmup = 5, seed = 123)
+    ifs = IFS(SMALL_EQ)
+    ifs_pts = chaos_game(ifs, 4_000; warmup = 5, seed = 123)
 
-    square = make_image(ifs; resolution = (32, 32))
-    wide = make_image(ifs; resolution = (24, 40))
-    tall = make_image(ifs; resolution = (40, 24))
+    square = make_image(ifs_pts, ifs.limits; resolution = (32, 32))
+    wide = make_image(ifs_pts, ifs.limits; resolution = (24, 40))
+    tall = make_image(ifs_pts, ifs.limits; resolution = (40, 24))
 
     @test size(square) == (32, 32)
     @test size(wide) == (24, 40)
@@ -835,9 +792,9 @@ end
 end
 
 @testset "make_image converts point cloud to a normalized Float32 grayscale heatmap" begin
-    ifs = IFS(SMALL_EQ; npoints = 2000)
-    iterate!(ifs; warmup = 5)
-    img = make_image(ifs; resolution = (32, 32))
+    ifs = IFS(SMALL_EQ)
+    ifs_pts = chaos_game(ifs, 2000; warmup = 5)
+    img = make_image(ifs_pts, ifs.limits; resolution = (32, 32))
     @test size(img) == (32, 32)
     @test eltype(img) == Float32
     @test all(img .>= 0.0f0)
@@ -845,30 +802,40 @@ end
 end
 
 @testset "Make Image Backends" begin
-    ifs = IFS(SMALL_EQ; npoints = 2000)
-    iterate!(ifs; warmup = 5, seed = 123)
+    ifs = IFS(SMALL_EQ)
+    ifs_pts = chaos_game(ifs, 2000; warmup = 5, seed = 123)
 
-    img_default = make_image(ifs; resolution = (32, 32))
-    img_cpu = make_image(ifs; resolution = (32, 32), backend = :cpu)
+    img_default = make_image(ifs_pts, ifs.limits; resolution = (32, 32))
+    img_cpu = make_image(ifs_pts, ifs.limits; resolution = (32, 32), backend = :cpu)
     @test img_default == img_cpu
 
-    img_auto = make_image(ifs; resolution = (32, 32), backend = :auto)
+    img_auto = make_image(ifs_pts, ifs.limits; resolution = (32, 32), backend = :auto)
     @test size(img_auto) == (32, 32)
     @test eltype(img_auto) == Float32
     @test all(img_auto .>= 0.0f0)
     @test maximum(img_auto) <= 1.0f0
 
     if _probe_gpu_available()
-        img_gpu = make_image(ifs; resolution = (32, 32), backend = :gpu)
+        img_gpu = make_image(ifs_pts, ifs.limits; resolution = (32, 32), backend = :gpu)
         @test size(img_gpu) == (32, 32)
         @test eltype(img_gpu) == Float32
         @test all(img_gpu .>= 0.0f0)
         @test maximum(img_gpu) <= 1.0f0
     else
-        @test_throws ArgumentError make_image(ifs; resolution = (32, 32), backend = :gpu)
+        @test_throws ArgumentError make_image(
+            ifs_pts,
+            ifs.limits;
+            resolution = (32, 32),
+            backend = :gpu,
+        )
     end
 
-    @test_throws ArgumentError make_image(ifs; resolution = (32, 32), backend = :bad)
+    @test_throws ArgumentError make_image(
+        ifs_pts,
+        ifs.limits;
+        resolution = (32, 32),
+        backend = :bad,
+    )
 end
 
 @testset "Shared Backend Dispatch" begin
@@ -907,10 +874,10 @@ end
 @testset "GPU Parity (Optional)" begin
     if get(ENV, "FRACTALS_RUN_GPU_TESTS", "0") == "1"
         if _probe_gpu_available()
-            ifs = IFS(SMALL_EQ; npoints = 5000)
-            iterate!(ifs; warmup = 5, seed = 987)
-            cpu_img = make_image(ifs; resolution = (48, 48), backend = :cpu)
-            gpu_img = make_image(ifs; resolution = (48, 48), backend = :gpu)
+            ifs = IFS(SMALL_EQ)
+            ifs_pts = chaos_game(ifs, 5000; warmup = 5, seed = 987)
+            cpu_img = make_image(ifs_pts, ifs.limits; resolution = (48, 48), backend = :cpu)
+            gpu_img = make_image(ifs_pts, ifs.limits; resolution = (48, 48), backend = :gpu)
             @test isapprox(cpu_img, gpu_img; atol = 1e-5, rtol = 1e-5)
         else
             _skip_optional_gpu_parity!("GPU Parity (Optional)")
@@ -921,9 +888,9 @@ end
 end
 
 @testset "Iterate Image" begin
-    ifs = IFS(SMALL_EQ; npoints = 2000)
-    iterate!(ifs; warmup = 5)
-    img = make_image(ifs; resolution = (32, 32))
+    ifs = IFS(SMALL_EQ)
+    ifs_pts = chaos_game(ifs, 2000; warmup = 5)
+    img = make_image(ifs_pts, ifs.limits; resolution = (32, 32))
     out = iterate_image(ifs, img)
     out2 = iterate_image(ifs, out)
     @test size(out) == (32, 32)
@@ -936,9 +903,9 @@ end
 end
 
 @testset "Iterate Image Colors" begin
-    ifs = IFS(SMALL_EQ; npoints = 1500)
-    iterate!(ifs; warmup = 5)
-    img = make_image(ifs; resolution = (32, 32))
+    ifs = IFS(SMALL_EQ)
+    ifs_pts = chaos_game(ifs, 1500; warmup = 5)
+    img = make_image(ifs_pts, ifs.limits; resolution = (32, 32))
 
     out1 = iterate_image(ifs, img; colors = true, seed = 123)
     out2 = iterate_image(ifs, img; colors = true, seed = 123)
@@ -949,9 +916,9 @@ end
 end
 
 @testset "Iterate Image Backends" begin
-    ifs = IFS(SMALL_EQ; npoints = 2000)
-    iterate!(ifs; warmup = 5, seed = 321)
-    src = make_image(ifs; resolution = (24, 24), backend = :cpu)
+    ifs = IFS(SMALL_EQ)
+    ifs_pts = chaos_game(ifs, 2000; warmup = 5, seed = 321)
+    src = make_image(ifs_pts, ifs.limits; resolution = (24, 24), backend = :cpu)
 
     out_default = iterate_image(ifs, src)
     out_cpu = iterate_image(ifs, src; backend = :cpu)
@@ -990,9 +957,9 @@ end
 @testset "Iterate Image GPU Parity (Optional)" begin
     if get(ENV, "FRACTALS_RUN_GPU_TESTS", "0") == "1"
         if _probe_gpu_available()
-            ifs = IFS(SMALL_EQ; npoints = 2000)
-            iterate!(ifs; warmup = 5, seed = 4321)
-            src = make_image(ifs; resolution = (28, 28), backend = :cpu)
+            ifs = IFS(SMALL_EQ)
+            ifs_pts = chaos_game(ifs, 2000; warmup = 5, seed = 4321)
+            src = make_image(ifs_pts, ifs.limits; resolution = (28, 28), backend = :cpu)
 
             cpu_gray = iterate_image(ifs, src; backend = :cpu)
             gpu_gray = iterate_image(ifs, src; backend = :gpu)
@@ -1015,7 +982,7 @@ end
 end
 
 @testset "Inverse Rasterize" begin
-    ifs = IFS(SMALL_EQ; npoints = 100)
+    ifs = IFS(SMALL_EQ)
     lims = ifs.limits
     img = rasterize_image_inversely(ifs, 2, lims; resolution = (8, 8))
     @test size(img) == (8, 8)
@@ -1031,7 +998,7 @@ end
 end
 
 @testset "inverse_iterate returns a Float32 coverage value in [0, 1] for pixel corners" begin
-    ifs = IFS(SMALL_EQ; npoints = 10)
+    ifs = IFS(SMALL_EQ)
     p0 = SVector{2,Float64}(0.0, 0.0)
     p1 = SVector{2,Float64}(0.1, 0.0)
     p2 = SVector{2,Float64}(0.0, 0.1)
@@ -1045,7 +1012,7 @@ end
 end
 
 @testset "Inverse Rasterize Backends" begin
-    ifs = IFS(SMALL_EQ; npoints = 100)
+    ifs = IFS(SMALL_EQ)
     lims = ifs.limits
 
     img_default = rasterize_image_inversely(ifs, 2, lims; resolution = (8, 8))
@@ -1140,12 +1107,14 @@ end
 end
 
 @testset "Backend Dispatch Consistency" begin
-    ifs = IFS(SMALL_EQ; npoints = 2000)
-    iterate!(ifs; warmup = 5, seed = 2468)
+    ifs = IFS(SMALL_EQ)
+    ifs_pts = chaos_game(ifs, 2000; warmup = 5, seed = 2468)
     lims = ifs.limits
-    src = make_image(ifs; resolution = (24, 24), backend = :cpu)
+    src = make_image(ifs_pts, ifs.limits; resolution = (24, 24), backend = :cpu)
 
-    bad_make = _capture_exception(() -> make_image(ifs; resolution = (24, 24), backend = :bad))
+    bad_make = _capture_exception(
+        () -> make_image(ifs_pts, ifs.limits; resolution = (24, 24), backend = :bad),
+    )
     bad_iterate = _capture_exception(() -> iterate_image(ifs, src; backend = :bad))
     bad_inverse = _capture_exception(
         () -> rasterize_image_inversely(ifs, 2, lims; resolution = (8, 8), backend = :bad),
@@ -1155,14 +1124,16 @@ end
     @test sprint(showerror, bad_make) == sprint(showerror, bad_inverse)
 
     if _probe_gpu_available()
-        make_auto = make_image(ifs; resolution = (24, 24), backend = :auto)
+        make_auto = make_image(ifs_pts, ifs.limits; resolution = (24, 24), backend = :auto)
         iterate_auto = iterate_image(ifs, src; backend = :auto)
         inverse_auto = rasterize_image_inversely(ifs, 2, lims; resolution = (8, 8), backend = :auto)
         @test size(make_auto) == (24, 24)
         @test size(iterate_auto) == (24, 24)
         @test size(inverse_auto) == (8, 8)
     else
-        gpu_make = _capture_exception(() -> make_image(ifs; resolution = (24, 24), backend = :gpu))
+        gpu_make = _capture_exception(
+            () -> make_image(ifs_pts, ifs.limits; resolution = (24, 24), backend = :gpu),
+        )
         gpu_iterate = _capture_exception(() -> iterate_image(ifs, src; backend = :gpu))
         gpu_inverse = _capture_exception(
             () -> rasterize_image_inversely(ifs, 2, lims; resolution = (8, 8), backend = :gpu),
@@ -1171,8 +1142,8 @@ end
         @test sprint(showerror, gpu_make) == sprint(showerror, gpu_iterate)
         @test sprint(showerror, gpu_make) == sprint(showerror, gpu_inverse)
 
-        @test make_image(ifs; resolution = (24, 24), backend = :auto) ==
-              make_image(ifs; resolution = (24, 24), backend = :cpu)
+        @test make_image(ifs_pts, ifs.limits; resolution = (24, 24), backend = :auto) ==
+              make_image(ifs_pts, ifs.limits; resolution = (24, 24), backend = :cpu)
         @test iterate_image(ifs, src; backend = :auto) == iterate_image(ifs, src; backend = :cpu)
         @test rasterize_image_inversely(ifs, 2, lims; resolution = (8, 8), backend = :auto) ==
               rasterize_image_inversely(ifs, 2, lims; resolution = (8, 8), backend = :cpu)
@@ -1182,7 +1153,7 @@ end
 @testset "Inverse Rasterize GPU Parity (Optional)" begin
     if get(ENV, "FRACTALS_RUN_GPU_TESTS", "0") == "1"
         if _probe_gpu_available()
-            ifs = IFS(SMALL_EQ; npoints = 100)
+            ifs = IFS(SMALL_EQ)
             lims = ifs.limits
 
             cpu_img = rasterize_image_inversely(
@@ -1238,12 +1209,11 @@ end
      -0.5 0.0 0.0 -0.5 1.0 0.0 0.4
     }
     """
-    defs = parse_ifs_string(sample; npoints = 10)
+    defs = parse_ifs_string(sample)
     @test length(defs) == 1
     @test defs[1] isa IFS
     @test defs[1].name == "Test IFS"
-    @test occursin("Doc line 1", defs[1].docs)
-    @test length(defs[1].points) == 10
+    @test length(defs[1].maps) == 2
 
     mixed = """
     ValidOne {
@@ -1255,8 +1225,7 @@ end
     """
     kept =
         @test_logs (:warn, r"Skipping non-contractive IFS definition 'InvalidOne'") parse_ifs_string(
-            mixed;
-            npoints = 10,
+            mixed,
         )
     @test [x.name for x in kept] == ["ValidOne"]
 
@@ -1274,19 +1243,17 @@ end
     _with_tmpdir() do tmp
         path = joinpath(tmp, "file.ifs")
         write(path, sample)
-        from_file = parse_ifs_file(path; npoints = 12)
+        from_file = parse_ifs_file(path)
         @test length(from_file) == 1
         @test from_file[1] isa IFS
-        @test length(from_file[1].points) == 12
 
         # get_ifs resolves by name, preferring prebuilt records and falling back to files.
         lib = joinpath(tmp, "lib")
-        got = get_ifs("Test IFS"; dir = tmp, libdir = lib, npoints = 7)
+        got = get_ifs("Test IFS"; dir = tmp, libdir = lib)
         @test got isa IFS
         @test got.name == "Test IFS"
-        @test length(got.points) == 7
         build_ifs_library(; dir = tmp, outdir = lib)
-        got_prebuilt = get_ifs("Test IFS"; file = "file.ifs", dir = tmp, libdir = lib, npoints = 7)
+        got_prebuilt = get_ifs("Test IFS"; file = "file.ifs", dir = tmp, libdir = lib)
         @test got_prebuilt.maps == got.maps
         @test_throws ArgumentError get_ifs("Missing"; dir = tmp, libdir = lib)
     end
@@ -1317,7 +1284,7 @@ end
         end
 
         @testset "DrWatson data layout" begin
-            @test !isempty(parse_ifs_file(ifs_data_dir("Default.ifs"); npoints = 1))
+            @test !isempty(parse_ifs_file(ifs_data_dir("Default.ifs")))
 
             with_output_root(d) do
                 json1 = Fractals._save_data_text(joinpath("benchmarks", "x.json"), "{\"a\":1}")
@@ -1379,7 +1346,7 @@ end
                 @test dirname(out.outpath) == plots
                 @test basename(out.outpath) == "ifs_method=chaos_npoints=500_resolution=16x24.png"
 
-                named = IFS(SMALL_EQ; npoints = 200, name = "My Fractal!")
+                named = IFS(SMALL_EQ, name = "My Fractal!")
                 det = render(
                     named;
                     method = PointDeterministic,
@@ -1444,7 +1411,7 @@ end
 end
 
 @testset "Affine Map SVG Rendering" begin
-    ifs = IFS(SMALL_EQ; npoints = 50)
+    ifs = IFS(SMALL_EQ)
     _with_tmpdir() do tmp
         suffix = randstring(8)
         svg_path = render_transformations_svg(
@@ -1514,7 +1481,7 @@ end
         @test white_nonzero > 0
 
         eq_identity = reshape([1.0 0.0 0.0 1.0 0.0 0.0 1.0], 1, 7)
-        ifs_identity = IFS(eq_identity; npoints = 10)
+        ifs_identity = IFS(eq_identity)
         png_no_axis = render_transformations_png(
             ifs_identity;
             outpath = joinpath(tmp, "maps_no_axis_$suffix.png"),
@@ -1544,7 +1511,7 @@ end
 end
 
 @testset "Affine Map Color Assignment By Map" begin
-    ifs = IFS(EISENSTEIN; npoints = 50)
+    ifs = IFS(EISENSTEIN)
     _with_tmpdir() do tmp
         suffix = randstring(8)
         svg_path = render_transformations_svg(
@@ -1603,7 +1570,7 @@ end
     _with_tmpdir() do tmp
         for (deg, clockwise, label) in cases
             eq = rotation_eq(deg; clockwise = clockwise)
-            ifs = IFS(eq; npoints = 10)
+            ifs = IFS(eq)
 
             p0 = SVector{2,Float64}(0.0, 0.0)
             p1 = SVector{2,Float64}(1.0, 0.0)
@@ -1651,7 +1618,7 @@ end
 @testset "Transformation Origin Anchor Across Initial Polygons" begin
     presets = (:default, :equilateral_triangle, :line_arrow, :line)
     width, height = 320, 320
-    ifs = IFS(reshape([1.0 0.0 0.0 1.0 0.0 0.0 1.0], 1, 7); npoints = 10)
+    ifs = IFS(reshape([1.0 0.0 0.0 1.0 0.0 0.0 1.0], 1, 7))
     _with_tmpdir() do tmp
         centers = Tuple{Float64,Float64}[]
         for preset in presets
@@ -1684,8 +1651,8 @@ end
 @testset "Transformation Raster Renders Follow Iterative Geometry" begin
     base_eq = reshape([1.0 0.0 0.0 1.0 0.0 0.0 1.0], 1, 7)
     shifted_eq = reshape([1.0 0.0 0.0 1.0 0.0 10.0 1.0], 1, 7)
-    ifs = IFS(base_eq; npoints = 10)
-    shifted_ifs = IFS(shifted_eq; npoints = 10)
+    ifs = IFS(base_eq)
+    shifted_ifs = IFS(shifted_eq)
     width, height = 320, 320
 
     _with_tmpdir() do tmp
@@ -1747,7 +1714,7 @@ end
     end
 
     eq = reshape([cos(pi / 6) sin(pi / 6) -sin(pi / 6) cos(pi / 6) 0.0 0.0 1.0], 1, 7)
-    ifs = IFS(eq; npoints = 10)
+    ifs = IFS(eq)
     width, height = 320, 320
 
     _with_tmpdir() do tmp
@@ -1793,7 +1760,7 @@ end
 
 @testset "Transformation SVG Polygon Limits Iterations Affect Framing" begin
     eq = reshape([1.0 0.0 0.0 1.0 0.0 10.0 1.0], 1, 7)
-    ifs = IFS(eq; npoints = 10)
+    ifs = IFS(eq)
 
     _with_tmpdir() do tmp
         zero_iter_path = render_transformations_svg(
@@ -1847,7 +1814,7 @@ end
         sprint(showerror, err),
     )
 
-    ifs = IFS(SMALL_EQ; npoints = 20)
+    ifs = IFS(SMALL_EQ)
     _with_tmpdir() do tmp
         suffix = randstring(8)
 
@@ -1937,17 +1904,18 @@ end
         @test isfile(out1.outpath)
         @test size(out1.image) == (64, 64)
 
-        ifs = IFS(SMALL_EQ; npoints = 2000)
+        ifs = IFS(SMALL_EQ)
         out2 = render(
             ifs;
             method = :point_deterministic,
             iterations = 1,
+            npoints = 2000,
             resolution = (48, 48),
             outpath = joinpath(tmp, "render_ifs_$suffix.png"),
         )
         @test isfile(out2.outpath)
         @test size(out2.image) == (48, 48)
-        @test length(out2.ifs.points) == length(ifs.points) * length(ifs.maps)
+        @test length(out2.points) == 2000 * length(ifs.maps)
 
         text = """
         RenderTest {
@@ -2045,7 +2013,7 @@ end
     # render() must delegate to render_*() — verify output parity for deterministic methods
     _with_tmpdir() do tmp
         res = (32, 32)
-        ifs = IFS(SMALL_EQ; npoints = 50)
+        ifs = IFS(SMALL_EQ)
 
         # Inverse is deterministic given the same IFS limits
         c = render(
@@ -2175,7 +2143,7 @@ end
         @test size(out_graya.image) == (20, 20)
         @test count(px -> Float32(gray(px)) > 0, out_graya.image) > 0
 
-        direct_graya = iterate_image(IFS(SMALL_EQ; npoints = 200), graya_seed)
+        direct_graya = iterate_image(IFS(SMALL_EQ), graya_seed)
         @test size(direct_graya) == (20, 20)
         @test eltype(direct_graya) <: Gray
         @test count(px -> Float32(gray(px)) > 0, direct_graya) > 0
@@ -2238,7 +2206,7 @@ end
         end
 
         rot_eq = reshape([cos(pi / 6) sin(pi / 6) -sin(pi / 6) cos(pi / 6) 0.0 0.0 1.0], 1, 7)
-        rot_ifs = IFS(rot_eq; npoints = 10)
+        rot_ifs = IFS(rot_eq)
         rot_limits_0 = Fractals._limits_from_polygon_point_iterations(
             rot_ifs;
             initial_polygon_spec = initial_polygon(:line_arrow),
@@ -2254,7 +2222,7 @@ end
         @test isapprox(rot_dx, rot_dy; atol = 1e-9)
 
         offset_eq = reshape([0.5 0.0 0.0 0.5 10.0 10.0 1.0], 1, 7)
-        offset_ifs = IFS(offset_eq; npoints = 10)
+        offset_ifs = IFS(offset_eq)
         offset_limits_1 = Fractals._limits_from_polygon_point_iterations(
             offset_ifs;
             initial_polygon_spec = initial_polygon(:line),
@@ -2294,7 +2262,7 @@ end
         edgar_defs = Fractals.parse_ifs_definitions_file(edgar_path)
         wreath_idx = findfirst(d -> String(d.name) == "Barnsleys Wreath", edgar_defs)
         wreath_idx === nothing && error("Barnsleys Wreath not found in Edgar.ifs")
-        wreath_ifs = IFS(edgar_defs[wreath_idx].eq; npoints = 10)
+        wreath_ifs = IFS(edgar_defs[wreath_idx].eq)
 
         wreath_raster_1 = Fractals._build_polygon_raster_ifs(
             wreath_ifs;
@@ -2308,8 +2276,6 @@ end
         )
 
         @test wreath_raster_1.name == wreath_ifs.name
-        @test wreath_raster_1.docs == wreath_ifs.docs
-        @test wreath_raster_1.points == wreath_ifs.points
         @test wreath_raster_1.maps == wreath_ifs.maps
         @test wreath_raster_1.weights == wreath_ifs.weights
         @test wreath_raster_1.limits != wreath_ifs.limits
@@ -2323,7 +2289,7 @@ end
         @info "Polygon Source Resolver Branching"
 
         offset_eq = reshape([0.5 0.0 0.0 0.5 10.0 10.0 1.0], 1, 7)
-        offset_ifs = IFS(offset_eq; npoints = 10)
+        offset_ifs = IFS(offset_eq)
 
         @test Fractals._normalize_polygon_limits_mode(:geometry) == :geometry
         @test Fractals._normalize_polygon_limits_mode(:ifs) == :ifs
@@ -2338,8 +2304,6 @@ end
         )
         @test geometry_raster_ifs !== offset_ifs
         @test geometry_raster_ifs.name == offset_ifs.name
-        @test geometry_raster_ifs.docs == offset_ifs.docs
-        @test geometry_raster_ifs.points == offset_ifs.points
         @test geometry_raster_ifs.maps == offset_ifs.maps
         @test geometry_raster_ifs.weights == offset_ifs.weights
         @test geometry_raster_ifs.limits != offset_ifs.limits
@@ -2349,7 +2313,7 @@ end
         @info "Polygon Source Resolver Seed Smoke"
 
         offset_eq = reshape([0.5 0.0 0.0 0.5 10.0 10.0 1.0], 1, 7)
-        offset_ifs = IFS(offset_eq; npoints = 10)
+        offset_ifs = IFS(offset_eq)
 
         geometry_source = Fractals._resolve_image_source_context(
             offset_ifs,
@@ -2376,7 +2340,7 @@ end
         _with_tmpdir() do tmp
             @info "Render Image Iterate API: polygon geometry public guard"
             rot_eq = reshape([cos(pi / 6) sin(pi / 6) -sin(pi / 6) cos(pi / 6) 0.0 0.0 1.0], 1, 7)
-            rot_ifs = IFS(rot_eq; npoints = 10)
+            rot_ifs = IFS(rot_eq)
             poly_seed = render(
                 rot_ifs;
                 method = :image_iterate,
@@ -2457,7 +2421,7 @@ end
     @testset "Render Image Iterate API: polygon overlays and alpha" begin
         _with_tmpdir() do tmp
             rot_eq = reshape([cos(pi / 6) sin(pi / 6) -sin(pi / 6) cos(pi / 6) 0.0 0.0 1.0], 1, 7)
-            rot_ifs = IFS(rot_eq; npoints = 10)
+            rot_ifs = IFS(rot_eq)
             base_off = render(
                 rot_ifs;
                 method = :image_iterate,
@@ -2529,7 +2493,7 @@ end
 
 @testset "Image Source Resolution" begin
     _with_tmpdir() do tmp
-        ifs = IFS(SMALL_EQ; npoints = 400)
+        ifs = IFS(SMALL_EQ)
         res = (32, 32)
 
         polygon_img = Fractals._resolve_image_source(
@@ -2725,7 +2689,7 @@ end
         @test Fractals._read_png_source_limits(plain_path) === nothing
         @test load(tagged_path) == src
 
-        ifs = IFS(reshape([0.5 0.0 0.0 0.5 0.0 10.0 1.0], 1, 7); npoints = 10)
+        ifs = IFS(reshape([0.5 0.0 0.0 0.5 0.0 10.0 1.0], 1, 7))
         tagged_ctx = Fractals._resolve_image_source_context(
             ifs,
             :file,
@@ -2775,7 +2739,7 @@ end
         )
         @test Fractals._read_png_source_limits(chaos_out.outpath) == chaos_out.ifs.limits
 
-        base_ifs = IFS(SMALL_EQ; npoints = 50)
+        base_ifs = IFS(SMALL_EQ)
         transform_out = render(
             base_ifs;
             method = :render_transformations,
@@ -2909,7 +2873,7 @@ end
 @testset "Validation And Errors" begin
     bad5 = ones(2, 5)
     err = try
-        IFS(bad5; npoints = 10)
+        IFS(bad5)
         nothing
     catch e
         e
@@ -2919,7 +2883,7 @@ end
 
     bad8 = ones(2, 8)
     err = try
-        IFS(bad8; npoints = 10)
+        IFS(bad8)
         nothing
     catch e
         e
@@ -2929,7 +2893,7 @@ end
 
     empty_eq = Matrix{Float64}(undef, 0, 6)
     err = try
-        IFS(empty_eq; npoints = 10)
+        IFS(empty_eq)
         nothing
     catch e
         e
@@ -2940,7 +2904,7 @@ end
     bad_nan = copy(SMALL_EQ)
     bad_nan[1, 1] = NaN
     err = try
-        IFS(bad_nan; npoints = 10)
+        IFS(bad_nan)
         nothing
     catch e
         e
@@ -2951,7 +2915,7 @@ end
     bad_prob_neg = copy(SMALL_EQ)
     bad_prob_neg[1, 7] = -0.1
     err = try
-        IFS(bad_prob_neg; npoints = 10)
+        IFS(bad_prob_neg)
         nothing
     catch e
         e
@@ -2962,7 +2926,7 @@ end
     bad_prob_zero = copy(SMALL_EQ)
     bad_prob_zero[:, 7] .= 0.0
     err = try
-        IFS(bad_prob_zero; npoints = 10)
+        IFS(bad_prob_zero)
         nothing
     catch e
         e

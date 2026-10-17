@@ -78,8 +78,8 @@ without this package:
 
 ```julia
 using DrWatson
-ifs = IFS(EISENSTEIN; npoints = 100_000); iterate!(ifs; seed = 1)
-path = save_fractal(ifs; seed = 1)
+ifs = IFS(EISENSTEIN); points = chaos_game(ifs, 100_000; seed = 1)
+path = save_fractal(ifs, points; seed = 1)
 rec = wload(path)
 rec["points"]   # 2×100000 Matrix{Float64}
 ```

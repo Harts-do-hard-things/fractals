@@ -29,7 +29,7 @@ using IFSParse:
     _format_contractivity_failure
 include("types.jl")                  # AffineMap, IFS structs and constructors
 include("render_transformations.jl") # SVG/PNG visualization of affine maps
-include("chaos.jl")                  # iterate!, iterate_parallel!
+include("chaos.jl")                  # chaos_game
 include("point_deterministic.jl")    # deterministic_iterate
 include("rasterize.jl")              # make_image, make_pixelate_map
 include("inverse.jl")                # rasterize_image_inversely
@@ -77,8 +77,7 @@ export AffineMap,
     render_inverse,
     render_image_iterate,
     render_transformations,
-    iterate!,
-    iterate_parallel!,
+    chaos_game,
     deterministic_iterate,
     interpolate_eq_matrix,
     interpolate_ifs,

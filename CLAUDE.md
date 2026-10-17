@@ -72,9 +72,9 @@ Core data model (`types.jl`):
 - `AffineMap` wraps a StaticArrays 2×2 matrix + offset, and is callable and invertible. `IFS` holds maps, weights, the point cloud, and `limits` (world-space bounds used to frame every raster).
 
 Render methods — each lives in its own file and is wrapped by a `render_*` function in `render.jl`:
-- `chaos.jl` — chaos game (`iterate!`, threaded `iterate_parallel!`), with an optional `seed` for reproducibility.
+- `chaos.jl` — chaos game (`chaos_game(ifs, n)` returns the points; threaded), with an optional `seed` for reproducibility.
 - `point_deterministic.jl` — applies every map to every point, `iterations` deep.
-- `rasterize.jl` — point cloud → normalized Float32 grayscale heatmap (`make_image`).
+- `rasterize.jl` — points + limits → normalized Float32 grayscale heatmap (`make_image(points, limits)`).
 - `inverse.jl` — per-pixel inverse-map coverage (`rasterize_image_inversely`, `mode=:exact|:preview`).
 - `image_iterate.jl` — applies the IFS to an image rather than to points. The source image is chosen by `image_source` (`:polygon`, `:chaos`, `:point_deterministic`, `:inverse`, `:file`) through the `_IMAGE_SOURCE_DISPATCH` table.
 - `render_transformations.jl` — SVG/PNG diagrams of the affine maps applied to an initial polygon (presets are in `config.jl`). Rotation convention is math-space: positive angles are counterclockwise, `+y` is up, and the model origin is anchored to the same pixel across presets.

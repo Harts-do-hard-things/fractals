@@ -237,7 +237,7 @@ function _cmd_batch_render(opts::Dict{String,Any})
     initial_polygon = Symbol(_opt_str(opts, "initial-polygon", "default"))
     outdir = _opt_str(opts, "out-dir", "batch")
 
-    defs = parse_ifs_file(input; npoints=1)
+    defs = parse_ifs_file(input)
     isempty(defs) && throw(ArgumentError("No IFS definitions found in '$input'"))
 
     println("Batch rendering $(length(defs)) definitions from $input")

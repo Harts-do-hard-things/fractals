@@ -93,6 +93,7 @@ struct ImageSourceRequest
     show_divergence_scale::Bool
     initial_polygon_spec::InitialPolygonPreset
     backend::Symbol
+    npoints::Int
 end
 
 const _IMAGE_SOURCE_CHOICES = (:polygon, :chaos, :point_deterministic, :inverse, :file)
@@ -122,26 +123,29 @@ function _resolve_image_source_from_file(req::ImageSourceRequest)
 end
 
 function _resolve_image_source_from_chaos(req::ImageSourceRequest)
-    tifs = IFS(
-        req.ifs.name,
-        req.ifs.docs,
-        copy(req.ifs.points),
-        req.ifs.maps,
-        req.ifs.weights,
-        req.ifs.limits,
-    )
-    iterate!(tifs; warmup = req.warmup)
+    points = chaos_game(req.ifs, req.npoints; warmup = req.warmup)
     return (;
         ifs = req.ifs,
-        image = make_image(tifs; resolution = req.resolution, backend = req.backend),
+        image = make_image(
+            points,
+            req.ifs.limits;
+            resolution = req.resolution,
+            backend = req.backend,
+        ),
     )
 end
 
 function _resolve_image_source_from_point_deterministic(req::ImageSourceRequest)
-    tifs = deterministic_iterate(req.ifs, req.deterministic_iters; warmup = req.warmup)
+    seeds = chaos_game(req.ifs, req.npoints; warmup = req.warmup)
+    points = deterministic_iterate(req.ifs, seeds, req.deterministic_iters)
     return (;
         ifs = req.ifs,
-        image = make_image(tifs; resolution = req.resolution, backend = req.backend),
+        image = make_image(
+            points,
+            req.ifs.limits;
+            resolution = req.resolution,
+            backend = req.backend,
+        ),
     )
 end
 
@@ -226,6 +230,7 @@ function _resolve_image_source_context(
     show_divergence_scale::Bool,
     initial_polygon_spec::Union{InitialPolygonPreset,Symbol} = initial_polygon(),
     backend::Symbol = :cpu,
+    npoints::Integer = DEFAULT_SAMPLES,
 )
     return _resolve_image_source_context(
         ImageSourceRequest(
@@ -241,6 +246,7 @@ function _resolve_image_source_context(
             show_divergence_scale,
             _resolve_initial_polygon(initial_polygon_spec),
             backend,
+            Int(npoints),
         ),
     )
 end
@@ -258,6 +264,7 @@ function _resolve_image_source(
     show_divergence_scale::Bool,
     initial_polygon_spec::Union{InitialPolygonPreset,Symbol} = initial_polygon(),
     backend::Symbol = :cpu,
+    npoints::Integer = DEFAULT_SAMPLES,
 )::AbstractMatrix
     return _resolve_image_source_context(
         ifs,
@@ -272,6 +279,7 @@ function _resolve_image_source(
         show_divergence_scale,
         initial_polygon_spec,
         backend,
+        npoints,
     ).image
 end
 

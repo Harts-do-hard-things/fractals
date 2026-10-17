@@ -242,7 +242,7 @@ function _read_png_source_limits(path::AbstractString)
 end
 
 function _ifs_with_limits(ifs, limits)
-    return IFS(ifs.name, ifs.docs, copy(ifs.points), ifs.maps, ifs.weights, limits)
+    return IFS(ifs.name, ifs.maps, ifs.weights, limits)
 end
 
 @inline function _initial_polygon_names_text()

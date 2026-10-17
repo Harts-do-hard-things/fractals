@@ -104,12 +104,12 @@ function _load_ifs(
             1 <= idx <= length(defs) || throw(ArgumentError("ifs_index $idx is out of range for '$input'"))
             selected = defs[idx]
         end
-        return IFS(selected.eq; npoints=1, name=selected.name, docs=selected.docs)
+        return IFS(selected.eq; name=selected.name)
     end
 
     !isnothing(ifs_index) && throw(ArgumentError("--ifs-index is only valid for .ifs inputs"))
     !isnothing(ifs_name) && throw(ArgumentError("--ifs-name is only valid for .ifs inputs"))
-    return IFS(_read_eq_file(String(input)); npoints=1)
+    return IFS(_read_eq_file(String(input)))
 end
 
 function _split_graya_seed(img::AbstractMatrix)
@@ -147,7 +147,7 @@ function _single_map_ifs(
     right_eq = reshape([map.A[1, 1], map.A[1, 2], map.A[2, 1], map.A[2, 2], map.b[1], map.b[2], 1.0], 1, 7)
     eq = Fractals.interpolate_eq_matrix(left_eq, right_eq, t; interpolation_mode=interpolation_mode)
     maps, weights = Fractals._build_maps_and_weights(eq)
-    return IFS(maps, weights; npoints=1, name=ifs.name, docs=ifs.docs, limits=ifs.limits)
+    return IFS(maps, weights; name=ifs.name, limits=ifs.limits)
 end
 
 function _single_map_layer(

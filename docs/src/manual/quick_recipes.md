@@ -155,8 +155,8 @@ finish_eq = [
 ]
 
 # For animation work, keep the same transform count/order on both sides.
-mid = interpolate_ifs(IFS(start_eq; npoints=5_000, name="start"),
-                      IFS(finish_eq; npoints=5_000, name="finish"),
+mid = interpolate_ifs(IFS(start_eq; name="start"),
+                      IFS(finish_eq; name="finish"),
                       0.5;
                       limits_mode=:interpolate)
 
@@ -174,8 +174,8 @@ By default, interpolation uses a rotation-plus-uniform-scale path for each map's
 ```julia
 using Fractals
 
-start = IFS(start_eq; npoints=5_000, name="start")
-finish = IFS(finish_eq; npoints=5_000, name="finish")
+start = IFS(start_eq; name="start")
+finish = IFS(finish_eq; name="finish")
 
 frames = render_interpolation_frames(start, finish;
                                      frames=4,

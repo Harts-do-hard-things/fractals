@@ -26,7 +26,7 @@ result.outpath   # <repo>/plots/render.png
   `:render_transformations`
 - the same names as strings: `"chaos"`, `"point_deterministic"`, ...
 
-`Parallel` renders as `Chaos`, because [`iterate!`](@ref) is already threaded. The removed
+`Parallel` renders as `Chaos`, because [`chaos_game`](@ref) is already threaded. The removed
 `:deterministic` method throws `ArgumentError` with a pointer to `:point_deterministic`.
 
 ## Shared options
@@ -39,8 +39,7 @@ result.outpath   # <repo>/plots/render.png
   - `:cpu` always uses the CPU implementation;
   - `:gpu` requires the CUDA extension and errors if it's unavailable;
   - `:auto` falls back to the CPU when no GPU is available.
-- `npoints`: for matrix, string, and file inputs, omitting it uses `DEFAULT_SAMPLES`. For an
-  `IFS` input, omitting it keeps the existing point count.
+- `npoints`: the point count for the point-based methods; omitting it uses `DEFAULT_SAMPLES`.
 - `color = true` tints the output by map (the default for `RenderTransformations`), and
   `alpha = true` makes zero-valued pixels transparent.
 
@@ -54,7 +53,7 @@ result.outpath   # <repo>/plots/render.png
 
 ## `Chaos`
 
-Chaos-game sampling with [`iterate!`](@ref), rasterized by [`make_image`](@ref). See
+Chaos-game sampling with [`chaos_game`](@ref), rasterized by [`make_image`](@ref). See
 [`render_chaos`](@ref).
 
 ```julia
@@ -128,13 +127,14 @@ The render methods are thin wrappers, and the pieces can be used directly:
 ```julia
 using Fractals, DrWatson
 
-ifs = IFS(HEIGHWAY_DRAGON; npoints = 200_000)
-iterate!(ifs; seed = 1234)                  # reproducible chaos game
-img = make_image(ifs; resolution = (1024, 1024))
+ifs = IFS(HEIGHWAY_DRAGON)
+points = chaos_game(ifs, 200_000; seed = 1234)   # reproducible chaos game
+img = make_image(points, ifs.limits; resolution = (1024, 1024))
 safesave(output_dir("dragon.png"), img)     # DrWatson: creates dirs, keeps an existing file as _#1
 
-expanded = deterministic_iterate(IFS(EISENSTEIN; npoints = 200), 2)
-img2 = make_image(expanded; resolution = (800, 800))
+eis = IFS(EISENSTEIN)
+expanded = deterministic_iterate(eis, chaos_game(eis, 200), 2)
+img2 = make_image(expanded, eis.limits; resolution = (800, 800))
 ```
 
 Saving through `safesave` directly skips the source-limits and provenance metadata that

@@ -23,13 +23,13 @@ const EISENSTEIN = [
 function main(; eq = EISENSTEIN, npoints = 1_000_000, outpath = nothing)
 
     println("Building IFS...")
-    ifs = IFS(eq; npoints = npoints)
+    ifs = IFS(eq)
 
     println("Running chaos game...")
-    iterate!(ifs)
+    points = chaos_game(ifs, npoints)
 
     println("Rasterizing...")
-    img = make_image(ifs)
+    img = make_image(points, ifs.limits)
 
     params = (; method = :chaos, ifs_name = ifs.name, npoints, resolution = RESOLUTION)
     final_outpath =

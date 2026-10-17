@@ -37,17 +37,17 @@ function make_pixelate_map(limits; resolution = RESOLUTION)
     return AffineMap(A, b)
 end
 
-function _make_image_cpu(ifs::IFS; resolution::Tuple{Int,Int} = RESOLUTION)
-    map = make_pixelate_map(ifs.limits; resolution = resolution)
+function _make_image_cpu(points, limits; resolution::Tuple{Int,Int} = RESOLUTION)
+    map = make_pixelate_map(limits; resolution = resolution)
     rows, cols = resolution
-    npts = length(ifs.points)
+    npts = length(points)
     nthreads_local = _thread_buffer_slots()
     nstripes = _make_image_cpu_stripes(npts, rows, cols)
     buffers = [[zeros(Float32, rows, cols) for _ = 1:nstripes] for _ = 1:nthreads_local]
 
-    @threads for idx in eachindex(ifs.points)
+    @threads for idx in eachindex(points)
         tid = threadid()
-        pt = ifs.points[idx]
+        pt = points[idx]
         pixels = map(pt)
         pixelx = clamp(round(Int, pixels[1]), 1, cols)
         pixely = clamp(round(Int, pixels[2]), 1, rows)
@@ -87,24 +87,29 @@ end
     return 1
 end
 
-function _make_image_gpu(ifs::IFS, ::Val; resolution::Tuple{Int,Int} = RESOLUTION)
+function _make_image_gpu(points, limits, ::Val; resolution::Tuple{Int,Int} = RESOLUTION)
     throw(_gpu_backend_unavailable_error())
 end
 
 """
-    make_image(ifs; resolution=RESOLUTION, backend=:cpu) -> Matrix{Float32}
+    make_image(points, limits; resolution=RESOLUTION, backend=:cpu) -> Matrix{Float32}
 
-Rasterize `ifs.points` within `ifs.limits` into a `(rows, cols)` density heatmap,
-log-normalized to `[0, 1]`. Run [`iterate!`](@ref) (or [`deterministic_iterate`](@ref))
-first to fill the points.
+Rasterize `points` (for example from [`chaos_game`](@ref) or [`deterministic_iterate`](@ref))
+within world `limits` (`ifs.limits`) into a `(rows, cols)` density heatmap, log-normalized to
+`[0, 1]`.
 
 `backend=:cpu` always uses the CPU; `:gpu` uses the CUDA extension and throws if it's
 unavailable; `:auto` falls back to the CPU when no GPU is available.
 """
-function make_image(ifs::IFS; resolution::Tuple{Int,Int} = RESOLUTION, backend::Symbol = :cpu)
+function make_image(
+    points::AbstractVector{<:SVector{2,Float64}},
+    limits;
+    resolution::Tuple{Int,Int} = RESOLUTION,
+    backend::Symbol = :cpu,
+)
     return _dispatch_backend(
         backend,
-        () -> _make_image_cpu(ifs; resolution = resolution),
-        () -> _make_image_gpu(ifs, Val(:cuda); resolution = resolution),
+        () -> _make_image_cpu(points, limits; resolution = resolution),
+        () -> _make_image_gpu(points, limits, Val(:cuda); resolution = resolution),
     )
 end

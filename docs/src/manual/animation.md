@@ -18,7 +18,7 @@ finish_eq = [
 ]
 
 mid_eq = interpolate_eq_matrix(start_eq, finish_eq, 0.5)
-mid_ifs = interpolate_ifs(IFS(start_eq; npoints = 2_000), IFS(finish_eq; npoints = 2_000), 0.5)
+mid_ifs = interpolate_ifs(IFS(start_eq), IFS(finish_eq), 0.5)
 ```
 
 - [`interpolate_eq_matrix`](@ref) accepts compatible 6- or 7-column matrices and returns a
@@ -37,8 +37,8 @@ mid_ifs = interpolate_ifs(IFS(start_eq; npoints = 2_000), IFS(finish_eq; npoints
 with `render_method = RenderTransformations` (the default) or `Chaos`:
 
 ```julia
-start = IFS(start_eq; npoints = 2_000, name = "start")
-finish = IFS(finish_eq; npoints = 2_000, name = "finish")
+start = IFS(start_eq; name = "start")
+finish = IFS(finish_eq; name = "finish")
 
 frames = render_interpolation_frames(start, finish;
                                      frames = 5,

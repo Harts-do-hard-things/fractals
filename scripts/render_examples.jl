@@ -16,7 +16,7 @@ sweep = dict_list(Dict(:name => collect(keys(systems)),
                        :color => [false, true]))
 
 for params in sweep
-    ifs = IFS(systems[params[:name]]; npoints=params[:npoints], name=params[:name])
-    out = render(ifs; method=Chaos, color=params[:color], resolution=(800, 800))
+    ifs = IFS(systems[params[:name]]; name=params[:name])
+    out = render(ifs; method=Chaos, npoints=params[:npoints], color=params[:color], resolution=(800, 800))
     println(relpath(out.outpath, projectdir()))
 end

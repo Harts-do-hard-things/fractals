@@ -30,24 +30,15 @@ function _deterministic_expand_points(
 end
 
 """
-    deterministic_iterate(ifs, n; warmup=DEFAULT_WARMUP, seed=nothing) -> IFS
+    deterministic_iterate(ifs, points, n) -> Vector{SVector{2,Float64}}
 
-Seed a copy of `ifs` with one chaos-game pass ([`iterate!`](@ref) with `warmup`/`seed`),
-then apply every map to every point `n` times, returning a new `IFS` (the input is not
-mutated). Each round maps the same snapshot of points through all maps.
+Apply every map of `ifs` to every point of `points`, `n` times, and return the resulting
+points (the input is not mutated). Each round maps the same snapshot of points through all
+maps. Seed the expansion with, for example, `chaos_game(ifs, 100)`.
 
-The point count grows as `length(ifs.points) * length(ifs.maps)^n`, and the expansion
-asserts the result stays below `10^8` points, so keep `npoints` small for large `n`.
+The point count grows as `length(points) * length(ifs.maps)^n`, and the expansion asserts the
+result stays below `10^8` points, so keep `points` small for large `n`.
 """
-function deterministic_iterate(
-    ifs::IFS,
-    n::Integer;
-    warmup::Integer = DEFAULT_WARMUP,
-    seed::Union{Nothing,Integer} = nothing,
-)
-    base = IFS(ifs.name, ifs.docs, copy(ifs.points), ifs.maps, ifs.weights, ifs.limits)
-    iterate!(base; warmup = warmup, seed = seed)
-
-    result = _deterministic_expand_points(base.points, ifs.maps, n)
-    return IFS(ifs.name, ifs.docs, result, ifs.maps, ifs.weights, ifs.limits)
+function deterministic_iterate(ifs::IFS, points::AbstractVector{<:SVector{2,Float64}}, n::Integer)
+    return _deterministic_expand_points(Vector{SVector{2,Float64}}(points), ifs.maps, n)
 end

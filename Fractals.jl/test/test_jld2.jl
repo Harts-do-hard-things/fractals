@@ -7,11 +7,17 @@ using DrWatson: wload
     root = mktempdir(; prefix = "fractals_jld2_")
     with_output_root(root) do
         @testset "save_fractal / load_fractal round trip" begin
-            ifs = IFS(SMALL_EQ; npoints = 500, name = "Small Eq")
-            iterate!(ifs; warmup = 10, seed = 3)
-            img = make_image(ifs; resolution = (16, 16))
-            path =
-                save_fractal(ifs; image = img, method = :chaos, seed = 3, params = (; warmup = 10))
+            ifs = IFS(SMALL_EQ; name = "Small Eq")
+            ifs_pts = chaos_game(ifs, 500; warmup = 10, seed = 3)
+            img = make_image(ifs_pts, ifs.limits; resolution = (16, 16))
+            path = save_fractal(
+                ifs,
+                ifs_pts;
+                image = img,
+                method = :chaos,
+                seed = 3,
+                params = (; warmup = 10),
+            )
             @test isfile(path)
             @test startswith(path, data_output_dir())
             @test endswith(path, ".jld2")
@@ -31,7 +37,7 @@ using DrWatson: wload
             @test loaded.image == img
             @test loaded.params["warmup"] == 10
             @test loaded.ifs.name == "Small Eq"
-            @test loaded.ifs.points == ifs.points
+            @test loaded.points == ifs_pts
             @test loaded.ifs.limits == ifs.limits
             @test collect(loaded.ifs.weights) == collect(ifs.weights)
             @test [m.A for m in loaded.ifs.maps] == [m.A for m in ifs.maps]
@@ -40,7 +46,7 @@ using DrWatson: wload
             @test load_fractal(basename(path)).path == path
 
             # Saving again keeps the old file as a backup.
-            path2 = save_fractal(ifs; method = :chaos, seed = 3)
+            path2 = save_fractal(ifs, ifs_pts; method = :chaos, seed = 3)
             @test path2 == path
             @test isfile(replace(path, ".jld2" => "_#1.jld2"))
 
@@ -54,13 +60,13 @@ using DrWatson: wload
             a = fractal_data(SMALL_EQ; npoints = 300, seed = 7, name = "cache")
             @test !a.cached
             @test isfile(a.path)
-            @test length(a.ifs.points) == 300
+            @test length(a.points) == 300
             mtime_a = mtime(a.path)
 
             b = fractal_data(SMALL_EQ; npoints = 300, seed = 7, name = "cache")
             @test b.cached
             @test b.path == a.path
-            @test b.ifs.points == a.ifs.points
+            @test b.points == a.points
             @test mtime(b.path) == mtime_a
             @test !isfile(replace(a.path, ".jld2" => "_#1.jld2"))
 
@@ -75,11 +81,11 @@ using DrWatson: wload
             # force=true recomputes; same seed gives the same points.
             e = fractal_data(SMALL_EQ; npoints = 300, seed = 7, name = "cache", force = true)
             @test !e.cached
-            @test e.ifs.points == a.ifs.points
+            @test e.points == a.points
 
             det =
                 fractal_data(SMALL_EQ; method = :point_deterministic, npoints = 20, iterations = 2)
-            @test length(det.ifs.points) == 20 * 2^2
+            @test length(det.points) == 20 * 2^2
             @test fractal_data(
                 SMALL_EQ;
                 method = :point_deterministic,
@@ -98,7 +104,7 @@ using DrWatson: wload
             @test size(out2.image) == (24, 32)
             @test isfile(out1.outpath) && isfile(out2.outpath)
             @test out1.outpath != out2.outpath
-            @test out1.ifs.points == data.ifs.points
+            @test out1.points == data.points
             @test mtime(data.path) == before
             @test read_provenance(out1.outpath).params.method == "chaos"
         end
@@ -106,15 +112,15 @@ using DrWatson: wload
         @testset "extend_fractal accumulates the chaos game" begin
             data = fractal_data(SMALL_EQ; npoints = 200, seed = 5, name = "grow")
             ext = extend_fractal(data, 100; seed = 11)
-            @test length(ext.ifs.points) == 300
-            @test ext.ifs.points[1:200] == data.ifs.points
+            @test length(ext.points) == 300
+            @test ext.points[1:200] == data.points
             @test ext.path != data.path
             @test isfile(data.path) # original kept
             # The chain continues from the last saved point.
-            @test any(m -> m(data.ifs.points[end]) ≈ ext.ifs.points[201], data.ifs.maps)
+            @test any(m -> m(data.points[end]) ≈ ext.points[201], data.ifs.maps)
 
             again = extend_fractal(ext.path, 50; seed = 12)
-            @test length(again.ifs.points) == 350
+            @test length(again.points) == 350
             @test load_fractal(again.path).params["npoints"] == 350
 
             det = fractal_data(SMALL_EQ; method = :point_deterministic, npoints = 10)

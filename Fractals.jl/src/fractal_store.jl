@@ -10,7 +10,7 @@
 #   "points"    2×N Matrix{Float64}             "image"   rasterized Matrix (optional)
 #   "method"    render method name              "params"  Dict of parameters
 #   "seed"      Int or nothing                  "meta"    small summary (read by the catalog)
-#   "name", "docs", "format", "fractals_version", "created", and DrWatson's "gitcommit".
+#   "name", "format", "fractals_version", "created", and DrWatson's "gitcommit".
 #
 # Everything is written/read through the helpers in output.jl, into `data_output_dir()`.
 
@@ -37,14 +37,15 @@ _record_params(params::NamedTuple) =
     Dict{String,Any}(String(k) => _provenance_value(v) for (k, v) in pairs(params))
 
 """
-    fractal_record(ifs; image=nothing, method=:chaos, params=(;), seed=nothing) -> Dict{String,Any}
+    fractal_record(ifs, points; image=nothing, method=:chaos, params=(;), seed=nothing) -> Dict{String,Any}
 
-The plain-data record that [`save_fractal`](@ref) writes for `ifs`: its equation matrix,
-weights, limits, points (a `2×N` matrix), optional `image`, render `method`, `params`,
+The plain-data record that [`save_fractal`](@ref) writes for `ifs` and its `points`: the
+equation matrix, weights, limits, points (a `2×N` matrix), optional `image`, render `method`, `params`,
 `seed`, and a `"meta"` summary. Contains only arrays, strings and numbers.
 """
 function fractal_record(
-    ifs::IFS;
+    ifs::IFS,
+    points::AbstractVector{<:SVector{2,Float64}};
     image = nothing,
     method::Union{Symbol,AbstractString} = :chaos,
     params::NamedTuple = (;),
@@ -56,19 +57,18 @@ function fractal_record(
         "fractals_version" => string(pkgversion(@__MODULE__)),
         "created" => created,
         "name" => ifs.name,
-        "docs" => ifs.docs,
         "eq" => _equation_matrix(ifs),
         "weights" => Float64.(collect(ifs.weights)),
         "limits" =>
             Float64[ifs.limits[1][1] ifs.limits[1][2]; ifs.limits[2][1] ifs.limits[2][2]],
-        "points" => _points_matrix(ifs.points),
+        "points" => _points_matrix(points),
         "method" => String(method),
         "params" => _record_params(params),
         "seed" => isnothing(seed) ? nothing : Int(seed),
         "meta" => Dict{String,Any}(
             "name" => ifs.name,
             "method" => String(method),
-            "npoints" => length(ifs.points),
+            "npoints" => length(points),
             "nmaps" => length(ifs.maps),
             "seed" => isnothing(seed) ? nothing : Int(seed),
             "created" => created,
@@ -84,28 +84,17 @@ function _ifs_from_record(record::AbstractDict)
     maps, weights = _build_maps_and_weights(eq)
     lim = record["limits"]
     limits = ((Float64(lim[1, 1]), Float64(lim[1, 2])), (Float64(lim[2, 1]), Float64(lim[2, 2])))
-    return IFS(
-        record["name"],
-        record["docs"],
-        _points_vector(record["points"]),
-        maps,
-        weights,
-        limits,
-    )
+    return IFS(record["name"], maps, weights, limits)
 end
 
-function _default_data_name(ifs::IFS, method, seed)
-    return _output_name(
-        ifs.name,
-        (; method = Symbol(method), npoints = length(ifs.points), seed),
-        "jld2",
-    )
+function _default_data_name(ifs::IFS, npoints, method, seed)
+    return _output_name(ifs.name, (; method = Symbol(method), npoints, seed), "jld2")
 end
 
 """
-    save_fractal(ifs; image=nothing, method=:chaos, params=(;), seed=nothing, outpath=nothing) -> path
+    save_fractal(ifs, points; image=nothing, method=:chaos, params=(;), seed=nothing, outpath=nothing) -> path
 
-Save `ifs` (maps, weights, limits and its current point cloud) as a JLD2 record, plus an
+Save `ifs` (maps, weights, limits) and its `points` as a JLD2 record, plus an
 optional rasterized `image`, the render `method`, `params` and `seed`. `outpath=nothing`
 names the file with DrWatson's `savename` under [`data_output_dir`](@ref); relative paths
 resolve there and absolute paths are used as given. Saved with `safesave` (existing files
@@ -113,28 +102,29 @@ become `_#N` backups) and tagged with the Git commit like DrWatson's `tagsave` d
 [`load_fractal`](@ref), or with plain `JLD2.load` / `DrWatson.wload`.
 
 ```julia
-ifs = IFS(EISENSTEIN; npoints = 100_000); iterate!(ifs; seed = 1)
-path = save_fractal(ifs; seed = 1, image = make_image(ifs))
+ifs = IFS(EISENSTEIN); points = chaos_game(ifs, 100_000; seed = 1)
+path = save_fractal(ifs, points; seed = 1, image = make_image(points, ifs.limits))
 ```
 """
 function save_fractal(
-    ifs::IFS;
+    ifs::IFS,
+    points::AbstractVector{<:SVector{2,Float64}};
     image = nothing,
     method::Union{Symbol,AbstractString} = :chaos,
     params::NamedTuple = (;),
     seed::Union{Nothing,Integer} = nothing,
     outpath::Union{Nothing,AbstractString} = nothing,
 )
-    path = _resolve_data_path(outpath, _default_data_name(ifs, method, seed))
-    record = fractal_record(ifs; image, method, params, seed)
+    path = _resolve_data_path(outpath, _default_data_name(ifs, length(points), method, seed))
+    record = fractal_record(ifs, points; image, method, params, seed)
     return _save_data_record(path, record)
 end
 
 """
-    load_fractal(path) -> (ifs, image, method, params, seed, gitcommit, created, path, record)
+    load_fractal(path) -> (ifs, points, image, method, params, seed, gitcommit, created, path, record)
 
-Load a record written by [`save_fractal`](@ref) (via DrWatson's `wload`). `ifs` is a full
-[`IFS`](@ref) with its points and limits restored, `image` is the saved raster or `nothing`,
+Load a record written by [`save_fractal`](@ref) (via DrWatson's `wload`). `ifs` is the
+[`IFS`](@ref) with its limits restored, `points` the saved point cloud, `image` is the saved raster or `nothing`,
 `method` a `Symbol`, and `record` the raw `Dict`. Relative paths resolve under
 [`data_output_dir`](@ref).
 """
@@ -145,6 +135,7 @@ function load_fractal(path::AbstractString)
         throw(ArgumentError("'$final_path' is not a Fractals data record"))
     return (
         ifs = _ifs_from_record(record),
+        points = _points_vector(record["points"]),
         image = get(record, "image", nothing),
         method = Symbol(record["method"]),
         params = record["params"],
@@ -161,11 +152,11 @@ _loaded_fractal(f::NamedTuple) = load_fractal(f.path) # e.g. a `fractal_data` or
 
 """
     fractal_data(input; method=:chaos, npoints=DEFAULT_SAMPLES, warmup=DEFAULT_WARMUP,
-                 iterations=1, seed=0, name="", force=false) -> (ifs, path, cached, record)
+                 iterations=1, seed=0, name="", force=false) -> (ifs, points, path, cached, record)
 
 Compute a fractal's point cloud once and cache it with DrWatson's `produce_or_load`. `input`
-is an equation matrix or an [`IFS`](@ref); `method` is `:chaos` ([`iterate!`](@ref)) or
-`:point_deterministic` ([`deterministic_iterate`](@ref) to depth `iterations`). The file
+is an equation matrix or an [`IFS`](@ref); `method` is `:chaos` ([`chaos_game`](@ref)) or
+`:point_deterministic` (a chaos-game seed expanded with [`deterministic_iterate`](@ref) to depth `iterations`). The file
 name comes from `savename` over the equation matrix (hashed), method and parameters, so a
 later call with identical arguments reloads the saved points (`cached = true`) instead of
 recomputing them. `force=true` recomputes. The `seed` makes chaos-game output reproducible
@@ -189,7 +180,7 @@ function fractal_data(
     npoints > 0 || throw(ArgumentError("npoints must be > 0, got $npoints"))
     iterations >= 0 || throw(ArgumentError("iterations must be >= 0, got $iterations"))
 
-    base = input isa IFS ? input : IFS(input; npoints = npoints, name = name)
+    base = input isa IFS ? input : IFS(input; name = name)
     base_eq = _equation_matrix(base)
     label = isempty(name) ? base.name : String(name)
     config = (;
@@ -203,26 +194,21 @@ function fractal_data(
     filename = _output_name(label, config, "jld2")
 
     function produce(_)
-        start = IFS(
-            label,
-            base.docs,
-            fill(SVector{2,Float64}(0.0, 0.0), npoints),
-            base.maps,
-            base.weights,
-            base.limits,
-        )
-        if m == :chaos
-            iterate!(start; warmup, seed)
-            out = start
-        else
-            out = deterministic_iterate(start, iterations; warmup, seed)
-        end
+        out = IFS(label, base.maps, base.weights, base.limits)
+        points = chaos_game(out, npoints; warmup, seed)
+        m == :point_deterministic && (points = deterministic_iterate(out, points, iterations))
         params = (; npoints, warmup, iterations = config.iterations)
-        return fractal_record(out; method = m, params, seed)
+        return fractal_record(out, points; method = m, params, seed)
     end
 
     record, path, cached = _produce_or_load_record(produce, config, filename; force)
-    return (ifs = _ifs_from_record(record), path = path, cached = cached, record = record)
+    return (
+        ifs = _ifs_from_record(record),
+        points = _points_vector(record["points"]),
+        path = path,
+        cached = cached,
+        record = record,
+    )
 end
 
 """
@@ -247,7 +233,8 @@ function render_fractal(
     loaded = _loaded_fractal(source)
     ifs = loaded.ifs
     method = loaded.method
-    img = make_image(ifs; resolution = resolution, backend = backend)
+    points = loaded.points
+    img = make_image(points, ifs.limits; resolution = resolution, backend = backend)
     color && (img = iterate_image(ifs, img; colors = true, backend = backend))
     alpha && (img = _apply_alpha_mask(img))
     final_outpath = _save_render_output(
@@ -256,14 +243,14 @@ function render_fractal(
         ifs,
         ifs.limits;
         method = method,
-        params = (; npoints = length(ifs.points), resolution, color, alpha, backend),
+        params = (; npoints = length(points), resolution, color, alpha, backend),
         name_keys = (:npoints, :resolution, :color, :alpha),
     )
     return (ifs = ifs, image = img, outpath = final_outpath, method = method)
 end
 
 """
-    extend_fractal(source, n; seed=nothing, outpath=nothing) -> (ifs, path)
+    extend_fractal(source, n; seed=nothing, outpath=nothing) -> (ifs, points, path)
 
 Resume a saved chaos game: load `source` (a path or [`load_fractal`](@ref) result), continue
 the chain from its last point for `n` more steps, and save the accumulated cloud as a new
@@ -284,26 +271,26 @@ function extend_fractal(
     old = loaded.ifs
     rng = isnothing(seed) ? Random.default_rng() : MersenneTwister(seed)
     indices = Base.OneTo(length(old.maps))
-    x = isempty(old.points) ? SVector{2,Float64}(0.0, 0.0) : last(old.points)
-    points = copy(old.points)
+    x = isempty(loaded.points) ? SVector{2,Float64}(0.0, 0.0) : last(loaded.points)
+    points = copy(loaded.points)
     sizehint!(points, length(points) + n)
     for _ = 1:n
         x = old.maps[sample(rng, indices, old.weights)](x)
         push!(points, x)
     end
-    extended = IFS(old.name, old.docs, points, old.maps, old.weights, old.limits)
     params = merge(
         (; (Symbol(k) => v for (k, v) in loaded.params)...),
         (; npoints = length(points), extended_by = n),
     )
     path = save_fractal(
-        extended;
+        old,
+        points;
         method = :chaos,
         params = params,
         seed = loaded.seed,
         outpath = outpath,
     )
-    return (ifs = extended, path = path)
+    return (ifs = old, points = points, path = path)
 end
 
 """

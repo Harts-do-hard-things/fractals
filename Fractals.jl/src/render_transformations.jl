@@ -238,7 +238,7 @@ function _build_polygon_raster_ifs(
         initial_polygon_spec = initial_polygon_spec,
         polygon_limits_iterations = polygon_limits_iterations,
     )
-    return IFS(ifs.name, ifs.docs, copy(ifs.points), ifs.maps, ifs.weights, limits)
+    return IFS(ifs.name, ifs.maps, ifs.weights, limits)
 end
 
 @inline function _render_transformations_effective_ifs(

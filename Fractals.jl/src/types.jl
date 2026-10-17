@@ -73,33 +73,32 @@ AffineMap(a11::T, a12::T, a21::T, a22::T, b1::T, b2::T) where {T<:AbstractFloat}
 # --------------------------------
 
 """
-    IFS(eq::AbstractMatrix; npoints=DEFAULT_SAMPLES, name="", docs="")
-    IFS(maps::Vector{AffineMap{Float64}}, weights; npoints=DEFAULT_SAMPLES, name="", docs="", limits)
+    IFS(eq::AbstractMatrix; name="")
+    IFS(maps::Vector{AffineMap{Float64}}, weights; name="", limits)
 
-One iterated function system: its affine `maps`, their sampling `weights`, a `points`
-cloud (initialized at the origin; filled by [`iterate!`](@ref) or
-[`deterministic_iterate`](@ref)), world-space `limits` `((xmin, xmax), (ymin, ymax))` used
-to frame every raster, and descriptive `name`/`docs`.
+One iterated function system: its affine `maps`, their sampling `weights`, a `name`, and
+world-space `limits` `((xmin, xmax), (ymin, ymax))` (the attractor's bounding box, used to
+frame every raster). Points are not stored on the `IFS`: [`chaos_game`](@ref) and
+[`deterministic_iterate`](@ref) return them.
 
 The equation-matrix form takes one row per map, `a11 a12 a21 a22 b1 b2 [p]` (Fractint
 `.ifs` order). Without the 7th probability column, weights are derived from `|det(A)|`.
-`limits` are estimated by sampling the chaos game (see [`refresh_limits`](@ref)).
+`limits` are estimated once, at construction, by sampling the chaos game (see
+[`refresh_limits`](@ref)).
 
 Matrix inputs are validated: at least one row, exactly 6 or 7 columns, all entries finite,
 and (with a probability column) nonnegative probabilities with a positive total. Invalid
 input throws `ArgumentError`.
 
 ```jldoctest
-julia> ifs = IFS(HEIGHWAY_DRAGON; npoints = 1_000, name = "Heighway Dragon");
+julia> ifs = IFS(HEIGHWAY_DRAGON; name = "Heighway Dragon");
 
-julia> length(ifs.maps), length(ifs.points)
+julia> length(ifs.maps), length(chaos_game(ifs, 1_000))
 (2, 1000)
 ```
 """
 struct IFS
     name::String
-    docs::String
-    points::Vector{SVector{2,Float64}} # TODO make this parameterizable
     maps::Vector{AffineMap{Float64}}
     weights::Weights{Float64,Float64,Vector{Float64}}
     limits::Tuple{Tuple{Float64,Float64},Tuple{Float64,Float64}}
@@ -120,18 +119,11 @@ end
 
 function Base.show(io::IO, f::IFS)
     println(io, "IFS: $(f.name)")
-    if !isempty(f.docs)
-        println(io, "Docs:")
-        for line in split(f.docs, '\n')
-            println(io, "  ", line)
-        end
-    end
     println(io, "Maps ($(length(f.maps))):")
     for (i, m) in enumerate(f.maps)
         println(io, "  [$i]")
         show(io, m)
     end
-    println(io, "Points: $(length(f.points))")
 end
 
 # --------------------------------
@@ -259,16 +251,14 @@ function random_eq(;
 end
 
 """
-    random_ifs(; npoints=DEFAULT_SAMPLES, name="", docs="", kwargs...)
+    random_ifs(; name="", kwargs...)
 
 Build an [`IFS`](@ref) from [`random_eq`](@ref); the remaining keywords (`nmaps`,
 `translation_range`, `with_probs`, `rng`, `max_tries`) are passed through. Pass a seeded
 `rng` for a reproducible system.
 """
 function random_ifs(;
-    npoints::Integer = DEFAULT_SAMPLES,
     name::AbstractString = "",
-    docs::AbstractString = "",
     nmaps::Union{Integer,UnitRange{Int}} = 2:4,
     translation_range::Real = 1.0,
     with_probs::Bool = true,
@@ -282,7 +272,7 @@ function random_ifs(;
         rng = rng,
         max_tries = max_tries,
     )
-    return IFS(eq; npoints = npoints, name = name, docs = docs)
+    return IFS(eq; name = name)
 end
 
 # --------------------------------
@@ -363,66 +353,46 @@ end
 
 function compute_limits(
     ifs::IFS;
-    source::Symbol = :maps,
     warmup::Integer = DEFAULT_WARMUP,
     n::Integer = 10_000,
     seed::Integer = 0,
 )
-    if source == :maps
-        return compute_limits(ifs.maps, ifs.weights; warmup = warmup, n = n, seed = seed)
-    elseif source == :points
-        return compute_limits(ifs.points)
-    end
-    throw(ArgumentError("Invalid limits source '$source'. Supported: :maps, :points"))
+    return compute_limits(ifs.maps, ifs.weights; warmup = warmup, n = n, seed = seed)
 end
 
 """
-    refresh_limits(ifs; source=:maps, warmup=DEFAULT_WARMUP, n=10_000, seed=0)
+    refresh_limits(ifs; warmup=DEFAULT_WARMUP, n=10_000, seed=0)
 
-Return a copy of `ifs` with recomputed `limits` (a square box with 5% padding).
-`source=:maps` samples `n` chaos-game points (after `warmup`, seeded for reproducibility);
-`source=:points` bounds the current `ifs.points`. Use it after replacing points or maps,
-since `limits` are not updated automatically.
+Return a copy of `ifs` with recomputed `limits` (a square box with 5% padding), sampled from
+`n` chaos-game points (after `warmup`, seeded for reproducibility). Use it after changing the
+maps, since `limits` are not updated automatically.
 """
 function refresh_limits(
     ifs::IFS;
-    source::Symbol = :maps,
     warmup::Integer = DEFAULT_WARMUP,
     n::Integer = 10_000,
     seed::Integer = 0,
 )
-    limits = compute_limits(ifs; source = source, warmup = warmup, n = n, seed = seed)
-    return IFS(ifs.name, ifs.docs, copy(ifs.points), ifs.maps, ifs.weights, limits)
+    limits = compute_limits(ifs; warmup = warmup, n = n, seed = seed)
+    return IFS(ifs.name, ifs.maps, ifs.weights, limits)
 end
 
 # --------------------------------
 # Constructors
 # --------------------------------
 
-function IFS(
-    eq::AbstractMatrix{<:Real};
-    npoints = DEFAULT_SAMPLES,
-    name::AbstractString = "",
-    docs::AbstractString = "",
-)
-
+function IFS(eq::AbstractMatrix{<:Real}; name::AbstractString = "")
     _validate_eq_matrix(eq)
     maps, weights = _build_maps_and_weights(eq)
     limits = compute_limits(maps, weights)
-
-    points = [SVector{2,Float64}(0.0, 0.0) for _ = 1:npoints]
-
-    return IFS(String(name), String(docs), points, maps, weights, limits)
+    return IFS(String(name), maps, weights, limits)
 end
 
 function IFS(
     maps::Vector{AffineMap{Float64}},
     weights::Weights;
-    npoints::Integer = DEFAULT_SAMPLES,
     name::AbstractString = "",
-    docs::AbstractString = "",
     limits = compute_limits(maps, weights),
 )
-    points = [SVector{2,Float64}(0.0, 0.0) for _ = 1:npoints]
-    return IFS(String(name), String(docs), points, maps, weights, limits)
+    return IFS(String(name), maps, weights, limits)
 end

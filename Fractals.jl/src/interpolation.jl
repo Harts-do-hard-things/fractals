@@ -184,7 +184,7 @@ function interpolate_eq_matrix(
 end
 
 """
-    interpolate_ifs(left, right, t; npoints, name, docs, limits_mode, interpolation_mode=:rotation_scale)
+    interpolate_ifs(left, right, t; name, limits_mode, interpolation_mode=:rotation_scale)
 
 Build an interpolated IFS suitable for animation or transitional rendering.
 The linear 2x2 map components default to rotation+scale interpolation with
@@ -195,9 +195,7 @@ function interpolate_ifs(
     left::IFS,
     right::IFS,
     t::Real;
-    npoints::Integer = min(length(left.points), length(right.points)),
     name::AbstractString = "",
-    docs::AbstractString = "",
     limits_mode::Symbol = :interpolate,
     interpolation_mode::Union{Symbol,AbstractString} = :rotation_scale,
 )
@@ -206,7 +204,6 @@ function interpolate_ifs(
             "Interpolation requires the same number of transforms, got $(length(left.maps)) and $(length(right.maps))",
         ),
     )
-    npoints >= 0 || throw(ArgumentError("npoints must be >= 0, got $npoints"))
 
     eq = interpolate_eq_matrix(
         _eq_matrix_for_interpolation(left),
@@ -239,16 +236,8 @@ function interpolate_ifs(
             left.name == right.name ? left.name :
             string("Interpolated(", left.name, " -> ", right.name, ")")
         ) : String(name)
-    resolved_docs = isempty(docs) ? "Interpolated IFS at t=$(round(α; digits=4))" : String(docs)
 
-    return IFS(
-        maps,
-        weights;
-        npoints = npoints,
-        name = resolved_name,
-        docs = resolved_docs,
-        limits = limits,
-    )
+    return IFS(maps, weights; name = resolved_name, limits = limits)
 end
 
 """
@@ -278,9 +267,8 @@ function render_interpolation_frames(
     render_method::Union{RenderMethod,Symbol,AbstractString} = RenderTransformations,
     limits_mode::Symbol = :interpolate,
     interpolation_mode::Union{Symbol,AbstractString} = :rotation_scale,
-    npoints::Integer = min(length(left.points), length(right.points)),
+    npoints::Integer = DEFAULT_SAMPLES,
     name::AbstractString = "",
-    docs::AbstractString = "",
     kwargs...,
 )
     frames > 0 || throw(ArgumentError("frames must be > 0, got $frames"))
@@ -322,9 +310,7 @@ function render_interpolation_frames(
             left,
             right,
             t;
-            npoints = npoints,
             name = name,
-            docs = docs,
             limits_mode = limits_mode,
             interpolation_mode = interpolation_mode,
         )
@@ -339,7 +325,15 @@ function render_interpolation_frames(
             limits_mode,
             interpolation_mode = _normalize_interpolation_mode(interpolation_mode),
         )
-        _render_interpolation_frame(ifs, parsed_method, path, frame_params, gitcommit; kwargs...)
+        _render_interpolation_frame(
+            ifs,
+            parsed_method,
+            path,
+            frame_params,
+            gitcommit;
+            npoints = npoints,
+            kwargs...,
+        )
         push!(paths, path)
     end
 
@@ -383,8 +377,9 @@ function _render_interpolation_frame(
         warmup = get(kwargs, :warmup, DEFAULT_WARMUP)
         backend = get(kwargs, :backend, :cpu)
 
-        iterate!(ifs; warmup = warmup)
-        img = make_image(ifs; resolution = resolution, backend = backend)
+        npoints = get(kwargs, :npoints, DEFAULT_SAMPLES)
+        points = chaos_game(ifs, npoints; warmup = warmup)
+        img = make_image(points, ifs.limits; resolution = resolution, backend = backend)
         if color
             img = iterate_image(ifs, img; colors = true, backend = backend)
         end
@@ -392,10 +387,7 @@ function _render_interpolation_frame(
             img = _apply_alpha_mask(img)
         end
         source_limits = ifs.limits
-        params = merge(
-            frame_params,
-            (; npoints = length(ifs.points), warmup, resolution, color, alpha, backend),
-        )
+        params = merge(frame_params, (; npoints, warmup, resolution, color, alpha, backend))
     end
 
     _save_image(
