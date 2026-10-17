@@ -12,8 +12,7 @@ julia --startup-file=no --project=FractalsGUI.jl FractalsGUI.jl/test/runtests.jl
 
 Opt-in groups, off in CI:
 
-- `FRACTALS_RUN_GPU_TESTS=1`: CUDA parity tests;
-- `FRACTALS_RUN_CLI_BENCH_TESTS=1`: CLI command and benchmark tests.
+- `FRACTALS_RUN_GPU_TESTS=1`: CUDA parity tests.
 
 The suite points `FRACTALS_OUTPUT_ROOT` at a temporary directory, so tests never write into
 `plots/`. It includes seeded property tests for affine-map inverse round trips.
@@ -22,7 +21,7 @@ The suite points `FRACTALS_OUTPUT_ROOT` at a temporary directory, so tests never
 
 Deterministic CPU render paths are compared against PNG fixtures in
 `Fractals.jl/test/snapshots/`: a transformation render, an inverse mask
-(`show_divergence_scale = false`), and a polygon-seeded image-iterate render. On a
+(`divergence_scale = false`), and a polygon-seeded image-iterate render. On a
 mismatch, the actual and diff images are written to a temp directory. When render output
 changes intentionally, regenerate the fixtures:
 

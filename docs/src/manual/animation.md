@@ -33,24 +33,24 @@ mid_ifs = interpolate_ifs(IFS(start_eq), IFS(finish_eq), 0.5)
 
 ## Rendering frames
 
-[`render_interpolation_frames`](@ref) writes `basename_0001.png`, `basename_0002.png`, ...
-with `render_method = RenderTransformations` (the default) or `Chaos`:
+[`render_interpolation_frames`](@ref) writes `basename_0001.png`, `basename_0002.png`, ...,
+rendering each interpolated system with any [`RenderMethod`](@ref) (`Transformations()` by
+default). `resolution`, `color`, `alpha` and `overlays` are the same as for [`Render`](@ref):
 
 ```julia
 start = IFS(start_eq; name = "start")
 finish = IFS(finish_eq; name = "finish")
 
-frames = render_interpolation_frames(start, finish;
+frames = render_interpolation_frames(start, finish, Chaos(npoints = 100_000, warmup = 20, seed = 1);
                                      frames = 5,
                                      outdir = "frames",
                                      basename = "dragon_morph",
-                                     render_method = Chaos,
-                                     resolution = (512, 512),
-                                     warmup = 20)
+                                     resolution = (512, 512))
 ```
 
-Omit `outdir` to write to an auto-named directory under `plots/frames/`. Each frame's
-provenance records its `t`, method, and render settings.
+The result is `(outdir, paths, ts)`. Omit `outdir` to write to an auto-named directory under
+`plots/frames/`. Each frame also gets a render record (see [`load_render`](@ref)) holding its
+interpolated system.
 
 ## Exporting GIF and MP4
 

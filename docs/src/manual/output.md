@@ -18,7 +18,7 @@ environment variable; either way output goes to `<root>/plots/`.
 
 ```julia
 with_output_root(mktempdir()) do
-    render(EISENSTEIN; npoints = 1_000, resolution = (64, 64))   # written to <tmp>/plots/
+    render(IFS(EISENSTEIN), Chaos(npoints = 1_000); resolution = (64, 64))   # written to <tmp>/plots/
 end
 ```
 
@@ -28,7 +28,7 @@ The project follows DrWatson's default layout for data as well as plots:
 
 - [`data_output_dir`](@ref)`(args...)` is DrWatson's `datadir("exp_pro", args...)`, or
   `<root>/data/exp_pro/` under the same overrides. It receives generated data such as
-  benchmark JSON (`fractals.jl benchmark --json <path>`). Generated data under `data/sims/` and
+  the prebuilt IFS library (`data/exp_pro/ifs/`). Generated data under `data/sims/` and
   `data/exp_pro/` is git-ignored.
 - [`ifs_data_dir`](@ref)`(args...)` points at the curated, tracked `.ifs` input library in
   `ifs/` at the DrWatson project root, independent of the active project. For
@@ -36,35 +36,32 @@ The project follows DrWatson's default layout for data as well as plots:
 
 ## File names
 
-When the path is omitted, the name comes from DrWatson's `savename`. The prefix is the
-sanitized IFS name (`ifs` when unnamed), followed by the content-defining render settings,
-with `false`/`nothing` values left out:
+When the path is omitted, the PNG name comes from DrWatson's `savename` over the render: the
+sanitized IFS name (`ifs` when unnamed) plus the method tag and the method's own fields
+(`DrWatson.allaccess`), then the resolution and `_color`/`_alpha` flags:
 
 ```julia
-out = render(EISENSTEIN; method = Chaos, npoints = 100_000, resolution = (800, 800))
-basename(out.outpath)   # "ifs_method=chaos_npoints=100000_resolution=800x800.png"
+out = render(IFS(EISENSTEIN; name = "Eisenstein"), Chaos(npoints = 100_000); resolution = (800, 800))
+basename(out.outpath)   # "Eisenstein_chaos_npoints=100000_800x800.png"
 ```
 
-## No overwrites
+## Render records
 
-Every save goes through DrWatson's `safesave`: if the file exists, the old one is moved to
-`name_#1.ext` (and older backups to `#2`, `#3`, ...) before the new file is written.
-
-## Provenance metadata
-
-PNGs embed two `tEXt` chunks:
-
-- `fractals.source_limits`: the world-space framing, so `image_source = :file` can reuse it;
-- `fractals.provenance`: JSON with `gitcommit` (DrWatson's `gitdescribe`, e.g.
-  `v1.0.1-41-g1922796-dirty`), `fractals_version`, `created`, and all render `params`.
-
-SVGs start with an equivalent `<!-- fractals.provenance: ... -->` comment. Read PNG
-provenance back with [`read_provenance`](@ref):
+[`render`](@ref) (through [`save_render`](@ref)) writes two files with the same stem: the PNG and
+a `.jld2` record holding the [`Render`](@ref) description and the world-space `limits` of the
+image. The record is written with DrWatson's `tagsave`, so it also stores the Git commit
+(`gitdescribe`, e.g. `v1.0.1-41-g1922796-dirty`). [`load_render`](@ref) reads it back (pass the
+`.jld2` or the PNG), and an `ImageIterate` with a [`FileSource`](@ref) uses the record's limits to
+frame the PNG as a seed:
 
 ```julia
-prov = read_provenance(out.outpath)
-prov.params.method, prov.gitcommit   # ("chaos", "v1.0.1-41-g...")
+r = load_render(out.outpath)
+render(r; outpath = "again.png")   # same description, same seed, same image
 ```
+
+Existing files at the same path are overwritten. SVGs start with an
+`<!-- fractals.provenance: ... -->` comment, and [`read_provenance`](@ref) reads the
+provenance chunk of PNGs written by the animation script.
 
 ## Saving fractal data (JLD2)
 
@@ -85,19 +82,19 @@ rec["points"]   # 2×100000 Matrix{Float64}
 ```
 
 [`load_fractal`](@ref) goes the other way and rebuilds an [`IFS`](@ref) with its points and
-limits, together with the metadata.
+limits, together with the metadata. `load_fractal` returns the points as `points` and the system as `ifs`.
 
 ### Caching with `fractal_data`
 
 [`fractal_data`](@ref) computes a point cloud once with DrWatson's `produce_or_load`. The
 file name is a `savename` of the method, parameters and a hash of the equation matrix, so an
 identical later call reloads the file (`cached = true`) instead of iterating again.
-[`render_fractal`](@ref) then rasterizes the saved points at any resolution or coloring:
+Rasterize the saved points at any resolution with [`make_image`](@ref):
 
 ```julia
 data = fractal_data(EISENSTEIN; npoints = 1_000_000, seed = 1)   # computed and saved
 data = fractal_data(EISENSTEIN; npoints = 1_000_000, seed = 1)   # loaded: data.cached == true
-render_fractal(data; resolution = (2048, 2048), color = true)
+make_image(data.points, data.ifs.limits; resolution = (2048, 2048))
 ```
 
 ### Resuming and cataloging
@@ -105,8 +102,7 @@ render_fractal(data; resolution = (2048, 2048), color = true)
 [`extend_fractal`](@ref) continues a saved chaos game from its last point and saves the
 accumulated cloud as a new record, so a fractal can be refined over several sessions.
 [`fractal_catalog`](@ref) lists every saved record as a vector of named tuples (reading only
-a small summary per file). `render(...; save_data = true)` writes a record alongside the
-image it produces.
+a small summary per file).
 
 ```julia
 more = extend_fractal(data, 500_000; seed = 2)

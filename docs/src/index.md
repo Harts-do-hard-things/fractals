@@ -9,8 +9,7 @@ Supported Julia versions: `1.11` and `1.12`.
 
 ## Installation
 
-From the repository root, instantiate the DrWatson project (for renders, scripts, and the
-CLI) and the package itself (for development and tests):
+From the repository root, instantiate the DrWatson project (for renders and scripts) and the package itself (for development and tests):
 
 ```bash
 julia --startup-file=no --project=. -e "using Pkg; Pkg.instantiate()"
@@ -22,25 +21,24 @@ julia --startup-file=no --project=Fractals.jl -e "using Pkg; Pkg.instantiate()"
 ```julia
 using Fractals
 
-out = render(HEIGHWAY_DRAGON; method = Chaos, npoints = 200_000, resolution = (1024, 1024))
-out.outpath   # <repo>/plots/ifs_method=chaos_npoints=200000_resolution=1024x1024.png
+ifs = IFS(HEIGHWAY_DRAGON; name = "Heighway Dragon")
+out = render(ifs, Chaos(npoints = 200_000); resolution = (1024, 1024))
+out.outpath   # <repo>/plots/Heighway_Dragon_chaos_npoints=200000_1024x1024.png
 ```
 
 [`render`](@ref) saves under DrWatson's `plotsdir()`, names the file from its parameters,
-never overwrites an existing file, and embeds provenance in the PNG. See
-[Output files](@ref).
+and saves a render record (`.jld2`) next to the PNG so the render can be reloaded with
+[`load_render`](@ref). See [Output files](@ref).
 
 ## Render methods at a glance
 
-| Method | Best for | Method-specific keywords |
-|:-------|:---------|:-------------------------|
-| [`Chaos`](@ref) | baseline stochastic rendering from sampled points | `warmup` |
-| [`PointDeterministic`](@ref) | exact expansion previews at a fixed depth | `iterations` |
-| [`ImageIterate`](@ref) | iterating a seed image or polygon through the maps | `image_source`, `image_iterations`, `initial_polygon`, ... |
-| [`Inverse`](@ref) | inverse-branch coverage and divergence maps | `iterations`, `show_divergence_scale` |
-| [`RenderTransformations`](@ref) | previewing each affine map on a seed polygon | `initial_polygon`, `show_base`, `axis` |
-
-[`Parallel`](@ref) is a compatibility alias for `Chaos` and may be deprecated.
+| Method | Best for | Parameters |
+|:-------|:---------|:-----------|
+| [`Chaos`](@ref) | baseline stochastic rendering from sampled points | `npoints`, `warmup`, `seed` |
+| [`PointDeterministic`](@ref) | exact expansion previews at a fixed depth | `npoints`, `iterations`, `warmup`, `seed` |
+| [`ImageIterate`](@ref) | iterating a seed image, polygon or other render through the maps | source, `iterations` |
+| [`Inverse`](@ref) | inverse-branch coverage and divergence maps | `iterations`, `divergence_scale` |
+| [`Transformations`](@ref) | previewing each affine map on a seed polygon | `polygon`, `limits_iterations` |
 
 ## Where to go next
 
@@ -48,5 +46,4 @@ never overwrites an existing file, and embeds provenance in the PNG. See
 - [Quick recipes](@ref): copy-paste examples for each workflow.
 - [Animation](@ref): interpolation, frame sequences, and GIF/MP4 export.
 - [IFS text format](@ref): writing `.ifs` files and validation rules.
-- [CLI](@ref): rendering and benchmarking from the command line.
 - [API reference](@ref): every exported function and type.

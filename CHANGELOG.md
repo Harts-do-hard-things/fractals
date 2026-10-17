@@ -6,6 +6,16 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
 
 ## [Unreleased]
 
+### Changed
+- Rendering is redesigned around values: `Render(ifs, method; resolution, color, alpha, overlays)` is run by `render(r)` or `render(ifs, method; kwargs...)`, which returns `(render, image, limits, outpath, record)`. Methods are the types `Chaos`, `PointDeterministic`, `Inverse`, `Transformations` and `ImageIterate` (seeded by `PolygonSource`, `FileSource` or any method); overlays are `BasePolygon` and `Axes`. `save_render` writes the PNG plus a same-stem `.jld2` record and `load_render` reads it back. File names come from DrWatson `savename` over each method's fields.
+- `render_interpolation_frames(left, right, method; frames, ...)` takes any render method and returns `(outdir, paths, ts)`.
+- Select a definition from a `.ifs` file with `get_ifs(name; file)` or `parse_ifs_file(path)[i]` instead of `ifs_index`/`ifs_name`.
+
+### Removed
+- `render(input; method = ...)`, the `render_*` wrappers, the `RenderMethod` enum (with `Parallel` and `RenderTransformations`), `render_fractal`, and interactive prompting (`prompt_ifs_and_render`).
+- The CLI (`Fractals.jl/bin/fractals.jl`) and the benchmark suite with its CI job and manual pages.
+- PNG provenance and source-limits chunks from `render` output (the render record carries them; `_save_image` and the animation script still write them).
+
 ### Added
 - `chaos_game(ifs, n)` returns the points, and `IFS` no longer stores `points` or `docs` (breaking). `iterate!`, `iterate_parallel!`, the `npoints`/`docs` constructor keywords and `make_image(ifs)` are gone; `make_image(points, limits)`, `deterministic_iterate(ifs, points, n)` and `save_fractal(ifs, points)` take the points explicitly.
 - `IFSParse` submodule (`Fractals.jl/src/ifs_parse.jl`) with a DrWatson-managed JLD2 library of prebuilt IFS definitions: `build_ifs_library`, `list_ifs_files`, `list_ifs`, `get_ifs`. `.ifs` files moved from `data/exp_raw/` to `ifs/`.

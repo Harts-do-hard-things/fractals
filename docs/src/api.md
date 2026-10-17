@@ -8,18 +8,21 @@ CurrentModule = Fractals
 
 ```@docs
 render
+Render
+save_render
+load_render
 RenderMethod
 Chaos
-Parallel
 PointDeterministic
-ImageIterate
 Inverse
-RenderTransformations
-render_chaos
-render_point_deterministic
-render_image_iterate
-render_inverse
-render_transformations
+Transformations
+ImageIterate
+ImageSource
+PolygonSource
+FileSource
+Overlay
+BasePolygon
+Axes
 render_transformations_svg
 render_transformations_png
 ```
@@ -83,7 +86,6 @@ list_ifs_files
 list_ifs
 get_ifs
 get_ifs_definition
-prompt_ifs_and_render
 ```
 
 ## Output
@@ -103,7 +105,6 @@ save_fractal
 load_fractal
 fractal_record
 fractal_data
-render_fractal
 extend_fractal
 fractal_catalog
 ```

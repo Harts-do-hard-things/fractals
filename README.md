@@ -14,11 +14,11 @@ The package includes:
 ## Repository Layout
 
 - `Project.toml` (repo root): [DrWatson](https://juliadynamics.github.io/DrWatson.jl/stable/) scientific project `fractals` that uses the local `Fractals` package (via `[sources]`); run scripts and renders from here
-- `Fractals.jl/`: Julia package (`src/`, `test/`, `bench/`, and `bin/fractals.jl`, the package CLI)
+- `Fractals.jl/`: Julia package (`src/` and `test/`)
 - `FractalsGUI.jl/`: separate Julia package for the desktop GUI (depends on `Fractals`)
 - `scripts/`: DrWatson project scripts (`@quickactivate "fractals"`): example renders, ImageIterate animation builder, GIF/MP4 export, rotation examples
 - `ifs/`: curated `.ifs` input files (tracked; `ifs_data_dir()` returns this path)
-- `data/exp_pro/`, `data/sims/`: generated data such as benchmark JSON and the prebuilt IFS library `data/exp_pro/ifs/` (`build_ifs_library()`) (git-ignored; `data_output_dir()`)
+- `data/exp_pro/`, `data/sims/`: generated data such as the prebuilt IFS library `data/exp_pro/ifs/` (`build_ifs_library()`) (git-ignored; `data_output_dir()`)
 - `plots/`: rendered images and animations (git-ignored, created on demand; `output_dir()`)
 - `docs/`: Documenter.jl documentation site (`docs/make.jl`, pages in `docs/src/`)
 
@@ -30,7 +30,7 @@ created on demand (all but `papers/` are git-ignored, per DrWatson's `.gitignore
 ### 1. Activate and install dependencies
 
 ```powershell
-julia --startup-file=no --project=. -e "using Pkg; Pkg.instantiate()"            # DrWatson project (scripts, CLI, renders)
+julia --startup-file=no --project=. -e "using Pkg; Pkg.instantiate()"            # DrWatson project (scripts, renders)
 julia --startup-file=no --project=Fractals.jl -e "using Pkg; Pkg.instantiate()"  # package development and tests
 ```
 
@@ -46,10 +46,10 @@ winget install Gyan.FFmpeg
 ### 2. Generate a fractal image
 
 ```powershell
-julia --startup-file=no --project=. -e "using Fractals; render(HEIGHWAY_DRAGON; npoints=200_000, resolution=(1024, 1024))"
+julia --startup-file=no --project=. -e "using Fractals; render(IFS(HEIGHWAY_DRAGON; name=\"Heighway Dragon\"), Chaos(npoints=200_000); resolution=(1024, 1024))"
 ```
 
-This writes `plots/ifs_method=chaos_npoints=200000_resolution=1024x1024.png`
+This writes `plots/Heighway_Dragon_chaos_npoints=200000_1024x1024.png` (and a `.jld2` render record next to it)
 (see [Output Files](#output-files-drwatson)).
 
 ### 3. Run tests
@@ -59,7 +59,6 @@ julia --startup-file=no --project=Fractals.jl Fractals.jl/test/runtests.jl
 ```
 
 Optional GPU parity tests can be enabled with `FRACTALS_RUN_GPU_TESTS=1` (requires CUDA support).
-Optional CLI/benchmark integration tests can be enabled with `FRACTALS_RUN_CLI_BENCH_TESTS=1`.
 Committed PNG snapshot fixtures for deterministic render paths live under `Fractals.jl/test/snapshots/`; regenerate them with `julia --startup-file=no --project=Fractals.jl Fractals.jl/test/generate_snapshots.jl` when render output intentionally changes.
 
 ### GUI package
@@ -108,24 +107,22 @@ the same pixel across all `initial_polygon` presets.
 ```julia
 using Fractals
 
-result = render(EISENSTEIN;
-                method=Chaos,
-                npoints=250_000,
-                resolution=(1200, 1200),
-                outpath="eisenstein.png")
+ifs = IFS(EISENSTEIN; name = "Eisenstein")
+result = render(ifs, Chaos(npoints = 250_000);
+                resolution = (1200, 1200),
+                outpath = "eisenstein.png")
 
 @show result.outpath
 ```
 
-`render` accepts method as enum (`Chaos`, `Parallel`, `PointDeterministic`, `ImageIterate`, `Inverse`, `RenderTransformations`), symbol, or lowercase string.
-`render`, `make_image`, `iterate_image`, and `rasterize_image_inversely` support `backend=:cpu|:gpu|:auto` (`:gpu` requires CUDA support, `:auto` falls back to CPU when unavailable).
-`rasterize_image_inversely` also supports `mode=:exact|:preview` (`:exact` is default and parity-oriented).
+A render is a value: `Render(ifs, method; resolution, color, alpha, overlays)`, run by `render`. The methods are `Chaos`, `PointDeterministic`, `Inverse`, `Transformations` and `ImageIterate` (whose source is a `PolygonSource`, a `FileSource`, or any other method), each validating its own parameters. `overlays` takes `BasePolygon(polygon)` and `Axes()`.
+`render` returns `(render, image, limits, outpath, record)`; `load_render(path)` reads a saved render back.
+`make_image`, `iterate_image`, and `rasterize_image_inversely` still take `backend=:cpu|:gpu|:auto`, but the GPU code is not wired into `render`.
 `interpolate_eq_matrix(...)` and `interpolate_ifs(...)` provide transform interpolation primitives for animation-oriented workflows.
-`render_interpolation_frames(...)` renders deterministic numbered PNG frame sequences into a chosen directory for animation workflows. Interpolated frame rendering currently supports `Chaos` and `RenderTransformations`.
+`render_interpolation_frames(left, right, method; frames, ...)` renders deterministic numbered PNG frame sequences into a chosen directory for animation workflows, with any render method.
 `export_animation(:gif|:mp4; ...)` converts those numbered PNG frames into GIF or MP4 artifacts via `ffmpeg`.
 Interpolation defaults to per-map rotation+uniform-scale blending for the 2x2 linear part, with automatic fallback to coefficient-wise linear blending when a map pair is not well represented by that model. Use `interpolation_mode=:linear` to force the previous behavior.
-For `method=:point_deterministic` and `method=:inverse`, use `iterations=...` to control iteration depth.
-For `.ifs` files with multiple definitions, select one with `ifs_index=...` or `ifs_name=...`.
+For `.ifs` files with several definitions, pick one with `get_ifs(name; file=...)` (or index `parse_ifs_file(path)`).
 
 Reproducible chaos iteration example:
 
@@ -159,7 +156,7 @@ points = chaos_game(ifs, 100_000)
 The documentation is a [Documenter.jl](https://documenter.juliadocs.org/stable/) site in `docs/`:
 
 - `docs/src/index.md`: home page.
-- `docs/src/manual/`: render methods, quick recipes, animation, output files, IFS text format, CLI, benchmarks, troubleshooting, and development notes.
+- `docs/src/manual/`: render methods, quick recipes, animation, output files, IFS text format, troubleshooting, and development notes.
 - `docs/src/api.md`: API reference generated from the package docstrings.
 
 Build it locally and open `docs/build/index.html`:
@@ -169,24 +166,22 @@ julia --startup-file=no --project=docs -e "using Pkg; Pkg.instantiate()"
 julia --startup-file=no --project=docs docs/make.jl
 ```
 
-Benchmark target envelopes are versioned in `Fractals.jl/bench/perf_targets.toml` (latency + allocation thresholds).
-
 ## Output Files (DrWatson)
 
-All files the package writes (`render*`, `render_transformations_svg/png`, `render_interpolation_frames`,
-`export_animation`, the CLI) are managed with [DrWatson](https://juliadynamics.github.io/DrWatson.jl/stable/):
+All files the package writes (`render`, `render_transformations_svg/png`, `render_interpolation_frames`,
+`export_animation`) are managed with [DrWatson](https://juliadynamics.github.io/DrWatson.jl/stable/):
 
 - **Location:** relative paths resolve under `plotsdir()` of the active project, so with `--project=.` output
   lands in `<repo>/plots/` regardless of the working directory. Absolute paths are used as given. Override with
   `with_output_root(dir) do ... end` or `FRACTALS_OUTPUT_ROOT=<dir>` (output then goes to `<dir>/plots/`);
   `output_dir()` shows the current target.
 - **Naming:** omit `outpath` and the file is named with `savename` from the render parameters, e.g.
-  `Heighway_Dragon_color=true_method=chaos_npoints=250000_resolution=1200x1200.png`. Interpolation frames go to
+  `Heighway_Dragon_chaos_npoints=250000_1200x1200_color.png`, plus a same-stem `.jld2` render record
+  (`load_render(path)` reads it back, so `render(load_render(path))` repeats the render). Interpolation frames go to
   `plots/frames/<savename>/` and animations to `plots/animations/`.
-- **No overwrites:** saves use `safesave`; an existing file is kept as `name_#1.png` (`#2`, ... for older ones).
-- **Provenance:** PNGs embed a `fractals.provenance` text chunk (git commit via `gitdescribe`, Fractals version,
-  timestamp, full render parameters) next to the source-limits chunk; SVGs carry it as a leading XML comment.
-  Read it back with `read_provenance(path)`.
+- **Render records:** `render` saves the PNG and a `.jld2` with the `Render` description and its limits, tagged
+  with the git commit by DrWatson's `tagsave`. SVGs carry a provenance comment (`read_provenance` reads PNG
+  provenance written by the animation script).
 
 New analysis scripts belong in `scripts/` and start with `using DrWatson; @quickactivate "fractals"`
 (see `scripts/render_examples.jl`).

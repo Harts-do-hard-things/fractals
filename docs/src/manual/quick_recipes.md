@@ -8,45 +8,33 @@ julia --project=Fractals.jl -e "using Pkg; Pkg.instantiate()"
 
 ## Input Selection
 
-Use index selection from `.ifs`:
+Pick a definition from a `.ifs` file by name with [`get_ifs`](@ref), then render it:
 
 ```julia
 using Fractals
 
-result = render("my_fractals.ifs";
-                ifs_index=2,
-                method=Chaos,
-                npoints=150_000,
-                outpath="recipe_file_index.png")
+ifs = get_ifs("Heighway Dragon"; file = "my_fractals.ifs", dir = ".")
+result = render(ifs, Chaos(npoints = 150_000); outpath = "recipe_file_name.png")
 ```
 
-Use name selection from `.ifs`:
+[`parse_ifs_file`](@ref) returns every definition in a file, so index selection is ordinary
+indexing:
 
 ```julia
-using Fractals
-
-result = render("my_fractals.ifs";
-                ifs_name="Heighway Dragon",
-                method=Chaos,
-                npoints=150_000,
-                outpath="recipe_file_name.png")
+ifs = parse_ifs_file("my_fractals.ifs")[2]
+result = render(ifs, Chaos(npoints = 150_000); outpath = "recipe_file_index.png")
 ```
 
-If no `ifs_index`/`ifs_name` is provided and the file contains multiple definitions, `render(...)` prints available options and asks for confirmation before selecting index `1`.
+An equation matrix works too: `IFS(eq)`.
 
 ## Render Methods
 
-Methods are listed in canonical order: `Chaos`, `PointDeterministic`, `ImageIterate`, `Inverse`.
-`Parallel` is a compatibility alias for `Chaos` and may be deprecated in a future release.
+The methods are [`Chaos`](@ref), [`PointDeterministic`](@ref), [`Inverse`](@ref),
+[`Transformations`](@ref) and [`ImageIterate`](@ref); each takes only its own parameters, and
+`render(ifs, method; resolution, color, alpha, overlays, outpath)` runs it. See
+[Render methods](@ref).
 
 ## Recipe: Chaos
-
-Arguments used by this method:
-- `method=Chaos`
-- `npoints=...`
-- `backend=:cpu|:gpu|:auto`
-- `resolution=(rows, cols)`
-- `outpath=...`
 
 ```julia
 using Fractals
@@ -56,87 +44,71 @@ eq = [
    -0.5  -0.5   0.5  -0.5   1.0   0.0
 ]
 
-result = render(eq;
-                method=Chaos,
-                backend=:cpu,
-                npoints=200_000,
-                resolution=(1024, 1024),
-                outpath="recipe_chaos.png")
+result = render(IFS(eq), Chaos(npoints = 200_000, seed = 1);
+                resolution = (1024, 1024),
+                outpath = "recipe_chaos.png")
 
 println(result.outpath)
 ```
 
 ## Recipe: PointDeterministic
 
-Arguments used by this method:
-- `method=PointDeterministic`
-- `iterations=...`
-- `npoints=...`
-- `backend=:cpu|:gpu|:auto`
-- `resolution=(rows, cols)`
-- `outpath=...`
-
 ```julia
 using Fractals
 
-result = render(EISENSTEIN;
-                method=PointDeterministic,
-                npoints=300,
-                iterations=2,
-                backend=:cpu,
-                resolution=(900, 900),
-                outpath="recipe_point_deterministic.png")
+result = render(IFS(EISENSTEIN), PointDeterministic(npoints = 300, iterations = 2);
+                resolution = (900, 900),
+                outpath = "recipe_point_deterministic.png")
 ```
 
 ## Recipe: ImageIterate
 
-Arguments used by this method:
-- `method=ImageIterate`
-- `image_source=:polygon|:chaos|:point_deterministic|:inverse|:file`
-- `image_path=...` (required when `image_source=:file`)
-- `image_iterations=...`
-- `polygon_limits_mode=:ifs|:default`
-- `initial_polygon=:default|:equilateral_triangle|:line_arrow|:line`
-- `backend=:cpu|:gpu|:auto`
-- `resolution=(rows, cols)`
-- `outpath=...`
-
 ```julia
 using Fractals
 
-result = render(EISENSTEIN;
-                method=ImageIterate,
-                image_source=:polygon,
-                image_iterations=3,
-                polygon_limits_mode=:ifs,
-                initial_polygon=:equilateral_triangle,
-                backend=:cpu,
-                resolution=(900, 900),
-                outpath="recipe_image_iterate.png")
+result = render(IFS(EISENSTEIN),
+                ImageIterate(PolygonSource(polygon = :equilateral_triangle, frame = :ifs);
+                             iterations = 3);
+                resolution = (900, 900),
+                outpath = "recipe_image_iterate.png")
 ```
 
-The `:polygon` seed is produced via `render_transformations_png(...; show_base=false, initial_polygon=...)` and then read as grayscale.
-For `image_source=:polygon`, `polygon_limits_mode=:default` is treated as `:ifs` (compatibility alias).
+The seed can also be an image file (`FileSource("seed.png")`, grayscale) or another render
+method (`ImageIterate(Chaos(npoints = 50_000))`). The polygon seed is the same image
+[`Transformations`](@ref) draws, read as grayscale.
 
 ## Recipe: Inverse
 
-Arguments used by this method:
-- `method=Inverse`
-- `iterations=...`
-- `show_divergence_scale=true|false` (optional)
-- `backend=:cpu|:gpu|:auto`
-- `resolution=(rows, cols)`
-- `outpath=...`
+```julia
+using Fractals
+
+result = render(IFS(EISENSTEIN), Inverse(iterations = 6);
+                resolution = (900, 900),
+                outpath = "recipe_inverse.png")
+```
+
+`Inverse(iterations = 6, divergence_scale = false)` gives a binary mask.
+
+## Recipe: Transformations with overlays
 
 ```julia
 using Fractals
 
-result = render(EISENSTEIN;
-                method=Inverse,
-                iterations=6,
-                backend=:cpu,
-                resolution=(900, 900),
-                outpath="recipe_inverse.png")
+result = render(IFS(HEIGHWAY_DRAGON), Transformations(polygon = :line_arrow);
+                color = true,
+                overlays = [BasePolygon(:line_arrow), Axes()],
+                resolution = (900, 900),
+                outpath = "recipe_transformations.png")
+```
+
+## Recipe: Reload and repeat a render
+
+```julia
+using Fractals
+
+result = render(IFS(EISENSTEIN), Chaos(npoints = 100_000, seed = 7); outpath = "recipe_repeat.png")
+again = render(load_render("recipe_repeat.png"); outpath = "recipe_repeat_2.png")
+again.image == result.image   # true: same description, same seed
 ```
 
 ## Recipe: Interpolate Between Two IFS States
@@ -160,10 +132,7 @@ mid = interpolate_ifs(IFS(start_eq; name="start"),
                       0.5;
                       limits_mode=:interpolate)
 
-render(mid;
-       method=RenderTransformations,
-       resolution=(900, 900),
-       outpath="recipe_interpolated_transforms.png")
+render(mid, Transformations(); resolution=(900, 900), outpath="recipe_interpolated_transforms.png")
 ```
 
 Use `interpolate_eq_matrix(...)` when you want the blended 7-column equation matrix directly.
@@ -177,19 +146,18 @@ using Fractals
 start = IFS(start_eq; name="start")
 finish = IFS(finish_eq; name="finish")
 
-frames = render_interpolation_frames(start, finish;
+frames = render_interpolation_frames(start, finish, Chaos(npoints = 100_000, warmup = 20, seed = 1);
                                      frames=4,
                                      outdir="frames",
                                      basename="recipe_anim",
-                                     render_method=Chaos,
                                      interpolation_mode=:rotation_scale,
-                                     resolution=(512, 512),
-                                     warmup=20)
+                                     resolution=(512, 512))
 
 println.(frames.paths)
 ```
 
-Interpolated frame rendering currently supports `Chaos` and `RenderTransformations`, with deterministic file names like `recipe_anim_0001.png`.
+Interpolated frame rendering accepts any render method (`Transformations()` is the default),
+with deterministic file names like `recipe_anim_0001.png`; each frame also gets a render record.
 
 Convert those frames into an animation artifact with `ffmpeg`:
 

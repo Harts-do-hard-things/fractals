@@ -95,18 +95,17 @@ using DrWatson: wload
             @test_throws ArgumentError fractal_data(SMALL_EQ; method = :inverse)
         end
 
-        @testset "render_fractal reuses saved points" begin
+        @testset "saved points rasterize without recomputing" begin
             data = fractal_data(SMALL_EQ; npoints = 400, seed = 1, name = "render")
             before = mtime(data.path)
-            out1 = render_fractal(data; resolution = (16, 16))
-            out2 = render_fractal(data.path; resolution = (24, 32), color = true)
-            @test size(out1.image) == (16, 16)
-            @test size(out2.image) == (24, 32)
-            @test isfile(out1.outpath) && isfile(out2.outpath)
-            @test out1.outpath != out2.outpath
-            @test out1.points == data.points
+            img1 = make_image(data.points, data.ifs.limits; resolution = (16, 16))
+            loaded = load_fractal(data.path)
+            img2 = make_image(loaded.points, loaded.ifs.limits; resolution = (24, 32))
+            @test size(img1) == (16, 16)
+            @test size(img2) == (24, 32)
+            @test loaded.points == data.points
+            @test maximum(img1) > 0.0f0
             @test mtime(data.path) == before
-            @test read_provenance(out1.outpath).params.method == "chaos"
         end
 
         @testset "extend_fractal accumulates the chaos game" begin
@@ -127,13 +126,13 @@ using DrWatson: wload
             @test_throws ArgumentError extend_fractal(det, 5)
         end
 
-        @testset "render(save_data=true) and fractal_catalog" begin
-            out = render(SMALL_EQ; npoints = 300, resolution = (16, 16), save_data = true)
-            @test isfile(out.data_path)
-            @test splitext(basename(out.data_path))[1] == splitext(basename(out.outpath))[1]
-            @test load_fractal(out.data_path).image == out.image
-            @test !haskey(render(SMALL_EQ; npoints = 300, resolution = (8, 8)), :data_path)
-
+        @testset "save_fractal with an image, and fractal_catalog" begin
+            ifs = IFS(SMALL_EQ; name = "catalog")
+            pts = chaos_game(ifs, 300; seed = 1)
+            img = make_image(pts, ifs.limits; resolution = (16, 16))
+            path = save_fractal(ifs, pts; image = img, method = :chaos, seed = 1)
+            @test isfile(path)
+            @test load_fractal(path).image == img
             rows = fractal_catalog()
             @test rows isa Vector{<:NamedTuple}
             @test length(rows) >= 6

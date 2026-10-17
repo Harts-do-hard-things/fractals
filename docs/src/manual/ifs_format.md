@@ -1,7 +1,7 @@
 # IFS text format
 
 IFS definitions can be written as text: inline strings for [`parse_ifs_string`](@ref), or
-`.ifs` files for [`parse_ifs_file`](@ref), [`render`](@ref), and the CLI. A curated set
+`.ifs` files for [`parse_ifs_file`](@ref), and [`get_ifs`](@ref), which feed [`render`](@ref). A curated set
 ships in `ifs/`; locate it with [`ifs_data_dir`](@ref), e.g.
 `parse_ifs_file(ifs_data_dir("Default.ifs"))`.
 

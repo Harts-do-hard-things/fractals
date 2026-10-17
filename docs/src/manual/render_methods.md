@@ -1,128 +1,150 @@
 # Render methods
 
-[`render`](@ref) is the high-level entry point: it resolves the input, runs one render
-method, saves the image, and returns `(ifs, image, outpath, method)`.
+A render is a value. [`Render`](@ref)`(ifs, method; resolution, color, alpha, overlays)` bundles
+an [`IFS`](@ref), a [`RenderMethod`](@ref) (each method is its own type carrying only its own
+parameters), the image size, whether to color by map, whether zero pixels become transparent,
+and any overlays. [`render`](@ref) runs it: draw with the method, color, overlay, apply
+alpha, then save the PNG and a render record next to it. It returns
+`(render, image, limits, outpath, record)`.
 
 ```julia
 using Fractals
 
-result = render(HEIGHWAY_DRAGON;
-                method = Chaos,
-                backend = :cpu,
-                npoints = 200_000,
-                resolution = (1024, 1024),
-                outpath = "render.png")
+ifs = IFS(HEIGHWAY_DRAGON; name = "Heighway Dragon")
 
-result.outpath   # <repo>/plots/render.png
+out = render(ifs, Chaos(npoints = 200_000); resolution = (1024, 1024), outpath = "render.png")
+out.outpath   # <repo>/plots/render.png
+out.record    # <repo>/plots/render.jld2
+
+# The same thing with the description built first:
+r = Render(ifs, Chaos(npoints = 200_000); resolution = (1024, 1024))
+out = render(r; outpath = "render.png")
 ```
 
-## Choosing a method
+Method constructors validate their own fields, so an invalid description throws
+`ArgumentError` before anything is drawn:
 
-`method` accepts any of these forms:
-
-- enum values (preferred): `Chaos`, `Parallel`, `PointDeterministic`, `ImageIterate`,
-  `Inverse`, `RenderTransformations`
-- symbols: `:chaos`, `:parallel`, `:point_deterministic`, `:image_iterate`, `:inverse`,
-  `:render_transformations`
-- the same names as strings: `"chaos"`, `"point_deterministic"`, ...
-
-`Parallel` renders as `Chaos`, because [`chaos_game`](@ref) is already threaded. The removed
-`:deterministic` method throws `ArgumentError` with a pointer to `:point_deterministic`.
+```julia
+Chaos(npoints = 0)                  # ArgumentError: npoints must be > 0, got 0
+Render(ifs, Chaos(); resolution = (0, 10))   # ArgumentError
+```
 
 ## Shared options
 
-- `iterations` sets the depth for `PointDeterministic`, `Inverse`, and the
-  `:point_deterministic`/`:inverse` image sources. It must be `>= 0`.
-- `warmup` applies to the chaos, point-deterministic, and image-source generation paths.
-- `backend = :cpu | :gpu | :auto` controls the GPU-capable steps (`make_image`,
-  `iterate_image`, and inverse rasterization):
-  - `:cpu` always uses the CPU implementation;
-  - `:gpu` requires the CUDA extension and errors if it's unavailable;
-  - `:auto` falls back to the CPU when no GPU is available.
-- `npoints`: the point count for the point-based methods; omitting it uses `DEFAULT_SAMPLES`.
-- `color = true` tints the output by map (the default for `RenderTransformations`), and
-  `alpha = true` makes zero-valued pixels transparent.
+These are keywords of [`Render`](@ref) (and so of `render(ifs, method; ...)`):
+
+- `resolution = (rows, cols)`.
+- `color = true` tints the output by map.
+- `alpha = true` makes zero-valued pixels transparent.
+- `overlays = [BasePolygon(:line), Axes()]` draws on top of the finished image:
+  [`BasePolygon`](@ref) the untransformed polygon preset, [`Axes`](@ref) the coordinate axes.
+
+Where the file goes is `outpath`, a keyword of `render` itself; see [Output files](@ref).
 
 ## Selecting a definition from a `.ifs` file
 
-- Pass `ifs_index = ...` or `ifs_name = ...`, not both.
-- An index or name that doesn't exist throws `ArgumentError` listing the available
-  definitions.
-- With no selector and several definitions, `render` lists them and asks (through
-  `input_fn`) to confirm rendering definition `1`. Declining throws `ArgumentError`.
-
-## `Chaos`
-
-Chaos-game sampling with [`chaos_game`](@ref), rasterized by [`make_image`](@ref). See
-[`render_chaos`](@ref).
+Build the [`IFS`](@ref) first, by name, with [`get_ifs`](@ref) (which prefers a prebuilt
+record and falls back to parsing the file):
 
 ```julia
-out = render(EISENSTEIN; method = Chaos, npoints = 250_000, resolution = (1024, 1024))
+ifs = get_ifs("Heighway Dragon"; file = "Default.ifs")
+render(ifs, Chaos(npoints = 100_000))
 ```
 
-## `PointDeterministic`
+A name that doesn't exist throws `ArgumentError`. [`parse_ifs_file`](@ref) returns every
+definition in a file as a `Vector{IFS}`.
 
-Applies every map to every point `iterations` times ([`deterministic_iterate`](@ref)). The
-point count grows as `npoints * nmaps^iterations`, so keep `npoints` small. See
-[`render_point_deterministic`](@ref).
+## [`Chaos`](@ref)
+
+`Chaos(; npoints, warmup, seed)`: chaos-game sampling with [`chaos_game`](@ref), rasterized by
+[`make_image`](@ref). A `seed` makes the result reproducible for a fixed thread count.
 
 ```julia
-out = render(EISENSTEIN; method = PointDeterministic, iterations = 2, npoints = 500,
+out = render(IFS(EISENSTEIN), Chaos(npoints = 250_000, seed = 1); resolution = (1024, 1024))
+```
+
+## [`PointDeterministic`](@ref)
+
+`PointDeterministic(; npoints, iterations, warmup, seed)`: applies every map to every point
+`iterations` times ([`deterministic_iterate`](@ref)), starting from `npoints` chaos-game points.
+The point count grows as `npoints * nmaps^iterations`, so keep `npoints` small.
+
+```julia
+out = render(IFS(EISENSTEIN), PointDeterministic(npoints = 500, iterations = 2);
              resolution = (800, 800))
 ```
 
-## `ImageIterate`
+## [`Inverse`](@ref)
 
-Builds a seed image, then applies the IFS to it `image_iterations` times with
-[`iterate_image`](@ref). See [`render_image_iterate`](@ref).
-
-- `image_source = :polygon | :chaos | :point_deterministic | :inverse | :file`:
-  - `:polygon` renders the [`initial_polygon`](@ref) preset (`:default`,
-    `:equilateral_triangle`, `:line_arrow`, `:line`).
-  - `:file` loads `image_path` and reuses the framing embedded in PNGs written by this
-    package.
-- `polygon_limits_mode = :geometry | :ifs` (polygon source only) frames by the polygon's
-  iterated geometry (the default) or by `ifs.limits`. `:default` is accepted and treated as
-  `:geometry` with a warning.
-- `show_base` and `axis` overlay the seed polygon and coordinate axes (polygon source only).
-- `color = true` colors the final pass.
+`Inverse(; iterations, divergence_scale)`: scores each pixel by pushing it back through the
+inverse maps ([`rasterize_image_inversely`](@ref)). `divergence_scale = false` gives a binary
+mask where non-diverged and origin-containing regions are white.
 
 ```julia
-out = render(EISENSTEIN; method = ImageIterate, image_source = :polygon, image_iterations = 3,
-             polygon_limits_mode = :ifs, initial_polygon = :equilateral_triangle,
-             resolution = (800, 800))
+out = render(IFS(EISENSTEIN), Inverse(iterations = 6); resolution = (800, 800))
 ```
 
-## `Inverse`
+## [`Transformations`](@ref)
 
-Scores each pixel by pushing it back through the inverse maps
-([`rasterize_image_inversely`](@ref)). `show_divergence_scale = false` switches to a binary
-mask where non-diverged and origin-containing regions are white. See
-[`render_inverse`](@ref).
-
-```julia
-out = render(EISENSTEIN; method = Inverse, iterations = 6, resolution = (800, 800))
-```
-
-## `RenderTransformations`
-
-Draws each map applied to the seed polygon directly, without chaos or image iteration.
-Options: `initial_polygon`, `show_base`, `axis`, `color`, `polygon_limits_iterations`. See
-[`render_transformations`](@ref) and, for SVG output,
-[`render_transformations_svg`](@ref).
+`Transformations(; polygon, limits_iterations)`: draws each map applied to the
+[`initial_polygon`](@ref) preset (`:default`, `:equilateral_triangle`, `:line_arrow`, `:line`),
+without chaos or image iteration, framed by the polygon after `limits_iterations` iterations.
+`color = true` tints by map. For SVG output, see [`render_transformations_svg`](@ref).
 
 Rotation follows the math convention: positive angles are counterclockwise in model
 coordinates (`+x` right, `+y` up). Transformation renders share an anchored origin, so
-`(0, 0)` maps to the same pixel for every `initial_polygon` preset.
+`(0, 0)` maps to the same pixel for every polygon preset.
 
 ```julia
-out = render(HEIGHWAY_DRAGON; method = RenderTransformations, initial_polygon = :line_arrow,
-             axis = true, resolution = (1024, 1024))
+out = render(IFS(HEIGHWAY_DRAGON), Transformations(polygon = :line_arrow);
+             color = true, overlays = [Axes()], resolution = (1024, 1024))
 ```
+
+## [`ImageIterate`](@ref)
+
+`ImageIterate(source = PolygonSource(); iterations = 1)`: starts from a seed image and applies
+the IFS to it `iterations` times with [`iterate_image`](@ref). The source is one of:
+
+- [`PolygonSource`](@ref)`(; polygon, frame, limits_iterations)`: the polygon preset drawn in
+  pixel space. `frame = :geometry` (the default) frames by the polygon's iterated geometry,
+  `limits_iterations` deep (default: the `ImageIterate` iteration count); `frame = :ifs` uses
+  `ifs.limits`.
+- [`FileSource`](@ref)`(path)`: the grayscale image at `path`. When a render record with the
+  same stem sits next to it (every PNG written by `render` has one), its saved limits frame the
+  image; otherwise the IFS's limits are used.
+- any other [`RenderMethod`](@ref): its image (and frame) is the seed, so
+  `ImageIterate(Chaos(npoints = 100_000))` iterates a chaos-game heatmap.
+
+`color = true` colors the final pass.
+
+```julia
+out = render(IFS(EISENSTEIN),
+             ImageIterate(PolygonSource(polygon = :equilateral_triangle, frame = :ifs);
+                          iterations = 3);
+             resolution = (800, 800))
+
+out = render(IFS(EISENSTEIN), ImageIterate(Chaos(npoints = 50_000); iterations = 2))
+```
+
+## Saving, loading and file names
+
+[`save_render`](@ref) (called by `render`) writes the PNG and a `.jld2` record with the same
+stem holding the [`Render`](@ref) and its `limits`, tagged with the Git commit by DrWatson's
+`tagsave`. [`load_render`](@ref) reads a record back (pass the `.jld2` or the PNG), so a render
+can be repeated exactly:
+
+```julia
+r = load_render(out.outpath)
+render(r; outpath = "again.png")
+```
+
+With `outpath = nothing` the PNG is named with DrWatson's `savename`: the IFS name, the method
+tag and parameters, the resolution, and `_color`/`_alpha` flags, for example
+`Heighway_Dragon_chaos_npoints=200000_1024x1024.png`.
 
 ## Lower-level building blocks
 
-The render methods are thin wrappers, and the pieces can be used directly:
+The pieces can be used directly, without a [`Render`](@ref):
 
 ```julia
 using Fractals, DrWatson
@@ -137,5 +159,5 @@ expanded = deterministic_iterate(eis, chaos_game(eis, 200), 2)
 img2 = make_image(expanded, eis.limits; resolution = (800, 800))
 ```
 
-Saving through `safesave` directly skips the source-limits and provenance metadata that
-[`render`](@ref) embeds. See [Output files](@ref).
+Saving through `safesave` directly skips the render record that [`render`](@ref) writes. See
+[Output files](@ref).
