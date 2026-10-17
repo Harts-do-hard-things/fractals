@@ -243,18 +243,40 @@ function draw(m::ImageIterate, r::Render)
     return img, limits
 end
 
+# SVG renders draw vector geometry (a `SegmentImage`) instead of a matrix. Only the methods with
+# `supports(method, SVG())` have these.
+function draw(m::Transformations, r::Render{<:Any,SVG})
+    _, _, groups, _ = _collect_transformed_base_segments(r.ifs; initial_polygon_spec = m.polygon)
+    limits = _limits_from_polygon_point_iterations(
+        r.ifs;
+        initial_polygon_spec = m.polygon,
+        polygon_limits_iterations = m.limits_iterations,
+    )
+    return SegmentImage(groups), limits
+end
+
+function draw(m::ImageIterate{PolygonSource}, r::Render{<:Any,SVG})
+    limits = _polygon_source_limits(m.source, r)
+    segments = _resolve_initial_polygon(m.source.polygon).segments
+    return SegmentImage(_iterate_segments(r.ifs, segments, m.iterations)), limits
+end
+
 # --------------------------------
 # seed_image: where ImageIterate starts
 # --------------------------------
 
+# The frame of a polygon-seeded ImageIterate, shared by the raster seed and the SVG geometry.
+function _polygon_source_limits(s::PolygonSource, r::Render)
+    return s.frame == :ifs ? r.ifs.limits :
+           _limits_from_polygon_point_iterations(
+        r.ifs;
+        initial_polygon_spec = s.polygon,
+        polygon_limits_iterations = something(s.limits_iterations, r.method.iterations),
+    )
+end
+
 function seed_image(s::PolygonSource, r::Render)
-    limits =
-        s.frame == :ifs ? r.ifs.limits :
-        _limits_from_polygon_point_iterations(
-            r.ifs;
-            initial_polygon_spec = s.polygon,
-            polygon_limits_iterations = something(s.limits_iterations, r.method.iterations),
-        )
+    limits = _polygon_source_limits(s, r)
     rows, cols = r.resolution
     img = _render_initial_polygon_seed_image(
         _frame(limits);
@@ -306,6 +328,9 @@ function overlay!(img, ::Axes, r::Render, limits)
     return _overlay_axes!(img, _frame(limits); width = cols, height = rows)
 end
 
+# SVG: the finished image is the document text.
+finish(r::Render{<:Any,SVG}, img::SegmentImage, limits) = _svg_document(r, img, limits)
+
 function finish(r::Render, img, limits)
     r.color && (img = colorize(r.method, r, img, limits))
     # Overlay helpers draw into Gray/RGB pixels; raw heatmaps are plain Float32 matrices.
@@ -338,11 +363,15 @@ source_tag(::PolygonSource) = "polygon"
 source_tag(::FileSource) = "file"
 source_tag(m::RenderMethod) = method_tag(m)
 
+_format_suffix(::PNG) = ".png"
+_format_suffix(::SVG) = "_svg.svg"
+
 function _render_name(r::Render)
     stem = savename(_savename_prefix(r.ifs.name) * "_" * method_tag(r.method), r.method)
     rows, cols = r.resolution
     flags = (r.color ? "_color" : "") * (r.alpha ? "_alpha" : "")
-    return "$(stem)_$(rows)x$(cols)$(flags).png"
+    # SVG names carry `_svg` so a PNG and an SVG render never share a file or a record.
+    return "$(stem)_$(rows)x$(cols)$(flags)$(_format_suffix(r.format))"
 end
 
 """
@@ -372,11 +401,29 @@ function render_record_path(image_path::AbstractString)
     return data_output_dir("renders", first(splitext(rel)) * ".jld2")
 end
 
-# Write the PNG to `png` and the record (`r` and `limits`, git-tagged by DrWatson's `tagsave`) to
+# PNGs are written directly; SVG text goes through `_save_svg` with a provenance comment.
+_write_output(::PNG, r::Render, path, img) = _save_image_file(path, img)
+function _write_output(::SVG, r::Render, path, svg)
+    params = (;
+        method = method_tag(r.method),
+        ifs_name = r.ifs.name,
+        resolution = r.resolution,
+        color = r.color,
+        alpha = r.alpha,
+        format = "svg",
+    )
+    return _save_svg(path, svg; params)
+end
+
+# The saved output of a render: the image for a PNG, the document text for an SVG.
+_load_output(::PNG, path) = _load_image(path)
+_load_output(::SVG, path) = read(path, String)
+
+# Write the output to `png` and the record (`r` and `limits`, git-tagged by DrWatson's `tagsave`) to
 # `record`.
 function _save_render(r::Render, img, limits, png::AbstractString, record::AbstractString)
     mkpath(dirname(png))
-    _save_image_file(png, img)
+    _write_output(r.format, r, png, img)
     data = Dict{String,Any}("render" => r, "limits" => limits)
     if _SKIP_GIT[]  # precompile workload: no git subprocess
         DrWatson.wsave(record, data)
@@ -389,7 +436,7 @@ end
 """
     save_render(r::Render, img, limits; outpath = nothing) -> (outpath, record)
 
-Write `img` as a PNG and the render record (`r` and `limits`, tagged with the Git commit by
+Write `img` (a PNG image, or the document text of an SVG render) and the render record (`r` and `limits`, tagged with the Git commit by
 DrWatson's `tagsave`) at [`render_record_path`](@ref)`(r)` in the data directory. `outpath`
 places only the PNG; `outpath = nothing` names it from the IFS name, the method's parameters,
 the resolution, and the color/alpha flags.
@@ -430,6 +477,7 @@ _same_render(a::Render, b::Render) =
     ifs_key(a.ifs) == ifs_key(b.ifs) &&
     a.ifs.limits == b.ifs.limits &&
     a.method === b.method &&
+    a.format === b.format &&
     a.resolution == b.resolution &&
     a.color == b.color &&
     a.alpha == b.alpha &&
@@ -446,20 +494,21 @@ function _load_existing_render(r::Render, png::AbstractString, record::AbstractS
     end
     stored = get(saved, "render", nothing)
     (stored isa Render && _same_render(stored, r)) || return nothing
-    return _load_image(png), saved["limits"]
+    return _load_output(r.format, png), saved["limits"]
 end
 
 """
     render(r::Render; outpath = nothing, force = false)
     render(ifs::IFS, method::RenderMethod; outpath = nothing, force = false, kwargs...)
 
-Draw `r` with its method, apply color, overlays and alpha, then save the PNG and its render
-record (see [`save_render`](@ref)). `outpath` places only the PNG; the record always goes to
+Draw `r` with its method, apply color, overlays and alpha, then save the PNG (or SVG, for a
+render with `format = SVG()`) and its render record (see [`save_render`](@ref)). `outpath` places only the PNG; the record always goes to
 [`render_record_path`](@ref)`(r)`. The second form builds the [`Render`](@ref) from `kwargs`.
 
 Like DrWatson's `produce_or_load`: when the PNG and a record describing the same render
 (same IFS content, method, resolution, color, alpha and overlays) already exist, they are
 loaded instead of redrawn (`cached = true`; the image is then the PNG as read from disk).
+For an SVG render the image is the SVG text and the cached image is that file read back as text.
 `force = true` always redraws and overwrites both. Returns
 `(render, image, limits, outpath, record, cached)`.
 """

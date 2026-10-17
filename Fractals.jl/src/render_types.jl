@@ -206,24 +206,68 @@ Overlay the coordinate axes.
 struct Axes <: Overlay end
 
 # --------------------------------
+# Output formats
+# --------------------------------
+
+"""
+    OutputFormat
+
+Supertype of the render output formats: [`PNG`](@ref) (every method) and [`SVG`](@ref) (vector
+output for [`Transformations`](@ref) and `ImageIterate(PolygonSource(...))`).
+"""
+abstract type OutputFormat end
+
+"""
+    PNG()
+
+Raster output: the default format of a [`Render`](@ref), supported by every render method.
+"""
+struct PNG <: OutputFormat end
+
+"""
+    SVG(; stroke_width = 2.0)
+
+Vector output: the render is written as an SVG of line segments, one stroke color per map when
+`color = true` (white otherwise), on a black background unless `alpha = true`. Only
+[`Transformations`](@ref) and [`ImageIterate`](@ref) seeded by a [`PolygonSource`](@ref) support
+it; any other method throws an `ArgumentError` when the `Render` is built.
+"""
+struct SVG <: OutputFormat
+    stroke_width::Float64
+    function SVG(stroke_width::Real)
+        _check(stroke_width > 0, "stroke_width must be > 0, got $stroke_width")
+        return new(stroke_width)
+    end
+end
+SVG(; stroke_width = 2.0) = SVG(stroke_width)
+
+# Whether a render method can be drawn in a format.
+supports(::RenderMethod, ::PNG) = true
+supports(::RenderMethod, ::SVG) = false
+supports(::Transformations, ::SVG) = true
+supports(::ImageIterate{PolygonSource}, ::SVG) = true
+
+# --------------------------------
 # The render description
 # --------------------------------
 
 """
-    Render(ifs, method; resolution = RESOLUTION, color = false, alpha = false, overlays = Overlay[])
+    Render(ifs, method; resolution = RESOLUTION, color = false, alpha = false, overlays = Overlay[],
+           format = PNG())
 
 Everything needed to produce one image: the [`IFS`](@ref), a [`RenderMethod`](@ref), the
 `(rows, cols)` resolution, whether to color by map, whether zero pixels become transparent,
-and any [`Overlay`](@ref)s. Run it with [`render`](@ref); a saved render record loads back as
+any [`Overlay`](@ref)s, and the [`OutputFormat`](@ref). Run it with [`render`](@ref); a saved render record loads back as
 a `Render` with [`load_render`](@ref).
 """
-struct Render{M<:RenderMethod}
+struct Render{M<:RenderMethod,F<:OutputFormat}
     ifs::IFS
     method::M
     resolution::Tuple{Int,Int}
     color::Bool
     alpha::Bool
     overlays::Vector{Overlay}
+    format::F
     function Render(
         ifs::IFS,
         method::M,
@@ -231,18 +275,33 @@ struct Render{M<:RenderMethod}
         color::Bool,
         alpha::Bool,
         overlays::AbstractVector,
-    ) where {M<:RenderMethod}
+        format::F,
+    ) where {M<:RenderMethod,F<:OutputFormat}
         _check(
             resolution[1] > 0 && resolution[2] > 0,
             "resolution must be positive, got $resolution",
         )
+        _check(
+            supports(method, format),
+            "$(typeof(method)) cannot be rendered as $(nameof(F)); SVG supports Transformations " *
+            "and ImageIterate(PolygonSource())",
+        )
         rows, cols = Int(resolution[1]), Int(resolution[2])
-        return new{M}(ifs, method, (rows, cols), color, alpha, collect(Overlay, overlays))
+        return new{M,F}(
+            ifs,
+            method,
+            (rows, cols),
+            color,
+            alpha,
+            collect(Overlay, overlays),
+            format,
+        )
     end
 end
 """
     Render(r::Render; resolution = r.resolution, color = r.color, alpha = r.alpha,
-           overlays = r.overlays, ifs = r.ifs, method = r.method)
+           overlays = r.overlays, ifs = r.ifs, method = r.method,
+           format = r.format)
 
 A copy of `r` with the given fields changed, e.g. `render(Render(r; resolution = (4096, 4096)))`
 to re-render a saved render at a higher resolution. Point-based methods reuse their cached
@@ -256,7 +315,8 @@ Render(
     color = r.color,
     alpha = r.alpha,
     overlays = r.overlays,
-) = Render(ifs, method, resolution, color, alpha, overlays)
+    format = r.format,
+) = Render(ifs, method, resolution, color, alpha, overlays, format)
 
 Render(
     ifs::IFS,
@@ -265,4 +325,5 @@ Render(
     color = false,
     alpha = false,
     overlays = Overlay[],
-) = Render(ifs, method, resolution, color, alpha, overlays)
+    format = PNG(),
+) = Render(ifs, method, resolution, color, alpha, overlays, format)

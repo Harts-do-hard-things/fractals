@@ -7,6 +7,7 @@ This changelog follows the intent of Keep a Changelog and uses Semantic Versioni
 ## [Unreleased]
 
 ### Changed
+- `Render` takes `format = PNG()` or `SVG()` (new exported types `OutputFormat`, `PNG`, `SVG`); `Transformations` and polygon-seeded `ImageIterate` can be drawn as SVG, written to `plots/<name>_svg.svg` with a render record. `render_transformations_svg` is now a wrapper over `render`.
 - `save_fractal`, `load_fractal`, `fractal_record` and `fractal_data` are removed: point clouds are cached by `cached_points` and renders by render records. `extend_fractal(Chaos, ifs, n)` extends a cached chaos game into the entry for the larger `npoints`, and `fractal_catalog(; dir)` lists render and point records.
 - Rendering is redesigned around values: `Render(ifs, method; resolution, color, alpha, overlays)` is run by `render(r)` or `render(ifs, method; kwargs...)`, which returns `(render, image, limits, outpath, record)`. Methods are the types `Chaos`, `PointDeterministic`, `Inverse`, `Transformations` and `ImageIterate` (seeded by `PolygonSource`, `FileSource` or any method); overlays are `BasePolygon` and `Axes`. `save_render` writes the PNG plus a same-stem `.jld2` record and `load_render` reads it back. File names come from DrWatson `savename` over each method's fields.
 - `render_interpolation_frames(left, right, method; frames, ...)` takes any render method and returns `(outdir, paths, ts)`.

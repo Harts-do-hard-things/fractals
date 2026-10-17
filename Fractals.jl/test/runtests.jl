@@ -1291,7 +1291,7 @@ end
                 named = IFS(SMALL_EQ; name = "My Fractal!")
                 svg = render_transformations_svg(named; width = 32, height = 16)
                 @test basename(svg) ==
-                      "My_Fractal_initial_polygon=default_method=transformations_svg_resolution=16x32.svg"
+                      "My_Fractal_transformations_limits_iterations=1_polygon=default_16x32_color_alpha_svg.svg"
                 @test startswith(read(svg, String), "<!-- fractals.provenance: ")
             end
         end
@@ -2729,6 +2729,102 @@ end
     @test basename(preview.outpath) == "ifs_inverse_iterations=3_preview=true_16x16.png"
     @test size(preview.image) == (16, 16)
     @test load_render(preview.record).method.preview
+end
+
+@testset "SVG Output Format" begin
+    ifs = IFS(SMALL_EQ)
+    nmaps = length(ifs.maps)
+    nsegments = length(initial_polygon().segments)
+    nlines(svg) = length(collect(eachmatch(r"<line ", svg)))
+
+    # Only Transformations and polygon-seeded ImageIterate can be drawn as SVG.
+    @test_throws ArgumentError Render(ifs, Chaos(npoints = 10); format = SVG())
+    @test_throws ArgumentError Render(ifs, PointDeterministic(npoints = 10); format = SVG())
+    @test_throws ArgumentError Render(ifs, Inverse(iterations = 1); format = SVG())
+    @test_throws ArgumentError Render(ifs, ImageIterate(Chaos(npoints = 10)); format = SVG())
+    @test Render(ifs, Transformations(); format = SVG()) isa Render{Transformations,SVG}
+    @test Render(ifs, Chaos(npoints = 10)).format isa PNG
+
+    # Transformations: one group per map.
+    rt = Render(ifs, Transformations(); resolution = (64, 64), format = SVG())
+    img, _ = Fractals.draw(rt)
+    @test length(img.groups) == nmaps
+    @test all(g -> length(g) == nsegments, img.groups)
+
+    # ImageIterate: every map applied to every segment, `iterations` times.
+    ri = Render(
+        ifs,
+        ImageIterate(PolygonSource(); iterations = 2);
+        resolution = (64, 64),
+        format = SVG(),
+    )
+    img2, _ = Fractals.draw(ri)
+    @test length(img2.groups) == nmaps
+    @test sum(length, img2.groups) == nsegments * nmaps^2
+    @test nlines(Fractals.finish(ri, img2, ifs.limits)) == nsegments * nmaps^2
+
+    # The segment cap is checked before iterating.
+    rbig = Render(
+        ifs,
+        ImageIterate(PolygonSource(); iterations = 40);
+        resolution = (64, 64),
+        format = SVG(),
+    )
+    err = try
+        Fractals.draw(rbig)
+        nothing
+    catch ex
+        ex
+    end
+    @test err isa ArgumentError
+    @test occursin("segments", err.msg)
+
+    # Overlays and alpha change the output.
+    plain = Fractals.finish(rt, img, ifs.limits)
+    with_base = Fractals.finish(Render(rt; overlays = [BasePolygon()]), img, ifs.limits)
+    with_axes = Fractals.finish(Render(rt; overlays = [Axes()]), img, ifs.limits)
+    opaque = Fractals.finish(Render(rt; alpha = false), img, ifs.limits)
+    transparent = Fractals.finish(Render(rt; alpha = true), img, ifs.limits)
+    mono = Fractals.finish(Render(rt; color = false), img, ifs.limits)
+    @test nlines(with_base) == nlines(plain) + nsegments
+    @test occursin("data-role=\"axis-x\"", with_axes)
+    @test !occursin("data-role", plain)
+    @test occursin("<rect", opaque)
+    @test !occursin("<rect", transparent)
+    @test opaque != transparent
+    @test occursin("#FFFFFF", mono)
+    @test !occursin("#FFFFFF", plain)
+
+    _with_tmpdir() do tmp
+        rpng = Render(ifs, Transformations(); resolution = (64, 64), color = true)
+        rsvg = Render(rpng; format = SVG())
+        @test rsvg.format isa SVG
+        @test Fractals._render_name(rpng) != Fractals._render_name(rsvg)
+        @test render_record_path(rpng) != render_record_path(rsvg)
+        @test endswith(Fractals._render_name(rsvg), ".svg")
+
+        out = render(rsvg)
+        @test isfile(out.outpath)
+        @test endswith(out.outpath, ".svg")
+        @test startswith(read(out.outpath, String), "<!-- fractals.provenance: ")
+        @test out.image isa String
+        @test !out.cached
+
+        # An unchanged SVG render is reused (the text read back from disk); force redraws.
+        again = render(rsvg)
+        @test again.cached
+        @test again.image == read(out.outpath, String)
+        @test !render(rsvg; force = true).cached
+
+        # A saved SVG render reloads and re-renders as a PNG.
+        loaded = load_render(out.record)
+        @test loaded.format isa SVG
+        png = render(Render(loaded; format = PNG()))
+        @test endswith(png.outpath, ".png")
+        @test isfile(png.outpath)
+        @test size(png.image) == (64, 64)
+        @test png.record != out.record
+    end
 end
 
 include("test_jld2.jl")
