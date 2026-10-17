@@ -104,10 +104,6 @@ read_provenance
 ## Saved data (JLD2)
 
 ```@docs
-save_fractal
-load_fractal
-fractal_record
-fractal_data
 extend_fractal
 fractal_catalog
 ```

@@ -1,147 +1,101 @@
-# JLD2 data records: save/load, produce_or_load caching, resuming, catalog.
+# JLD2 data records: cached point clouds, resuming a chaos game, and the catalog.
 # Included from runtests.jl, which points FRACTALS_OUTPUT_ROOT at a temp directory.
 using JLD2
-using DrWatson: wload
 
-@testset "JLD2 fractal records" begin
-    root = mktempdir(; prefix = "fractals_jld2_")
-    with_output_root(root) do
-        @testset "save_fractal / load_fractal round trip" begin
+@testset "JLD2 point clouds and catalog" begin
+    _with_tmpdir() do root
+        with_output_root(root) do
             ifs = IFS(SMALL_EQ; name = "Small Eq")
-            ifs_pts = chaos_game(ifs, 500; warmup = 10, seed = 3)
-            img = make_image(ifs_pts, ifs.limits; resolution = (16, 16))
-            path = save_fractal(
-                ifs,
-                ifs_pts;
-                image = img,
-                method = :chaos,
-                seed = 3,
-                params = (; warmup = 10),
-            )
-            @test isfile(path)
-            @test startswith(path, data_output_dir())
-            @test endswith(path, ".jld2")
 
-            # Loadable without Fractals types: plain arrays only.
-            raw = wload(path)
-            @test raw["points"] isa Matrix{Float64}
-            @test size(raw["points"]) == (2, 500)
-            @test size(raw["eq"]) == (2, 7)
-            @test raw["image"] == img
-            @test raw["seed"] == 3
-            @test haskey(raw, "gitcommit")
+            @testset "cached_points records" begin
+                m = Chaos(; npoints = 300, warmup = 10, seed = 7)
+                pts, path, cached = cached_points(m, ifs)
+                @test !cached
+                @test length(pts) == 300
+                @test dirname(path) == data_output_dir("points")
+                @test startswith(basename(path), "chaos_")
+                @test occursin(ifs_key(ifs), basename(path))
+                rec = JLD2.load(path)
+                @test size(rec["points"]) == (2, 300)
+                @test rec["method"] == m
+                @test rec["ifs"] == ifs_key(ifs)
 
-            loaded = load_fractal(path)
-            @test loaded.method == :chaos
-            @test loaded.seed == 3
-            @test loaded.image == img
-            @test loaded.params["warmup"] == 10
-            @test loaded.ifs.name == "Small Eq"
-            @test loaded.points == ifs_pts
-            @test loaded.ifs.limits == ifs.limits
-            @test collect(loaded.ifs.weights) == collect(ifs.weights)
-            @test [m.A for m in loaded.ifs.maps] == [m.A for m in ifs.maps]
-            @test [m.b for m in loaded.ifs.maps] == [m.b for m in ifs.maps]
-            # Relative paths resolve under data_output_dir().
-            @test load_fractal(basename(path)).path == path
+                pts2, path2, cached2 = cached_points(m, ifs)
+                @test cached2
+                @test path2 == path
+                @test pts2 == pts
 
-            # Saving again keeps the old file as a backup.
-            path2 = save_fractal(ifs, ifs_pts; method = :chaos, seed = 3)
-            @test path2 == path
-            @test isfile(replace(path, ".jld2" => "_#1.jld2"))
+                # A different seed or IFS is a different entry.
+                _, other, _ = cached_points(Chaos(; npoints = 300, warmup = 10, seed = 8), ifs)
+                @test other != path
+                _, other_ifs, _ = cached_points(m, IFS(SMALL_EQ .* [1 1 1 1 0.5 1 1]))
+                @test other_ifs != path
+            end
 
-            # Files that are not fractal records are rejected.
-            foreign = joinpath(root, "other.jld2")
-            JLD2.save(foreign, "x", 1)
-            @test_throws ArgumentError load_fractal(foreign)
-        end
+            @testset "extend_fractal grows the cached chaos game" begin
+                m = Chaos(; npoints = 200, warmup = 10, seed = 5)
+                old, old_path, _ = cached_points(m, ifs)
+                pts, path = extend_fractal(m, ifs, 100; seed = 11)
+                @test length(pts) == 300
+                @test pts[1:200] == old
+                @test path != old_path
+                @test isfile(old_path) # original kept
+                # The chain continues from the last stored point.
+                @test any(f -> f(old[end]) ≈ pts[201], ifs.maps)
 
-        @testset "fractal_data caches with produce_or_load" begin
-            a = fractal_data(SMALL_EQ; npoints = 300, seed = 7, name = "cache")
-            @test !a.cached
-            @test isfile(a.path)
-            @test length(a.points) == 300
-            mtime_a = mtime(a.path)
+                # The extension is the cache entry for the larger Chaos config.
+                bigger = Chaos(; npoints = 300, warmup = 10, seed = 5)
+                again, again_path, cached = cached_points(bigger, ifs)
+                @test cached
+                @test again_path == path
+                @test again == pts
 
-            b = fractal_data(SMALL_EQ; npoints = 300, seed = 7, name = "cache")
-            @test b.cached
-            @test b.path == a.path
-            @test b.points == a.points
-            @test mtime(b.path) == mtime_a
-            @test !isfile(replace(a.path, ".jld2" => "_#1.jld2"))
+                # Seeded extensions are reproducible, and an existing entry is overwritten.
+                pts_b, path_b = extend_fractal(m, ifs, 100; seed = 11)
+                @test path_b == path
+                @test pts_b == pts
 
-            # Different parameters or a different system get different files.
-            c = fractal_data(SMALL_EQ; npoints = 300, seed = 8, name = "cache")
-            @test !c.cached && c.path != a.path
-            other_eq = copy(SMALL_EQ)
-            other_eq[1, 5] = 0.25
-            d = fractal_data(other_eq; npoints = 300, seed = 7, name = "cache")
-            @test !d.cached && d.path != a.path
+                # Extending the extension accumulates.
+                more, _ = extend_fractal(bigger, ifs, 50; seed = 12)
+                @test length(more) == 350
+                @test more[1:300] == pts
+                @test cached_points(Chaos(; npoints = 350, warmup = 10, seed = 5), ifs)[3]
 
-            # force=true recomputes; same seed gives the same points.
-            e = fractal_data(SMALL_EQ; npoints = 300, seed = 7, name = "cache", force = true)
-            @test !e.cached
-            @test e.points == a.points
+                # Rendering at the new count reuses the extended cloud.
+                before = mtime(path)
+                out = render(ifs, bigger; resolution = (16, 16))
+                @test mtime(path) == before
+                @test size(out.image) == (16, 16)
 
-            det =
-                fractal_data(SMALL_EQ; method = :point_deterministic, npoints = 20, iterations = 2)
-            @test length(det.points) == 20 * 2^2
-            @test fractal_data(
-                SMALL_EQ;
-                method = :point_deterministic,
-                npoints = 20,
-                iterations = 2,
-            ).cached
-            @test_throws ArgumentError fractal_data(SMALL_EQ; method = :inverse)
-        end
+                @test_throws ArgumentError extend_fractal(m, ifs, 0)
+            end
 
-        @testset "saved points rasterize without recomputing" begin
-            data = fractal_data(SMALL_EQ; npoints = 400, seed = 1, name = "render")
-            before = mtime(data.path)
-            img1 = make_image(data.points, data.ifs.limits; resolution = (16, 16))
-            loaded = load_fractal(data.path)
-            img2 = make_image(loaded.points, loaded.ifs.limits; resolution = (24, 32))
-            @test size(img1) == (16, 16)
-            @test size(img2) == (24, 32)
-            @test loaded.points == data.points
-            @test maximum(img1) > 0.0f0
-            @test mtime(data.path) == before
-        end
+            @testset "fractal_catalog" begin
+                render(ifs, Chaos(; npoints = 200, warmup = 10, seed = 5); resolution = (16, 16))
+                rows = fractal_catalog()
+                nrows = length(rows)
+                @test rows isa Vector{<:NamedTuple}
+                @test all(r -> isfile(r.path), rows)
+                @test issorted([r.path for r in rows])
+                @test all(r -> r.gitcommit isa Union{Nothing,String}, rows)
+                @test any(r -> r.ifs_key == ifs_key(ifs), rows)
 
-        @testset "extend_fractal accumulates the chaos game" begin
-            data = fractal_data(SMALL_EQ; npoints = 200, seed = 5, name = "grow")
-            ext = extend_fractal(data, 100; seed = 11)
-            @test length(ext.points) == 300
-            @test ext.points[1:200] == data.points
-            @test ext.path != data.path
-            @test isfile(data.path) # original kept
-            # The chain continues from the last saved point.
-            @test any(m -> m(data.points[end]) ≈ ext.points[201], data.ifs.maps)
+                rows = filter(r -> r.ifs_key == ifs_key(ifs), rows)
+                pts_rows = filter(r -> r.kind == :points, rows)
+                @test !isempty(pts_rows)
+                @test all(r -> r.method == "chaos" && ismissing(r.resolution), pts_rows)
+                @test any(r -> r.npoints == 350, pts_rows)
 
-            again = extend_fractal(ext.path, 50; seed = 12)
-            @test length(again.points) == 350
-            @test load_fractal(again.path).params["npoints"] == 350
+                ren_rows = filter(r -> r.kind == :render, rows)
+                @test length(ren_rows) >= 1
+                @test all(r -> r.name == "Small Eq" && r.resolution == (16, 16), ren_rows)
+                @test any(r -> r.npoints == 200, ren_rows)
 
-            det = fractal_data(SMALL_EQ; method = :point_deterministic, npoints = 10)
-            @test_throws ArgumentError extend_fractal(det, 5)
-        end
-
-        @testset "save_fractal with an image, and fractal_catalog" begin
-            ifs = IFS(SMALL_EQ; name = "catalog")
-            pts = chaos_game(ifs, 300; seed = 1)
-            img = make_image(pts, ifs.limits; resolution = (16, 16))
-            path = save_fractal(ifs, pts; image = img, method = :chaos, seed = 1)
-            @test isfile(path)
-            @test load_fractal(path).image == img
-            rows = fractal_catalog()
-            @test rows isa Vector{<:NamedTuple}
-            @test length(rows) >= 6
-            @test all(r -> isfile(r.path), rows)
-            @test any(r -> r.name == "grow" && r.npoints == 300, rows)
-            @test any(r -> r.has_image && r.method == :chaos, rows)
-            @test all(r -> r.gitcommit isa Union{Nothing,String}, rows)
-            @test isempty(fractal_catalog(joinpath(root, "nope")))
-            @test issorted([r.created for r in rows])
+                # Unreadable files are skipped, and a missing directory is empty.
+                write(joinpath(data_output_dir("points"), "junk.jld2"), "not jld2")
+                @test length(fractal_catalog()) == nrows
+                @test isempty(fractal_catalog(; dir = joinpath(root, "nope")))
+            end
         end
     end
 end

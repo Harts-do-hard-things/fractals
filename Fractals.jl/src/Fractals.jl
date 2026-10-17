@@ -39,7 +39,6 @@ include("interpolation.jl")          # interpolate_eq_matrix, interpolate_ifs, r
 include("ifs_load.jl")               # parse_ifs_string/file, get_ifs: IFS-returning wrappers over IFSParse
 # render_pipeline.jl follows every file whose kernels draw() calls
 include("render_pipeline.jl")        # render(::Render): draw, finish, save_render, load_render
-include("fractal_store.jl")          # JLD2 records: save_fractal, load_fractal, fractal_data, ...
 include("examples.jl")               # HEIGHWAY_DRAGON, EISENSTEIN, main()
 include("precompile.jl")             # PrecompileTools workload (must stay last)
 
@@ -98,10 +97,6 @@ export AffineMap,
     ifs_data_dir,
     with_output_root,
     read_provenance,
-    fractal_record,
-    save_fractal,
-    load_fractal,
-    fractal_data,
     extend_fractal,
     fractal_catalog,
     RESOLUTION,
