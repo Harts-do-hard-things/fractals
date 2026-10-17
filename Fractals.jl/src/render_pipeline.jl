@@ -93,6 +93,7 @@ function draw(m::Inverse, r::Render)
         r.ifs.limits;
         resolution = r.resolution,
         show_divergence_scale = m.divergence_scale,
+        mode = m.preview ? :preview : :exact,
     )
     return img, r.ifs.limits
 end
@@ -205,7 +206,8 @@ end
 # Which method fields go into file names (DrWatson's `savename` reads these).
 DrWatson.allaccess(::Chaos) = (:npoints, :seed)
 DrWatson.allaccess(::PointDeterministic) = (:npoints, :iterations)
-DrWatson.allaccess(::Inverse) = (:iterations,)
+# `preview` only appears in names when set, so exact renders keep their names.
+DrWatson.allaccess(m::Inverse) = m.preview ? (:iterations, :preview) : (:iterations,)
 DrWatson.allaccess(::Transformations) = (:polygon, :limits_iterations)
 DrWatson.allaccess(::ImageIterate) = (:iterations,)
 
@@ -303,17 +305,56 @@ function _render(r::Render, png::AbstractString, record::AbstractString)
     return (; render = r, image = img, limits, outpath = png, record)
 end
 
+# Whether two renders describe the same image. `==` on these structs falls back to identity for
+# their vector fields, so compare the IFS by content key and the rest field by field (method
+# structs and overlays hold only bits, symbols and strings, which `===` compares by value).
+_same_render(a::Render, b::Render) =
+    ifs_key(a.ifs) == ifs_key(b.ifs) &&
+    a.ifs.limits == b.ifs.limits &&
+    a.method === b.method &&
+    a.resolution == b.resolution &&
+    a.color == b.color &&
+    a.alpha == b.alpha &&
+    length(a.overlays) == length(b.overlays) &&
+    all(o -> o[1] === o[2], zip(a.overlays, b.overlays))
+
+# The saved image and limits of `r`, if its PNG and a matching record both exist.
+function _load_existing_render(r::Render, png::AbstractString, record::AbstractString)
+    (isfile(png) && isfile(record)) || return nothing
+    saved = try
+        JLD2.load(record)
+    catch
+        return nothing
+    end
+    stored = get(saved, "render", nothing)
+    (stored isa Render && _same_render(stored, r)) || return nothing
+    return _load_image(png), saved["limits"]
+end
+
 """
-    render(r::Render; outpath = nothing)
-    render(ifs::IFS, method::RenderMethod; outpath = nothing, kwargs...)
+    render(r::Render; outpath = nothing, force = false)
+    render(ifs::IFS, method::RenderMethod; outpath = nothing, force = false, kwargs...)
 
 Draw `r` with its method, apply color, overlays and alpha, then save the PNG and its render
 record (see [`save_render`](@ref)). `outpath` places only the PNG; the record always goes to
 [`render_record_path`](@ref)`(r)`. The second form builds the [`Render`](@ref) from `kwargs`.
-Returns `(render, image, limits, outpath, record)`.
-"""
-render(r::Render; outpath::Union{Nothing,AbstractString} = nothing) =
-    _render(r, _resolve_output_path(outpath, _render_name(r)), render_record_path(r))
 
-render(ifs::IFS, method::RenderMethod; outpath = nothing, kwargs...) =
-    render(Render(ifs, method; kwargs...); outpath)
+Like DrWatson's `produce_or_load`: when the PNG and a record describing the same render
+(same IFS content, method, resolution, color, alpha and overlays) already exist, they are
+loaded instead of redrawn (`cached = true`; the image is then the PNG as read from disk).
+`force = true` always redraws and overwrites both. Returns
+`(render, image, limits, outpath, record, cached)`.
+"""
+function render(r::Render; outpath::Union{Nothing,AbstractString} = nothing, force::Bool = false)
+    png = _resolve_output_path(outpath, _render_name(r))
+    record = render_record_path(r)
+    existing = force ? nothing : _load_existing_render(r, png, record)
+    if !isnothing(existing)
+        img, limits = existing
+        return (; render = r, image = img, limits, outpath = png, record, cached = true)
+    end
+    return merge(_render(r, png, record), (; cached = false))
+end
+
+render(ifs::IFS, method::RenderMethod; outpath = nothing, force = false, kwargs...) =
+    render(Render(ifs, method; kwargs...); outpath, force)

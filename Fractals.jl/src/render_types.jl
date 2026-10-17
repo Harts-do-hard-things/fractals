@@ -69,20 +69,23 @@ PointDeterministic(; npoints = 1_000, iterations = 1, warmup = DEFAULT_WARMUP, s
     PointDeterministic(npoints, iterations, warmup, seed)
 
 """
-    Inverse(; iterations = 8, divergence_scale = true)
+    Inverse(; iterations = 8, divergence_scale = true, preview = false)
 
 Per-pixel inverse-map coverage, `iterations` deep. `divergence_scale = false` gives a binary
-mask instead of graded divergence values.
+mask instead of graded divergence values. `preview = true` caps the tracked branch frontier
+for a faster, approximate image (exact tracking otherwise).
 """
 struct Inverse <: RenderMethod
     iterations::Int
     divergence_scale::Bool
-    function Inverse(iterations::Integer, divergence_scale::Bool)
+    preview::Bool
+    function Inverse(iterations::Integer, divergence_scale::Bool, preview::Bool)
         _check(iterations >= 0, "iterations must be >= 0, got $iterations")
-        return new(iterations, divergence_scale)
+        return new(iterations, divergence_scale, preview)
     end
 end
-Inverse(; iterations = 8, divergence_scale = true) = Inverse(iterations, divergence_scale)
+Inverse(; iterations = 8, divergence_scale = true, preview = false) =
+    Inverse(iterations, divergence_scale, preview)
 
 """
     Transformations(; polygon = :default, limits_iterations = 1)

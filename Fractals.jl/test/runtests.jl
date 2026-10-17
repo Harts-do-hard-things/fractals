@@ -2709,4 +2709,33 @@ end
     @test Fractals.cached_points(Chaos(npoints = 501, warmup = 3, seed = 4), ifs)[2] != path
 end
 
+@testset "render reuses a matching record and PNG" begin
+    ifs = IFS(SMALL_EQ; name = "reuse")
+    r = Render(ifs, Inverse(iterations = 2); resolution = (16, 16))
+    first_out = render(r)
+    @test !first_out.cached
+    stamp = mtime(first_out.outpath)
+    again = render(r)
+    @test again.cached
+    @test again.outpath == first_out.outpath && again.record == first_out.record
+    @test again.limits == first_out.limits
+    @test mtime(first_out.outpath) == stamp
+    # Anything that changes the image is a miss: overlays are not in the file name.
+    @test !render(Render(r; overlays = [Axes()])).cached
+    @test !render(r; force = true).cached
+    # A missing PNG is a miss even when the record exists.
+    rm(first_out.outpath)
+    @test !render(r).cached
+end
+
+@testset "Inverse preview" begin
+    @test !Inverse().preview
+    exact = render(IFS(SMALL_EQ), Inverse(iterations = 3); resolution = (16, 16))
+    preview = render(IFS(SMALL_EQ), Inverse(iterations = 3, preview = true); resolution = (16, 16))
+    @test basename(exact.outpath) == "ifs_inverse_iterations=3_16x16.png"
+    @test basename(preview.outpath) == "ifs_inverse_iterations=3_preview=true_16x16.png"
+    @test size(preview.image) == (16, 16)
+    @test load_render(preview.record).method.preview
+end
+
 include("test_jld2.jl")
