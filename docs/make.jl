@@ -38,8 +38,6 @@ makedocs(;
             "manual/animation.md",
             "manual/output.md",
             "manual/ifs_format.md",
-            "manual/cli.md",
-            "manual/benchmarks.md",
             "manual/troubleshooting.md",
             "manual/development.md",
         ],

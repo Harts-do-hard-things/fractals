@@ -21,23 +21,9 @@ const EISENSTEIN = [
 # --------------------------------
 
 function main(; eq = EISENSTEIN, npoints = 1_000_000, outpath = nothing)
-
-    println("Building IFS...")
-    ifs = IFS(eq)
-
-    println("Running chaos game...")
-    points = chaos_game(ifs, npoints)
-
-    println("Rasterizing...")
-    img = make_image(points, ifs.limits)
-
-    params = (; method = :chaos, ifs_name = ifs.name, npoints, resolution = RESOLUTION)
-    final_outpath =
-        _resolve_output_path(outpath, _output_name("main", params[(:method, :npoints)], "png"))
-    println("Saving to $final_outpath")
-    _save_image(final_outpath, img, ifs.limits; params = params)
-
-    println("Done.")
+    out = render(IFS(eq; name = "main"), Chaos(npoints = npoints); outpath = outpath)
+    println("Saved to $(out.outpath)")
+    return out
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__

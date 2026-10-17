@@ -3,9 +3,8 @@
 # --------------------------------
 #
 # Exercises the common paths on tiny inputs so the first `render` call (and the test suite) does
-# not pay for compiling them. It uses the same shapes of call that users make (explicit `outpath`
-# strings, symbol/string/enum methods, `.ifs` file inputs, color/alpha), since each keyword
-# combination compiles its own `kwcall` method.
+# not pay for compiling them: one `render(::Render)` per method type, the parser, and the JLD2
+# helpers.
 #
 # Keep it cheap to precompile:
 # - Each `@compile_workload` block below is small and independent. One large block (or a loop
@@ -60,93 +59,44 @@ using PrecompileTools: @setup_workload, @compile_workload
         AffineMap([0.5 0.0; 0.0 0.5], [0.0, 0.0])
     end
 
-    # `render` for matrix, IFS, and file inputs. PNG saving compiles once per pixel type
-    # (Gray, GrayA, RGB, RGBA).
+    # One `render(::Render)` per method type; options are fields, so these cover every keyword
+    # combination. PNG saving compiles once per pixel type (Gray, GrayA, RGB, RGBA).
     @compile_workload begin
         inroot() do
+            render(ifs, Chaos(npoints = 50, warmup = 2); resolution = res)
+            render(ifs, Chaos(npoints = 50, warmup = 2); resolution = res, alpha = true)
+            render(ifs, Chaos(npoints = 50, warmup = 2); resolution = res, color = true)
             render(
-                eq;
-                method = Chaos,
+                ifs,
+                Chaos(npoints = 50, warmup = 2);
                 resolution = res,
-                outpath = "chaos_a.png",
-                npoints = 50,
-                warmup = 2,
-            )
-            render(
-                eq;
-                method = "chaos",
-                resolution = res,
-                outpath = "chaos_c.png",
                 color = true,
                 alpha = true,
-                npoints = 50,
-                warmup = 2,
-            )
-            render(eq; resolution = res, outpath = "gray.png", npoints = 50, alpha = true)
-            render(eq; resolution = res, outpath = "rgb.png", npoints = 50, color = true)
-            render(IFS(eq); method = Chaos, resolution = res, outpath = "ifs.png")
-            render(ifs_path; ifs_index = 1, npoints = 50, resolution = res, outpath = "file.png")
-            render(
-                ifs_path;
-                ifs_name = "Workload_Two",
-                npoints = 50,
-                resolution = res,
-                outpath = "file_two.png",
-            )
-            read_provenance(joinpath(output_dir(), "chaos_a.png"))
-        end
-    end
-
-    # One render per remaining method, each in its own block.
-    @compile_workload begin
-        inroot() do
-            render(
-                eq;
-                method = PointDeterministic,
-                resolution = res,
-                outpath = "pd.png",
-                npoints = 8,
-                iterations = 1,
             )
         end
     end
     @compile_workload begin
         inroot() do
-            render(eq; method = Inverse, resolution = res, outpath = "inverse.png", iterations = 1)
+            render(ifs, PointDeterministic(npoints = 8, iterations = 1); resolution = res)
         end
     end
     @compile_workload begin
         inroot() do
-            render(
-                eq;
-                method = ImageIterate,
-                resolution = res,
-                outpath = "ii.png",
-                image_source = :polygon,
-                image_iterations = 1,
-            )
-            render(
-                eq;
-                method = ImageIterate,
-                image_source = :file,
-                image_path = joinpath(output_dir(), "chaos_a.png"),
-                image_iterations = 1,
-                resolution = res,
-                outpath = "ii_file.png",
-            )
+            render(ifs, Inverse(iterations = 1); resolution = res)
         end
     end
     @compile_workload begin
         inroot() do
-            render(
-                eq;
-                method = RenderTransformations,
-                resolution = res,
-                outpath = "rt.png",
-                npoints = 8,
-            )
-            render_transformations_svg(IFS(eq); outpath = "t.svg", width = 16, height = 16)
-            render_transformations_png(IFS(eq); outpath = "t.png", width = 16, height = 16)
+            out = render(ifs, ImageIterate(); resolution = res, overlays = [BasePolygon(), Axes()])
+            render(ifs, ImageIterate(FileSource(out.outpath)); resolution = res)
+            render(ifs, ImageIterate(Chaos(npoints = 50, warmup = 2)); resolution = res)
+            load_render(out.record)
+        end
+    end
+    @compile_workload begin
+        inroot() do
+            render(ifs, Transformations(); resolution = res, color = true)
+            render_transformations_svg(ifs; outpath = "t.svg", width = 16, height = 16)
         end
     end
 
@@ -156,18 +106,19 @@ using PrecompileTools: @setup_workload, @compile_workload
         inroot() do
             left = IFS(eq; name = "left")
             right = IFS(eq .* 0.9; name = "right")
+            frames_dir = joinpath(scratch, "frames")
             render_interpolation_frames(
                 left,
                 right;
                 frames = 2,
-                outdir = joinpath(scratch, "frames"),
+                outdir = frames_dir,
                 resolution = res,
             )
             try
                 export_animation(
                     :gif;
-                    frames_dir = joinpath(scratch, "frames"),
-                    basename = "left_to_right",
+                    frames_dir = frames_dir,
+                    basename = "frame",
                     ffmpeg_cmd = "definitely_missing_ffmpeg_binary",
                 )
             catch
@@ -181,7 +132,6 @@ using PrecompileTools: @setup_workload, @compile_workload
             data = fractal_data(eq; npoints = 50, seed = 1, name = "w")
             save_fractal(ifs, pts; image = make_image(pts, ifs.limits; resolution = res), seed = 1)
             load_fractal(data.path)
-            render_fractal(data; resolution = res)
             extend_fractal(data, 10; seed = 2)
             fractal_catalog()
         end

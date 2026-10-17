@@ -162,7 +162,7 @@ later call with identical arguments reloads the saved points (`cached = true`) i
 recomputing them. `force=true` recomputes. The `seed` makes chaos-game output reproducible
 for a fixed thread count.
 
-Rasterize the result at any resolution with [`render_fractal`](@ref), without recomputing.
+Rasterize the points with [`make_image`](@ref) at any resolution, without recomputing.
 """
 function fractal_data(
     input::Union{AbstractMatrix{<:Real},IFS};
@@ -209,44 +209,6 @@ function fractal_data(
         cached = cached,
         record = record,
     )
-end
-
-"""
-    render_fractal(source; resolution=RESOLUTION, color=false, alpha=false, backend=:cpu,
-                   outpath=nothing) -> (ifs, image, outpath, method)
-
-Rasterize saved fractal data to a PNG without recomputing points. `source` is a path to a
-JLD2 record, or the result of [`load_fractal`](@ref) or [`fractal_data`](@ref). Resolution,
-coloring and transparency can differ from when the data was computed. The PNG is saved like
-[`render`](@ref) output (same naming and provenance).
-"""
-function render_fractal(
-    source;
-    resolution::Tuple{Int,Int} = RESOLUTION,
-    color::Bool = false,
-    alpha::Bool = false,
-    backend::Symbol = :cpu,
-    outpath::Union{Nothing,AbstractString} = nothing,
-)
-    resolution[1] > 0 && resolution[2] > 0 ||
-        throw(ArgumentError("resolution must be positive, got $resolution"))
-    loaded = _loaded_fractal(source)
-    ifs = loaded.ifs
-    method = loaded.method
-    points = loaded.points
-    img = make_image(points, ifs.limits; resolution = resolution, backend = backend)
-    color && (img = iterate_image(ifs, img; colors = true, backend = backend))
-    alpha && (img = _apply_alpha_mask(img))
-    final_outpath = _save_render_output(
-        outpath,
-        img,
-        ifs,
-        ifs.limits;
-        method = method,
-        params = (; npoints = length(points), resolution, color, alpha, backend),
-        name_keys = (:npoints, :resolution, :color, :alpha),
-    )
-    return (ifs = ifs, image = img, outpath = final_outpath, method = method)
 end
 
 """

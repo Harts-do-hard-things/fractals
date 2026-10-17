@@ -16,7 +16,7 @@ import DrWatson
 import JLD2
 using DrWatson: plotsdir, datadir, projectdir, savename, safesave, gitdescribe
 
-include("config.jl")                 # constants, RenderMethod enum, polygon presets
+include("config.jl")                 # constants, polygon presets
 include("utils.jl")                  # shared utilities: PNG metadata, color maps, GPU stub
 include("output.jl")                 # DrWatson-managed output paths, naming, safesave, provenance
 # IFSParse is a standalone package (no dependency on Fractals); types.jl and ifs_load.jl import from it
@@ -28,22 +28,17 @@ using IFSParse:
     _noncontractive_rows,
     _format_contractivity_failure
 include("types.jl")                  # AffineMap, IFS structs and constructors
+include("render_types.jl")           # RenderMethod types, ImageSource, Overlay, Render
 include("render_transformations.jl") # SVG/PNG visualization of affine maps
 include("chaos.jl")                  # chaos_game
 include("point_deterministic.jl")    # deterministic_iterate
 include("rasterize.jl")              # make_image, make_pixelate_map
 include("inverse.jl")                # rasterize_image_inversely
-# image_iterate.jl must follow chaos, point_deterministic, rasterize, inverse, and
-# render_transformations — _resolve_image_source calls all of them
-include("image_iterate.jl")          # iterate_image, _resolve_image_source
+include("image_iterate.jl")          # iterate_image
 include("interpolation.jl")          # interpolate_eq_matrix, interpolate_ifs, render_interpolation_frames
 include("ifs_load.jl")               # parse_ifs_string/file, get_ifs: IFS-returning wrappers over IFSParse
-# interactive.jl must follow ifs_load.jl (calls parse_ifs_file) and all render-method files,
-# but must come BEFORE render.jl — render.jl's _resolve_render_input calls _select_ifs_definition
-include("interactive.jl")            # all stdin logic: prompt helpers, _select_ifs_definition, prompt_ifs_and_render
-include("render.jl")                 # render (top-level API, must come after all methods)
-# fractal_store.jl follows output.jl, types.jl, rasterize.jl and render.jl (render_fractal calls
-# _save_render_output)
+# render_pipeline.jl follows every file whose kernels draw() calls
+include("render_pipeline.jl")        # render(::Render): draw, finish, save_render, load_render
 include("fractal_store.jl")          # JLD2 records: save_fractal, load_fractal, fractal_data, ...
 include("examples.jl")               # HEIGHWAY_DRAGON, EISENSTEIN, main()
 include("precompile.jl")             # PrecompileTools workload (must stay last)
@@ -55,11 +50,19 @@ export AffineMap,
     InitialPolygonPreset,
     RenderMethod,
     Chaos,
-    Parallel,
     PointDeterministic,
     ImageIterate,
+    Transformations,
+    ImageSource,
+    PolygonSource,
+    FileSource,
+    Overlay,
+    BasePolygon,
+    Axes,
+    Render,
+    save_render,
+    load_render,
     Inverse,
-    RenderTransformations,
     lex_ifs,
     parse_ifs_string,
     parse_ifs_file,
@@ -70,13 +73,7 @@ export AffineMap,
     get_ifs_definition,
     random_eq,
     random_ifs,
-    prompt_ifs_and_render,
     render,
-    render_chaos,
-    render_point_deterministic,
-    render_inverse,
-    render_image_iterate,
-    render_transformations,
     chaos_game,
     deterministic_iterate,
     interpolate_eq_matrix,
@@ -102,7 +99,6 @@ export AffineMap,
     save_fractal,
     load_fractal,
     fractal_data,
-    render_fractal,
     extend_fractal,
     fractal_catalog,
     RESOLUTION,

@@ -241,163 +241,65 @@ function interpolate_ifs(
 end
 
 """
-    render_interpolation_frames(left, right; frames, outdir=nothing, basename="frame", t_start=0.0, t_end=1.0,
-                                render_method=RenderTransformations, limits_mode=:interpolate,
-                                interpolation_mode=:rotation_scale, npoints, kwargs...)
+    render_interpolation_frames(left, right, method = Transformations(); frames, outdir = nothing,
+                                basename = "frame", t_start = 0.0, t_end = 1.0,
+                                limits_mode = :interpolate, interpolation_mode = :rotation_scale,
+                                name = "", resolution = RESOLUTION, color = false, alpha = false,
+                                overlays = Overlay[])
 
 Render `frames` evenly spaced interpolation steps from `left` to `right` (see
-[`interpolate_ifs`](@ref)) as numbered PNGs `basename_0001.png`, `basename_0002.png`, ... and
-return `(outdir, paths, ts, render_method)`. Both systems need the same number of maps.
-
-`render_method` is `RenderTransformations` (accepting `initial_polygon`, `show_base`,
-`axis`, `color`, `alpha`, `polygon_limits_iterations`, `resolution`) or `Chaos` (accepting
-`warmup`, `color`, `alpha`, `resolution`, `backend`), passed as `kwargs`. `outdir=nothing`
-writes to an auto-named sequence directory under `output_dir("frames")`. Every frame
-records its `t` and settings in provenance. Feed the frames to
+[`interpolate_ifs`](@ref)) with `method` (any [`RenderMethod`](@ref)), as numbered PNGs
+`basename_0001.png`, `basename_0002.png`, ... each with its render record, and return
+`(outdir, paths, ts)`. Both systems need the same number of maps. `outdir = nothing` writes to
+an auto-named directory under `output_dir("frames")`. Feed the frames to
 [`export_animation`](@ref).
 """
 function render_interpolation_frames(
     left::IFS,
-    right::IFS;
+    right::IFS,
+    method::RenderMethod = Transformations();
     frames::Integer,
     outdir::Union{Nothing,AbstractString} = nothing,
     basename::AbstractString = "frame",
     t_start::Real = 0.0,
     t_end::Real = 1.0,
-    render_method::Union{RenderMethod,Symbol,AbstractString} = RenderTransformations,
     limits_mode::Symbol = :interpolate,
     interpolation_mode::Union{Symbol,AbstractString} = :rotation_scale,
-    npoints::Integer = DEFAULT_SAMPLES,
     name::AbstractString = "",
-    kwargs...,
+    resolution = RESOLUTION,
+    color::Bool = false,
+    alpha::Bool = false,
+    overlays = Overlay[],
 )
     frames > 0 || throw(ArgumentError("frames must be > 0, got $frames"))
     !isempty(strip(basename)) || throw(ArgumentError("basename must be non-empty"))
     0 <= t_start <= 1 || throw(ArgumentError("t_start must be in [0, 1], got $t_start"))
     0 <= t_end <= 1 || throw(ArgumentError("t_end must be in [0, 1], got $t_end"))
 
-    parsed_method = _parse_render_method(render_method)
-    parsed_method in (Chaos, RenderTransformations) || throw(
-        ArgumentError(
-            "render_interpolation_frames currently supports method=Chaos or method=RenderTransformations only",
-        ),
-    )
-    method_symbol = _render_method_symbol(parsed_method)
-
     sequence_name = left.name == right.name ? left.name : string(left.name, "_to_", right.name)
     outdir = _resolve_output_path(
         outdir,
         joinpath(
             "frames",
-            _output_name(
-                sequence_name,
-                (; method = method_symbol, frames, t_start, t_end, limits_mode),
-                "",
+            savename(
+                _savename_prefix(sequence_name) * "_" * method_tag(method),
+                Dict("frames" => frames, "t_start" => t_start, "t_end" => t_end),
             ),
         ),
     )
     mkpath(outdir)
-    gitcommit = _gitcommit()
     ts = collect(
         Float64,
         frames == 1 ? [Float64(t_start)] : LinRange(Float64(t_start), Float64(t_end), frames),
     )
     paths = String[]
-    sizehint!(paths, frames)
-
     for (i, t) in enumerate(ts)
-        ifs = interpolate_ifs(
-            left,
-            right,
-            t;
-            name = name,
-            limits_mode = limits_mode,
-            interpolation_mode = interpolation_mode,
-        )
+        ifs = interpolate_ifs(left, right, t; name, limits_mode, interpolation_mode)
+        r = Render(ifs, method; resolution, color, alpha, overlays)
         path = joinpath(outdir, @sprintf("%s_%04d.png", basename, i))
-        frame_params = (;
-            method = :interpolation_frame,
-            render_method = method_symbol,
-            ifs_name = ifs.name,
-            frame = i,
-            frames,
-            t,
-            limits_mode,
-            interpolation_mode = _normalize_interpolation_mode(interpolation_mode),
-        )
-        _render_interpolation_frame(
-            ifs,
-            parsed_method,
-            path,
-            frame_params,
-            gitcommit;
-            npoints = npoints,
-            kwargs...,
-        )
-        push!(paths, path)
+        push!(paths, render(r; outpath = path).outpath)
     end
-
-    return (outdir = String(outdir), paths = paths, ts = ts, render_method = method_symbol)
-end
-
-# Render one interpolation frame with `render_method` and safesave it to the resolved `outpath`,
-# recording `frame_params` plus the render settings in its provenance.
-function _render_interpolation_frame(
-    ifs::IFS,
-    render_method::RenderMethod,
-    outpath::AbstractString,
-    frame_params::NamedTuple,
-    gitcommit;
-    kwargs...,
-)
-    resolution = get(kwargs, :resolution, RESOLUTION)
-    color = get(kwargs, :color, false)
-    alpha = get(kwargs, :alpha, false)
-
-    if render_method == RenderTransformations
-        initial_polygon = get(kwargs, :initial_polygon, :default)
-        img = _render_transformations_image(
-            ifs;
-            width = resolution[2],
-            height = resolution[1],
-            show_base = get(kwargs, :show_base, false),
-            initial_polygon_spec = initial_polygon,
-            color = color,
-            axis = get(kwargs, :axis, false),
-            alpha = alpha,
-        )
-        source_limits =
-            _render_transformations_effective_ifs(
-                ifs;
-                initial_polygon_spec = initial_polygon,
-                polygon_limits_iterations = get(kwargs, :polygon_limits_iterations, 1),
-            ).limits
-        params = merge(frame_params, (; resolution, initial_polygon, color, alpha))
-    else
-        warmup = get(kwargs, :warmup, DEFAULT_WARMUP)
-        backend = get(kwargs, :backend, :cpu)
-
-        npoints = get(kwargs, :npoints, DEFAULT_SAMPLES)
-        points = chaos_game(ifs, npoints; warmup = warmup)
-        img = make_image(points, ifs.limits; resolution = resolution, backend = backend)
-        if color
-            img = iterate_image(ifs, img; colors = true, backend = backend)
-        end
-        if alpha
-            img = _apply_alpha_mask(img)
-        end
-        source_limits = ifs.limits
-        params = merge(frame_params, (; npoints, warmup, resolution, color, alpha, backend))
-    end
-
-    _save_image(
-        outpath,
-        img,
-        source_limits;
-        params = params,
-        provenance = _provenance_payload(params; gitcommit = gitcommit),
-    )
-    return nothing
+    return (outdir = String(outdir), paths = paths, ts = ts)
 end
 
 function _animation_frame_pattern(basename::AbstractString)
