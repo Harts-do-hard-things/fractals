@@ -53,11 +53,19 @@ julia --startup-file=no --project=docs docs/make.jl
 
 The build (also run in CI) uses `checkdocs = :exports` and runs `jldoctest` blocks, so every exported name needs a docstring and a `@docs` entry in `docs/src/api.md`, and broken `@ref` links fail the build. Doctests run with `FRACTALS_OUTPUT_ROOT` set to a temp dir.
 
-There is no CLI or benchmark suite: renders are plain Julia calls, e.g.
+There is no CLI: renders are plain Julia calls, e.g.
 
 ```bash
 julia --startup-file=no --project=. -e "using Fractals; render(IFS(HEIGHWAY_DRAGON), Chaos(npoints = 100_000); resolution = (512, 512))"
 ```
+
+Benchmarks are opt-in and never run in CI or the tests (BenchmarkTools is a dependency of the root project only):
+
+```bash
+julia --startup-file=no --project=. scripts/benchmark.jl [small|medium]
+```
+
+Each run saves one DrWatson-tagged record to `data/sims/benchmarks/`; from a REPL, `include("scripts/benchmark.jl")` then `latest_benchmarks()` and `compare_benchmarks(a, b)` compare runs. All render output goes to a temp root.
 
 ## Architecture (`Fractals.jl/src`)
 
